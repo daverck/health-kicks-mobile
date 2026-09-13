@@ -10,6 +10,12 @@ build/
 *.iml
 .vscode/
 
+# Platform generated & local properties
+android/local.properties
+**/GeneratedPluginRegistrant.java
+ios/Flutter/
+ios/Runner/GeneratedPluginRegistrant.*
+
 # OS
 .DS_Store
 Thumbs.db

@@ -17,6 +17,9 @@ class BleFootwearClient {
   BluetoothCharacteristic? _studioControlChar;
   BluetoothCharacteristic? _studioBurstChar;
 
+  BluetoothCharacteristic? get activityCharacteristic => _activityChar;
+  BluetoothCharacteristic? get studioBurstCharacteristic => _studioBurstChar;
+
   final _activityController = StreamController<ActivityDetectionModel>.broadcast();
   Stream<ActivityDetectionModel> get activityStream => _activityController.stream;
 

@@ -62,6 +62,7 @@ class BurstReassembler {
 
   bool get isCollecting => _receivedStart && !_receivedEnd;
   int get samplesCount => _collectedReadings.length;
+  int get lastSequenceNum => _lastSequenceNum;
 
   /// Réinitialise l'état pour une nouvelle session de capture.
   void reset() {
@@ -87,6 +88,10 @@ class BurstReassembler {
     final seqNum = byteData.getUint16(1, Endian.big);
     final payloadLen = byteData.getUint8(3);
     final payload = rawPacket.sublist(4);
+
+    if (payload.length < payloadLen) {
+      return null;
+    }
 
     _lastSequenceNum = seqNum;
 

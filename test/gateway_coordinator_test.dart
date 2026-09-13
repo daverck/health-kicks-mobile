@@ -121,23 +121,26 @@ void main() {
 
     test('Relais montant : Détection d\'activité BLE transmise à MQTT', () async {
       final detection = ActivityDetectionModel(
-        activityState: ActivityState.running,
-        confidencePct: 92,
-        timestampEpoch: 1718000000,
-        flags: 0,
+        stateCode: 0x02,
+        eventType: 'run',
+        confidencePercent: 92,
+        timestampEpochSec: 1718000000,
+        isFall: false,
+        isHapticTriggered: false,
       );
 
       fakeBle.emitActivity(detection);
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
       expect(fakeMqtt.publishedDetections.length, equals(1));
-      expect(fakeMqtt.publishedDetections.first.activityState, equals(ActivityState.running));
-      expect(fakeMqtt.publishedDetections.first.confidencePct, equals(92));
+      expect(fakeMqtt.publishedDetections.first.eventType, equals('run'));
+      expect(fakeMqtt.publishedDetections.first.confidencePercent, equals(92));
     });
 
     test('Relais descendant : Commande haptique MQTT répercutée en BLE', () async {
       final command = HapticCommandModel(
-        pattern: HapticPattern.doubleShort,
+        commandId: 'cmd-haptic-test',
+        patternId: 1,
         intensity: 80,
         durationMs: 300,
       );
@@ -146,7 +149,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
       expect(fakeBle.sentHapticCommands.length, equals(1));
-      expect(fakeBle.sentHapticCommands.first.pattern, equals(HapticPattern.doubleShort));
+      expect(fakeBle.sentHapticCommands.first.patternId, equals(1));
       expect(fakeBle.sentHapticCommands.first.intensity, equals(80));
       expect(fakeBle.sentHapticCommands.first.durationMs, equals(300));
     });

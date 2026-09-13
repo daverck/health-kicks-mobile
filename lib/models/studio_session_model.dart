@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'imu_reading_model.dart';
 
 /// Modèle représentant une session d'enregistrement Studio complète réassemblée.
