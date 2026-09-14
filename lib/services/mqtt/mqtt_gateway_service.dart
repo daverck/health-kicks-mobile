@@ -89,6 +89,9 @@ class MqttGatewayService {
         443,
       );
 
+      // AWS IoT Core exige strictement le sous-protocole WebSocket unique 'mqtt'.
+      // Le défaut multi-protocoles de mqtt_client ('mqtt', 'mqttv3.1', 'mqttv3.11') provoque une erreur HTTP 403.
+      _client!.websocketProtocols = MqttClientConstants.protocolsSingleDefault;
       _client!.setProtocolV311();
       _client!.useWebSocket = true;
       _client!.secure = false; // Le chiffrement TLS est géré au niveau du protocole wss://

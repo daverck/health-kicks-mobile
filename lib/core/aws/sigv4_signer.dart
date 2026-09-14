@@ -25,6 +25,16 @@ class SigV4Signer {
     final credentialScope =
         '$dateStamp/${credentials.region}/$_service/aws4_request';
 
+    var endpoint = credentials.iotEndpoint.trim().toLowerCase();
+    if (endpoint.startsWith('https://')) {
+      endpoint = endpoint.substring(8);
+    } else if (endpoint.startsWith('wss://')) {
+      endpoint = endpoint.substring(6);
+    }
+    if (endpoint.endsWith('/')) {
+      endpoint = endpoint.substring(0, endpoint.length - 1);
+    }
+
     // 1. Paramètres de requête canoniques (triés par nom en ordre alphabétique strict)
     final canonicalQueryParams = <String, String>{
       'X-Amz-Algorithm': _algorithm,
@@ -41,11 +51,11 @@ class SigV4Signer {
     final sortedKeys = canonicalQueryParams.keys.toList()..sort();
     final canonicalQueryString = sortedKeys
         .map((k) =>
-            '${_uriEncode(k)}=${_uriEncode(canonicalQueryParams[k]!)}')
+            '${_uriEncodeStrict(k)}=${_uriEncodeStrict(canonicalQueryParams[k]!)}')
         .join('&');
 
     // 2. Requête canonique : GET /mqtt
-    final canonicalHeaders = 'host:${credentials.iotEndpoint.toLowerCase()}\n';
+    final canonicalHeaders = 'host:$endpoint\n';
     const signedHeaders = 'host';
 
     final canonicalRequest = [
@@ -81,8 +91,8 @@ class SigV4Signer {
         .convert(utf8.encode(stringToSign))
         .toString();
 
-    // 6. URL finale WSS
-    return 'wss://${credentials.iotEndpoint}/mqtt?$canonicalQueryString&X-Amz-Signature=$signature';
+    // 6. URL finale WSS (strictement sans fragment ni trailing #)
+    return 'wss://$endpoint/mqtt?$canonicalQueryString&X-Amz-Signature=$signature';
   }
 
   /// Dérivation cryptographique de la clé de signature AWS SigV4 :
@@ -122,11 +132,16 @@ class SigV4Signer {
     return '$y$m${d}T$h$min${s}Z';
   }
 
-  /// Encodage conforme URI selon AWS SigV4 RFC 3986 (sans encodage des caractères non réservés).
-  static String _uriEncode(String input) {
-    return Uri.encodeQueryComponent(input)
-        .replaceAll('+', '%20')
+  /// Encodage conforme URI selon AWS SigV4 RFC 3986.
+  /// Caractères non-réservés RFC 3986 : [A-Z], [a-z], [0-9], '-', '_', '.', '~'.
+  /// Tous les autres caractères doivent être encodés en hexadécimal majuscule (%XY).
+  static String _uriEncodeStrict(String input) {
+    return Uri.encodeComponent(input)
         .replaceAll('*', '%2A')
-        .replaceAll('%7E', '~');
+        .replaceAll('%7E', '~')
+        .replaceAll('!', '%21')
+        .replaceAll("'", '%27')
+        .replaceAll('(', '%28')
+        .replaceAll(')', '%29');
   }
 }
