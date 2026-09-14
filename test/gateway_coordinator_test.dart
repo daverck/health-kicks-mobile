@@ -120,7 +120,7 @@ void main() {
     });
 
     test('Relais montant : Détection d\'activité BLE transmise à MQTT', () async {
-      final detection = ActivityDetectionModel(
+      const detection = ActivityDetectionModel(
         stateCode: 0x02,
         eventType: 'run',
         confidencePercent: 92,
@@ -138,7 +138,7 @@ void main() {
     });
 
     test('Relais descendant : Commande haptique MQTT répercutée en BLE', () async {
-      final command = HapticCommandModel(
+      const command = HapticCommandModel(
         commandId: 'cmd-haptic-test',
         patternId: 1,
         intensity: 80,
@@ -162,8 +162,8 @@ void main() {
       );
 
       final frames = [
-        ImuReadingModel(deltaMs: 0, ax: 0.1, ay: 0.9, az: -0.2, gx: 10, gy: -5, gz: 0),
-        ImuReadingModel(deltaMs: 20, ax: 0.12, ay: 0.88, az: -0.19, gx: 12, gy: -4, gz: 1),
+        const ImuReadingModel(deltaMs: 0, ax: 0.1, ay: 0.9, az: -0.2, gx: 10, gy: -5, gz: 0),
+        const ImuReadingModel(deltaMs: 20, ax: 0.12, ay: 0.88, az: -0.19, gx: 12, gy: -4, gz: 1),
       ];
 
       final burstResult = BurstReassemblyResult(

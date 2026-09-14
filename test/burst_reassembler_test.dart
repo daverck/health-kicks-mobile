@@ -39,7 +39,7 @@ void main() {
 
     test('Réassemble un flux de 50 trames réparties sur plusieurs paquets avec validation CRC32', () {
       final reassembler = BurstReassembler();
-      final totalFrames = 50;
+      const totalFrames = 50;
 
       // 1. Paquet START_OF_BURST (type: 0x01, seq: 0, count: 50)
       final startData = ByteData(8);
