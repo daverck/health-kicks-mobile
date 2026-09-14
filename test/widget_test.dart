@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -8,7 +9,7 @@ import 'package:healthkicks_mobile/services/auth/token_storage_service.dart';
 import 'services/auth/token_storage_service_test.dart';
 
 void main() {
-  testWidgets('HealthKicksApp affiche LoginScreen si aucun token en local', (WidgetTester tester) async {
+  testWidgets('HealthKicksApp affiche LoginScreen si aucun token en local sans champ d\'URL backend', (WidgetTester tester) async {
     final fakeStorage = FakeFlutterSecureStorage();
     final tokenStorage = TokenStorageService(storage: fakeStorage);
     final authService = AuthService(
@@ -23,6 +24,8 @@ void main() {
     expect(find.text('Continuer avec Google'), findsOneWidget);
     expect(find.text('Continuer avec Microsoft / Azure'), findsOneWidget);
     expect(find.text('Se connecter'), findsNothing);
+    expect(find.byIcon(Icons.settings), findsNothing);
+    expect(find.textContaining('Serveur Backend'), findsNothing);
   });
 
   testWidgets('HealthKicksApp affiche GatewayDashboardScreen si token authentifié', (WidgetTester tester) async {

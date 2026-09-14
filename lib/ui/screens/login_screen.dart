@@ -42,62 +42,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _showDevBackendDialog() {
-    final controller = TextEditingController(text: widget.authService.backendBaseUrl);
-
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.tune, size: 20),
-            SizedBox(width: 8),
-            Text('URL API Backend'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Ajustez l\'adresse IP hôte de votre backend FastAPI de développement.',
-              style: TextStyle(fontSize: 12),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                labelText: 'URL Backend FastAPI',
-                hintText: 'http://192.168.1.127:8000',
-                prefixIcon: Icon(Icons.api),
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Annuler'),
-          ),
-          FilledButton(
-            onPressed: () {
-              var newUrl = controller.text.trim();
-              if (newUrl.isNotEmpty) {
-                newUrl = newUrl.replaceAll(RegExp(r'/+$'), '');
-                widget.authService.updateBackendBaseUrl(newUrl);
-                Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('URL Backend mise à jour : $newUrl')),
-                );
-              }
-            },
-            child: const Text('Enregistrer'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -108,13 +52,6 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('HealthKicks Auth'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            tooltip: 'Régler URL Backend',
-            onPressed: _showDevBackendDialog,
-          ),
-        ],
       ),
       body: SafeArea(
         child: Center(
@@ -208,9 +145,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: isServiceLoading
                         ? null
                         : () => _handleSsoLogin(
-                              () => widget.authService.signInWithGoogle(
-                                backendUrl: widget.authService.backendBaseUrl,
-                              ),
+                              () => widget.authService.signInWithGoogle(),
                               'Google',
                             ),
                   ),
@@ -231,19 +166,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: isServiceLoading
                         ? null
                         : () => _handleSsoLogin(
-                              () => widget.authService.signInWithAzure(
-                                backendUrl: widget.authService.backendBaseUrl,
-                              ),
+                              () => widget.authService.signInWithAzure(),
                               'Microsoft Azure',
                             ),
-                  ),
-                  const SizedBox(height: 48),
-
-                  // Indicateur backend actif
-                  Text(
-                    'Serveur Backend : ${widget.authService.backendBaseUrl}',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
                   ),
                 ],
               ),

@@ -4,6 +4,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/config/app_config.dart';
 import 'token_storage_service.dart';
 
 enum AuthState {
@@ -66,12 +67,12 @@ class AuthService extends ChangeNotifier {
   String? get lastError => _lastError;
 
   AuthService({
-    required String backendBaseUrl,
+    String? backendBaseUrl,
     TokenStorageService? tokenStorage,
     http.Client? httpClient,
     AppLinks? appLinks,
     UrlLauncherFunction? urlLauncher,
-  })  : _backendBaseUrl = backendBaseUrl.trim().replaceAll(RegExp(r'/+$'), ''),
+  })  : _backendBaseUrl = (backendBaseUrl ?? AppConfig.backendBaseUrl).trim().replaceAll(RegExp(r'/+$'), ''),
         _tokenStorage = tokenStorage ?? TokenStorageService(),
         _httpClient = httpClient ?? http.Client(),
         _appLinks = appLinks ?? AppLinks(),

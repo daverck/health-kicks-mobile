@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
+import 'core/config/app_config.dart';
 import 'core/permissions/permission_service.dart';
 import 'models/haptic_command_model.dart';
 import 'services/auth/auth_service.dart';
@@ -66,7 +67,6 @@ class _AuthGateState extends State<AuthGate> {
     super.initState();
     _authService = widget.authService ??
         AuthService(
-          backendBaseUrl: 'http://192.168.1.127:8000',
           tokenStorage: TokenStorageService(),
         );
     _checkAuth();
@@ -159,7 +159,6 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
   String _brokerHost = '10.0.2.2'; // Gateway broker default (local/emulator)
   int _brokerPort = 1883;
   MqttConnectionMode _connectionMode = MqttConnectionMode.localTcp;
-  String _backendBaseUrl = 'http://192.168.1.127:8000';
   IotCredentialsRepository? _credentialsRepo;
 
   final PermissionService _permissionService = PermissionService();
@@ -287,7 +286,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
 
       if (_connectionMode == MqttConnectionMode.cloudAwsWebSockets) {
         _credentialsRepo = IotCredentialsRepository(
-          backendBaseUrl: _backendBaseUrl,
+          backendBaseUrl: AppConfig.backendBaseUrl,
           tokenStorage: TokenStorageService(),
           authService: widget.authService,
           onLog: (msg, {bool isError = false}) {
@@ -524,7 +523,6 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
     final hostController = TextEditingController(text: _brokerHost);
     final portController = TextEditingController(text: _brokerPort.toString());
     final deviceIdController = TextEditingController(text: _deviceId);
-    final backendUrlController = TextEditingController(text: _backendBaseUrl);
     var selectedMode = _connectionMode;
 
     await showDialog<void>(
@@ -584,29 +582,31 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
                           color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.security, size: 18, color: Theme.of(context).colorScheme.primary),
-                            const SizedBox(width: 8),
-                            const Expanded(
-                              child: Text(
-                                'Connexion WebSockets WSS (port 443) avec signature AWS SigV4 via les identifiants STS fournis par le backend.',
-                                style: TextStyle(fontSize: 11),
+                            Row(
+                              children: [
+                                Icon(Icons.security, size: 18, color: Theme.of(context).colorScheme.primary),
+                                const SizedBox(width: 8),
+                                const Expanded(
+                                  child: Text(
+                                    'Connexion WebSockets WSS (port 443) avec signature AWS SigV4 via les identifiants STS fournis par le backend.',
+                                    style: TextStyle(fontSize: 11),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Backend STS : ${AppConfig.backendBaseUrl}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Theme.of(context).colorScheme.primary,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: backendUrlController,
-                        decoration: const InputDecoration(
-                          labelText: 'URL Backend FastAPI (STS)',
-                          hintText: 'ex: http://192.168.1.127:8000',
-                          prefixIcon: Icon(Icons.api, size: 20),
-                          helperText: 'Endpoint POST /api/v1/auth/iot-credentials',
-                          isDense: true,
-                          border: OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -658,11 +658,10 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
                       children: [
                         ActionChip(
                           avatar: const Icon(Icons.cloud_done, size: 14),
-                          label: const Text('AWS Cloud (Backend .127)', style: TextStyle(fontSize: 11)),
+                          label: const Text('AWS Cloud (SigV4)', style: TextStyle(fontSize: 11)),
                           onPressed: () {
                             setDialogState(() {
                               selectedMode = MqttConnectionMode.cloudAwsWebSockets;
-                              backendUrlController.text = 'http://192.168.1.127:8000';
                               portController.text = '443';
                               hostController.text = 'a2k10w7ebf2tx9-ats.iot.eu-north-1.amazonaws.com';
                             });
@@ -698,7 +697,6 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
                               selectedMode = MqttConnectionMode.localTcp;
                               hostController.text = '10.0.2.2';
                               portController.text = '1883';
-                              backendUrlController.text = 'http://10.0.2.2:8000';
                             });
                           },
                         ),
@@ -719,7 +717,6 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
                     final newHost = hostController.text.trim();
                     final newPort = int.tryParse(portController.text.trim()) ?? (selectedMode == MqttConnectionMode.cloudAwsWebSockets ? 443 : 1883);
                     final newDeviceId = deviceIdController.text.trim();
-                    final newBackend = backendUrlController.text.trim();
 
                     if (newDeviceId.isNotEmpty) {
                       setState(() {
@@ -728,12 +725,11 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
                         _brokerPort = newPort;
                         _deviceId = newDeviceId;
                         _targetDeviceId = 'HealthKicks-$newDeviceId';
-                        _backendBaseUrl = newBackend;
                       });
                       Navigator.of(ctx).pop();
                       _addLog(
                         'CONFIG',
-                        'Configuration mise à jour : Mode=${selectedMode.name}, Device=$_deviceId${selectedMode == MqttConnectionMode.cloudAwsWebSockets ? ", Backend=$_backendBaseUrl" : ", Broker=$_brokerHost:$_brokerPort"}',
+                        'Configuration mise à jour : Mode=${selectedMode.name}, Device=$_deviceId${selectedMode == MqttConnectionMode.cloudAwsWebSockets ? ", Backend=${AppConfig.backendBaseUrl}" : ", Broker=$_brokerHost:$_brokerPort"}',
                       );
                       _connectMqtt();
                     }
