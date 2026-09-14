@@ -2,12 +2,13 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:healthkicks_mobile/services/auth/auth_service.dart';
 import 'package:healthkicks_mobile/services/auth/token_storage_service.dart';
 import 'token_storage_service_test.dart';
 
 void main() {
-  group('AuthService - Flux de connexion et rafraîchissement', () {
+  group('AuthService - Flux SSO OAuth2 et Deep Links', () {
     late FakeFlutterSecureStorage fakeStorage;
     late TokenStorageService tokenStorage;
 
@@ -16,28 +17,67 @@ void main() {
       tokenStorage = TokenStorageService(storage: fakeStorage);
     });
 
-    test('loginWithCredentials - Succès HTTP 200 sauvegarde les jetons et authentifie', () async {
-      final mockClient = MockClient((request) async {
-        expect(request.url.path, equals('/api/v1/auth/login'));
-        final body = jsonDecode(request.body) as Map<String, dynamic>;
-        expect(body['email'], equals('user@example.com'));
-        expect(body['password'], equals('secret123'));
+    test('signInWithGoogle - Lance l\'URL OAuth Google avec redirect=true', () async {
+      Uri? launchedUri;
+      LaunchMode? launchedMode;
 
-        return http.Response(
-          jsonEncode({
-            'access_token': 'jwt_access_abc',
-            'refresh_token': 'jwt_refresh_xyz',
-            'user': {
+      final authService = AuthService(
+        backendBaseUrl: 'http://127.0.0.1:8000',
+        tokenStorage: tokenStorage,
+        urlLauncher: (uri, {mode = LaunchMode.platformDefault}) async {
+          launchedUri = uri;
+          launchedMode = mode;
+          return true;
+        },
+      );
+
+      final success = await authService.signInWithGoogle();
+
+      expect(success, isTrue);
+      expect(launchedUri, isNotNull);
+      expect(launchedUri.toString(), equals('http://127.0.0.1:8000/api/v1/auth/google/login?redirect=true'));
+      expect(launchedMode, equals(LaunchMode.externalApplication));
+    });
+
+    test('signInWithAzure - Lance l\'URL OAuth Azure avec redirect=true', () async {
+      Uri? launchedUri;
+      LaunchMode? launchedMode;
+
+      final authService = AuthService(
+        backendBaseUrl: 'http://127.0.0.1:8000',
+        tokenStorage: tokenStorage,
+        urlLauncher: (uri, {mode = LaunchMode.platformDefault}) async {
+          launchedUri = uri;
+          launchedMode = mode;
+          return true;
+        },
+      );
+
+      final success = await authService.signInWithAzure();
+
+      expect(success, isTrue);
+      expect(launchedUri, isNotNull);
+      expect(launchedUri.toString(), equals('http://127.0.0.1:8000/api/v1/auth/azure/login?redirect=true'));
+      expect(launchedMode, equals(LaunchMode.externalApplication));
+    });
+
+    test('handleDeepLink - Succès : extrait les tokens, interroge /me et passe en authenticated', () async {
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/v1/auth/me') {
+          expect(request.headers['Authorization'], equals('Bearer jwt_access_abc'));
+          return http.Response(
+            jsonEncode({
               'id': 42,
-              'email': 'user@example.com',
-              'name': 'Jean Dupont',
+              'email': 'sso_user@example.com',
+              'name': 'SSO User',
               'role': 'user',
               'is_active': true,
-            },
-          }),
-          200,
-          headers: {'content-type': 'application/json'},
-        );
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('Not Found', 404);
       });
 
       final authService = AuthService(
@@ -46,43 +86,49 @@ void main() {
         httpClient: mockClient,
       );
 
-      final success = await authService.loginWithCredentials(
-        email: 'user@example.com',
-        password: 'secret123',
+      final callbackUri = Uri.parse(
+        'healthkicks://auth/callback?access_token=jwt_access_abc&refresh_token=jwt_refresh_xyz',
       );
 
-      expect(success, isTrue);
+      final result = await authService.handleDeepLink(callbackUri);
+
+      expect(result, isTrue);
       expect(authService.state, equals(AuthState.authenticated));
       expect(authService.currentUser?.id, equals(42));
-      expect(authService.currentUser?.email, equals('user@example.com'));
+      expect(authService.currentUser?.email, equals('sso_user@example.com'));
       expect(await tokenStorage.getAccessToken(), equals('jwt_access_abc'));
       expect(await tokenStorage.getRefreshToken(), equals('jwt_refresh_xyz'));
     });
 
-    test('loginWithCredentials - Échec HTTP 401 met à jour lastError et reste non-authentifié', () async {
-      final mockClient = MockClient((request) async {
-        return http.Response(
-          jsonEncode({'detail': 'Identifiants invalides'}),
-          401,
-          headers: {'content-type': 'application/json'},
-        );
-      });
-
+    test('handleDeepLink - Erreur OAuth : capture le message d\'erreur et passe en unauthenticated', () async {
       final authService = AuthService(
         backendBaseUrl: 'http://127.0.0.1:8000',
         tokenStorage: tokenStorage,
-        httpClient: mockClient,
       );
 
-      final success = await authService.loginWithCredentials(
-        email: 'wrong@example.com',
-        password: 'bad',
+      final callbackUri = Uri.parse(
+        'healthkicks://auth/callback?error=access_denied&error_description=Utilisateur+a+refuse',
       );
 
-      expect(success, isFalse);
+      final result = await authService.handleDeepLink(callbackUri);
+
+      expect(result, isFalse);
       expect(authService.state, equals(AuthState.unauthenticated));
-      expect(authService.lastError, contains('Identifiants invalides'));
+      expect(authService.lastError, contains('Utilisateur a refuse'));
       expect(await tokenStorage.hasValidToken(), isFalse);
+    });
+
+    test('handleDeepLink - Ignore les URIs non destinées à healthkicks://auth', () async {
+      final authService = AuthService(
+        backendBaseUrl: 'http://127.0.0.1:8000',
+        tokenStorage: tokenStorage,
+      );
+
+      final foreignUri = Uri.parse('https://example.com/callback?access_token=123');
+      final result = await authService.handleDeepLink(foreignUri);
+
+      expect(result, isFalse);
+      expect(authService.state, equals(AuthState.initial));
     });
 
     test('logout - Supprime les jetons et réinitialise l\'état', () async {
@@ -100,3 +146,5 @@ void main() {
     });
   });
 }
+
+

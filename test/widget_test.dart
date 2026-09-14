@@ -20,9 +20,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('HealthKicks'), findsOneWidget);
-    expect(find.text('Se connecter'), findsOneWidget);
     expect(find.text('Continuer avec Google'), findsOneWidget);
     expect(find.text('Continuer avec Microsoft / Azure'), findsOneWidget);
+    expect(find.text('Se connecter'), findsNothing);
   });
 
   testWidgets('HealthKicksApp affiche GatewayDashboardScreen si token authentifié', (WidgetTester tester) async {
