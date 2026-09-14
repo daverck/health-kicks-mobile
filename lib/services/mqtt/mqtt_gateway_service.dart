@@ -3,13 +3,20 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
+import '../../core/aws/sigv4_signer.dart';
 import '../../models/activity_detection_model.dart';
 import '../../models/haptic_command_model.dart';
 import '../../models/studio_session_model.dart';
+import '../auth/iot_credentials_repository.dart';
 
 typedef MqttLogCallback = void Function(String message, {bool isError});
 
-/// Service de passerelle MQTT vers AWS IoT Core.
+enum MqttConnectionMode {
+  localTcp,
+  cloudAwsWebSockets,
+}
+
+/// Service de passerelle MQTT vers AWS IoT Core (WSS SigV4 Port 443) ou Mosquitto local (Port 1883).
 /// Référence contractuelle : contracts/README.md (Section 3 : Contrats MQTT IoT)
 class MqttGatewayService {
   final String brokerHost;
@@ -18,6 +25,9 @@ class MqttGatewayService {
   final String clientId;
   final SecurityContext? securityContext;
   final MqttLogCallback? onLog;
+
+  final MqttConnectionMode connectionMode;
+  final IotCredentialsRepository? credentialsRepository;
 
   MqttServerClient? _client;
   bool _isConnected = false;
@@ -28,16 +38,103 @@ class MqttGatewayService {
 
   MqttGatewayService({
     required this.brokerHost,
-    this.brokerPort = 8883,
+    this.brokerPort = 1883,
     required this.deviceId,
     String? clientId,
     this.securityContext,
     this.onLog,
-  }) : clientId = clientId ?? 'HealthKicks-Mobile-GW-$deviceId';
+    this.connectionMode = MqttConnectionMode.localTcp,
+    this.credentialsRepository,
+  }) : clientId = clientId ?? 'healthkicks-session-$deviceId';
 
-  /// Établit la liaison MQTT over TLS avec AWS IoT Core ou TCP avec broker local.
+  /// Établit la liaison MQTT selon le mode configuré :
+  /// 1. Local (Mosquitto) : TCP direct sans TLS sur port 1883
+  /// 2. Cloud (AWS IoT Core) : WebSockets signés SigV4 sur port 443 via STS
   Future<bool> connect({MqttLogCallback? onLog}) async {
     final log = onLog ?? this.onLog;
+
+    if (connectionMode == MqttConnectionMode.cloudAwsWebSockets) {
+      return _connectCloudAwsSigV4(log);
+    } else {
+      return _connectLocalTcp(log);
+    }
+  }
+
+  Future<bool> _connectCloudAwsSigV4(MqttLogCallback? log) async {
+    if (credentialsRepository == null) {
+      log?.call(
+        '[MQTT] Impossible de se connecter en mode Cloud : IotCredentialsRepository non configuré.',
+        isError: true,
+      );
+      return false;
+    }
+
+    log?.call('[MQTT] Récupération des identifiants STS backend...', isError: false);
+
+    try {
+      final creds = await credentialsRepository!.fetchCredentials(deviceId: deviceId);
+      log?.call(
+        '[MQTT] Identifiants STS valides (Expire à : ${creds.expiration.toIso8601String()}, Région : ${creds.region})',
+        isError: false,
+      );
+
+      final signedWssUrl = SigV4Signer.buildSignedWebSocketUrl(credentials: creds);
+      log?.call('[MQTT] Signature SigV4 générée, connexion WSS 443...', isError: false);
+
+      final effectiveClientId = clientId.isNotEmpty ? clientId : 'healthkicks-session-$deviceId';
+
+      _client = MqttServerClient.withPort(
+        signedWssUrl,
+        effectiveClientId,
+        443,
+      );
+
+      _client!.setProtocolV311();
+      _client!.useWebSocket = true;
+      _client!.secure = false; // Le chiffrement TLS est géré au niveau du protocole wss://
+      _client!.keepAlivePeriod = 30;
+      _client!.autoReconnect = true;
+      _client!.logging(on: false);
+
+      // Configuration Last Will & Testament (LWT)
+      final lwtPayload = jsonEncode({
+        'device_id': deviceId,
+        'state': 'offline',
+        'gateway': 'mobile',
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+      });
+
+      final connMessage = MqttConnectMessage()
+          .withClientIdentifier(effectiveClientId)
+          .startClean()
+          .withWillTopic('healthkicks/v1/$deviceId/status')
+          .withWillMessage(lwtPayload)
+          .withWillQos(MqttQos.atLeastOnce);
+
+      _client!.connectionMessage = connMessage;
+
+      final status = await _client!.connect();
+      _isConnected = status?.state == MqttConnectionState.connected;
+
+      if (_isConnected) {
+        log?.call('[MQTT] Connecté avec succès à AWS IoT Core en WebSockets.', isError: false);
+        _subscribeToHapticCommands();
+        await publishGatewayStatus(online: true);
+      } else {
+        log?.call(
+          '[MQTT] Échec connexion AWS IoT Core WSS : statut ${status?.state}.',
+          isError: true,
+        );
+      }
+      return _isConnected;
+    } catch (e) {
+      _isConnected = false;
+      log?.call('[MQTT] WebSocket error: $e', isError: true);
+      return false;
+    }
+  }
+
+  Future<bool> _connectLocalTcp(MqttLogCallback? log) async {
     log?.call('Tentative de connexion vers $brokerHost:$brokerPort (Client: $clientId)...', isError: false);
 
     _client = MqttServerClient.withPort(brokerHost, clientId, brokerPort);
@@ -49,7 +146,6 @@ class MqttGatewayService {
     _client!.autoReconnect = true;
     _client!.logging(on: false);
 
-    // Configuration du Last Will and Testament (LWT)
     final lwtPayload = jsonEncode({
       'device_id': deviceId,
       'state': 'offline',

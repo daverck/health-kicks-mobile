@@ -24,6 +24,7 @@ dependencies:
   intl: ^0.19.0
   # Local storage for offline sync
   shared_preferences: ^2.2.3
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
