@@ -7,6 +7,8 @@ import '../../models/activity_detection_model.dart';
 import '../../models/haptic_command_model.dart';
 import '../../models/studio_session_model.dart';
 
+typedef MqttLogCallback = void Function(String message, {bool isError});
+
 /// Service de passerelle MQTT vers AWS IoT Core.
 /// Référence contractuelle : contracts/README.md (Section 3 : Contrats MQTT IoT)
 class MqttGatewayService {
@@ -15,6 +17,7 @@ class MqttGatewayService {
   final String deviceId;
   final String clientId;
   final SecurityContext? securityContext;
+  final MqttLogCallback? onLog;
 
   MqttServerClient? _client;
   bool _isConnected = false;
@@ -29,10 +32,14 @@ class MqttGatewayService {
     required this.deviceId,
     String? clientId,
     this.securityContext,
+    this.onLog,
   }) : clientId = clientId ?? 'HealthKicks-Mobile-GW-$deviceId';
 
-  /// Établit la liaison MQTT over TLS avec AWS IoT Core.
-  Future<bool> connect() async {
+  /// Établit la liaison MQTT over TLS avec AWS IoT Core ou TCP avec broker local.
+  Future<bool> connect({MqttLogCallback? onLog}) async {
+    final log = onLog ?? this.onLog;
+    log?.call('Tentative de connexion vers $brokerHost:$brokerPort (Client: $clientId)...', isError: false);
+
     _client = MqttServerClient.withPort(brokerHost, clientId, brokerPort);
     _client!.secure = (brokerPort == 8883);
     if (_client!.secure) {
@@ -64,12 +71,25 @@ class MqttGatewayService {
       _isConnected = status?.state == MqttConnectionState.connected;
 
       if (_isConnected) {
+        log?.call('Connecté avec succès au broker $brokerHost:$brokerPort.', isError: false);
         _subscribeToHapticCommands();
         await publishGatewayStatus(online: true);
+      } else {
+        log?.call(
+          'Échec connexion broker $brokerHost:$brokerPort : statut ${status?.state}.',
+          isError: true,
+        );
       }
       return _isConnected;
     } catch (e) {
       _isConnected = false;
+      String errorMsg = e.toString();
+      if (e is SocketException) {
+        errorMsg = 'Connexion réseau impossible vers $brokerHost:$brokerPort (${e.osError?.message ?? e.message}) - Vérifiez le pare-feu ou l\'IP.';
+      } else if (e is HandshakeException) {
+        errorMsg = 'Échec négociation TLS/SSL sur port $brokerPort ($e).';
+      }
+      log?.call('Erreur MQTT : $errorMsg', isError: true);
       return false;
     }
   }

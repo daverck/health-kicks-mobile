@@ -123,6 +123,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
 
   Color _colorForTag(String tag) {
     switch (tag) {
+      case 'UI':
+        return Colors.blueGrey;
       case 'BLE':
         return Colors.blue;
       case 'MQTT':
@@ -148,7 +150,6 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
   }
 
   Future<void> _connectMqtt() async {
-    _addLog('MQTT', 'Connexion au broker $_brokerHost:$_brokerPort (Device: $_deviceId)...');
     try {
       _coordinator?.stopRouting();
       _coordinator = null;
@@ -158,19 +159,15 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         brokerHost: _brokerHost,
         brokerPort: _brokerPort,
         deviceId: _deviceId,
+        onLog: (msg, {bool isError = false}) {
+          _addLog('MQTT', msg, color: isError ? Colors.red : Colors.teal);
+        },
       );
 
       final connected = await _mqttService!.connect();
       if (mounted) {
         setState(() => _mqttConnected = connected);
       }
-      _addLog(
-        'MQTT',
-        connected
-            ? 'Connecté au broker $_brokerHost:$_brokerPort'
-            : 'Broker MQTT non joignable ($_brokerHost:$_brokerPort)',
-        color: connected ? Colors.teal : Colors.orange,
-      );
 
       if (connected && _bleClient != null) {
         _coordinator = GatewayCoordinator(
@@ -179,10 +176,10 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
           deviceId: _deviceId,
         );
         _coordinator!.startRouting();
-        _addLog('GATEWAY', 'Routage bidirectionnel BLE <-> MQTT réactivé.');
+        _addLog('GATEWAY', 'Routage bidirectionnel transparent BLE <-> MQTT réactivé.', color: Colors.green);
       }
     } catch (e) {
-      _addLog('MQTT', 'Erreur MQTT : $e', color: Colors.red);
+      _addLog('MQTT', 'Erreur MQTT inattendue : $e', color: Colors.red);
       if (mounted) {
         setState(() => _mqttConnected = false);
       }
@@ -194,10 +191,30 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
 
     // 1. Solliciter les permissions requises
     try {
-      final hasPerms = await _permissionService.requestBlePermissions();
-      _addLog('PERM', hasPerms ? 'Permissions BLE accordées.' : 'Permissions BLE refusées.');
+      final perms = await _permissionService.requestDetailedBlePermissions(
+        onLog: (msg) => _addLog('PERM', msg),
+      );
+      _addLog(
+        'PERM',
+        perms.isGranted
+            ? 'Permissions BLE accordées (${perms.details}).'
+            : 'Permissions BLE incomplètes (${perms.details}).',
+        color: perms.isGranted ? Colors.green : Colors.orange,
+      );
+      if (!perms.isGranted && perms.isPermanentlyDenied && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Permissions Bluetooth nécessaires. Veuillez les activer dans les Paramètres.'),
+            action: SnackBarAction(
+              label: 'Paramètres',
+              onPressed: () => _permissionService.openSettings(),
+            ),
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
     } catch (e) {
-      _addLog('PERM', 'Vérification des permissions ignorée ($e)');
+      _addLog('PERM', 'Vérification des permissions ignorée ($e)', color: Colors.orange);
     }
 
     // 2. Initialiser le service MQTT
@@ -205,7 +222,17 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
 
     // 3. Initialiser le gestionnaire BLE
     try {
-      _bleManager = BleConnectionManager(permissionService: _permissionService);
+      _bleManager = BleConnectionManager(
+        permissionService: _permissionService,
+        onLog: (msg) {
+          final isError = msg.contains('Erreur') || msg.contains('refusé') || msg.contains('Échec');
+          _addLog(
+            msg.startsWith('[PERM]') ? 'PERM' : 'BLE',
+            msg.replaceFirst(RegExp(r'^\[(BLE|PERM)\]\s*'), ''),
+            color: isError ? Colors.red : null,
+          );
+        },
+      );
       _bleManager!.statusStream.listen((status) {
         if (!mounted) return;
         setState(() {
@@ -222,17 +249,52 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
 
       await _startBleScan();
     } catch (e) {
-      _addLog('BLE', 'Initialisation BLE : $e');
+      _addLog('BLE', 'Initialisation BLE : $e', color: Colors.red);
     }
   }
 
   Future<void> _startBleScan() async {
-    if (_bleManager == null) return;
+    _addLog('UI', 'Bouton Re-scanner pressé');
+    if (_bleManager == null) {
+      _addLog('BLE', 'Gestionnaire BLE non initialisé.', color: Colors.red);
+      return;
+    }
+
+    // Annuler tout scan en cours avant de relancer
+    try {
+      await FlutterBluePlus.stopScan();
+    } catch (_) {}
+
     _addLog('BLE', 'Scan en cours pour "$_targetDeviceId" ou Service GATT...');
     try {
-      await _bleManager!.startAutoConnect(targetDeviceId: _targetDeviceId);
+      await _bleManager!.startAutoConnect(
+        targetDeviceId: _targetDeviceId,
+        timeout: const Duration(seconds: 10),
+        onLog: (msg) {
+          final isError = msg.contains('Erreur') || msg.contains('refusé') || msg.contains('Échec');
+          _addLog(
+            msg.startsWith('[PERM]') ? 'PERM' : 'BLE',
+            msg.replaceFirst(RegExp(r'^\[(BLE|PERM)\]\s*'), ''),
+            color: isError ? Colors.red : null,
+          );
+        },
+      );
     } catch (e) {
       _addLog('BLE', 'Erreur de scan : $e', color: Colors.red);
+      if (e.toString().contains('Paramètres') || e.toString().contains('refusé')) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Permissions BLE requises : $e'),
+              action: SnackBarAction(
+                label: 'Paramètres',
+                onPressed: () => _permissionService.openSettings(),
+              ),
+              duration: const Duration(seconds: 6),
+            ),
+          );
+        }
+      }
     }
   }
 
