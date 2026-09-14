@@ -99,6 +99,18 @@ void main() {
       final repo = IotCredentialsRepository(
         backendBaseUrl: 'http://192.168.1.100:8000',
         httpClient: mockClient,
+        authTokenProvider: () => 'valid_token',
+      );
+
+      expect(
+        () => repo.fetchCredentials(deviceId: 'HK-1'),
+        throwsA(isA<Exception>()),
+      );
+    });
+
+    test('fetchCredentials - Lève une exception claire si aucun token n\'est disponible', () async {
+      final repo = IotCredentialsRepository(
+        backendBaseUrl: 'http://192.168.1.100:8000',
       );
 
       expect(

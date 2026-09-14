@@ -1,16 +1,61 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:healthkicks_mobile/main.dart';
+import 'package:healthkicks_mobile/services/auth/auth_service.dart';
+import 'package:healthkicks_mobile/services/auth/token_storage_service.dart';
+import 'services/auth/token_storage_service_test.dart';
 
 void main() {
-  testWidgets('HealthKicksApp renders smoke test', (WidgetTester tester) async {
-    await tester.pumpWidget(const HealthKicksApp());
+  testWidgets('HealthKicksApp affiche LoginScreen si aucun token en local', (WidgetTester tester) async {
+    final fakeStorage = FakeFlutterSecureStorage();
+    final tokenStorage = TokenStorageService(storage: fakeStorage);
+    final authService = AuthService(
+      backendBaseUrl: 'http://127.0.0.1:8000',
+      tokenStorage: tokenStorage,
+    );
+
+    await tester.pumpWidget(HealthKicksApp(authService: authService));
+    await tester.pumpAndSettle();
+
+    expect(find.text('HealthKicks'), findsOneWidget);
+    expect(find.text('Se connecter'), findsOneWidget);
+    expect(find.text('Continuer avec Google'), findsOneWidget);
+    expect(find.text('Continuer avec Microsoft / Azure'), findsOneWidget);
+  });
+
+  testWidgets('HealthKicksApp affiche GatewayDashboardScreen si token authentifié', (WidgetTester tester) async {
+    final fakeStorage = FakeFlutterSecureStorage();
+    await fakeStorage.write(key: 'hk_access_token', value: 'valid_mock_token');
+    final tokenStorage = TokenStorageService(storage: fakeStorage);
+
+    final mockClient = MockClient((request) async {
+      if (request.url.path == '/api/v1/auth/me') {
+        return http.Response(
+          jsonEncode({
+            'id': 1,
+            'email': 'user@example.com',
+            'name': 'User Test',
+            'role': 'user',
+            'is_active': true,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      return http.Response('Not Found', 404);
+    });
+
+    final authService = AuthService(
+      backendBaseUrl: 'http://127.0.0.1:8000',
+      tokenStorage: tokenStorage,
+      httpClient: mockClient,
+    );
+
+    await tester.pumpWidget(HealthKicksApp(authService: authService));
+    await tester.pumpAndSettle();
+
     expect(find.text('HealthKicks BLE-to-MQTT Gateway'), findsOneWidget);
   });
 }

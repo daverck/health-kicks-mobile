@@ -4,11 +4,14 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 import 'core/permissions/permission_service.dart';
 import 'models/haptic_command_model.dart';
+import 'services/auth/auth_service.dart';
 import 'services/auth/iot_credentials_repository.dart';
+import 'services/auth/token_storage_service.dart';
 import 'services/ble/ble_connection_manager.dart';
 import 'services/ble/ble_footwear_client.dart';
 import 'services/gateway_coordinator.dart';
 import 'services/mqtt/mqtt_gateway_service.dart';
+import 'ui/screens/login_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,7 +19,9 @@ void main() {
 }
 
 class HealthKicksApp extends StatelessWidget {
-  const HealthKicksApp({super.key});
+  final AuthService? authService;
+
+  const HealthKicksApp({super.key, this.authService});
 
   @override
   Widget build(BuildContext context) {
@@ -37,10 +42,88 @@ class HealthKicksApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const GatewayDashboardScreen(),
+      home: AuthGate(authService: authService),
     );
   }
 }
+
+/// Garde de routage : vérifie la présence d'une session JWT valide au démarrage.
+class AuthGate extends StatefulWidget {
+  final AuthService? authService;
+
+  const AuthGate({super.key, this.authService});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  late final AuthService _authService;
+  bool _isChecking = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _authService = widget.authService ??
+        AuthService(
+          backendBaseUrl: 'http://192.168.1.127:8000',
+          tokenStorage: TokenStorageService(),
+        );
+    _checkAuth();
+  }
+
+  Future<void> _checkAuth() async {
+    await _authService.initialize();
+    if (mounted) {
+      setState(() {
+        _isChecking = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isChecking) {
+      return const Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: Color(0xFF0F766E)),
+              SizedBox(height: 16),
+              Text(
+                'Vérification de session...',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: _authService,
+      builder: (context, _) {
+        if (_authService.state == AuthState.authenticated) {
+          return GatewayDashboardScreen(
+            authService: _authService,
+            onLogout: () async {
+              await _authService.logout();
+            },
+          );
+        }
+
+        return LoginScreen(
+          authService: _authService,
+          onLoginSuccess: () {
+            // Le changement d'état via notifyListeners() bascule automatiquement l'écran
+          },
+        );
+      },
+    );
+  }
+}
+
 
 class LogEntry {
   final DateTime timestamp;
@@ -57,7 +140,14 @@ class LogEntry {
 }
 
 class GatewayDashboardScreen extends StatefulWidget {
-  const GatewayDashboardScreen({super.key});
+  final AuthService? authService;
+  final VoidCallback? onLogout;
+
+  const GatewayDashboardScreen({
+    super.key,
+    this.authService,
+    this.onLogout,
+  });
 
   @override
   State<GatewayDashboardScreen> createState() => _GatewayDashboardScreenState();
@@ -198,6 +288,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
       if (_connectionMode == MqttConnectionMode.cloudAwsWebSockets) {
         _credentialsRepo = IotCredentialsRepository(
           backendBaseUrl: _backendBaseUrl,
+          tokenStorage: TokenStorageService(),
+          authService: widget.authService,
           onLog: (msg, {bool isError = false}) {
             _addLog('AUTH', msg, color: isError ? Colors.red : Colors.cyan);
           },
@@ -692,6 +784,33 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
               ),
             ),
           ),
+          if (widget.onLogout != null)
+            IconButton(
+              icon: const Icon(Icons.logout),
+              tooltip: 'Se déconnecter',
+              onPressed: () {
+                showDialog<void>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Déconnexion'),
+                    content: const Text('Voulez-vous vraiment vous déconnecter de votre session HealthKicks ?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: const Text('Annuler'),
+                      ),
+                      FilledButton(
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          widget.onLogout!();
+                        },
+                        child: const Text('Déconnexion'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
         ],
       ),
       body: SafeArea(

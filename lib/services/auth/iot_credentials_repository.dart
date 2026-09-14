@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'auth_service.dart';
 import 'iot_credentials_model.dart';
+import 'token_storage_service.dart';
 
 typedef AuthLogCallback = void Function(String message, {bool isError});
 
@@ -10,7 +13,9 @@ typedef AuthLogCallback = void Function(String message, {bool isError});
 class IotCredentialsRepository {
   final String backendBaseUrl;
   final http.Client _httpClient;
-  final String? Function()? authTokenProvider;
+  final TokenStorageService? tokenStorage;
+  final AuthService? authService;
+  final FutureOr<String?> Function()? authTokenProvider;
   final AuthLogCallback? onLog;
 
   IoTCredentials? _cachedCredentials;
@@ -19,6 +24,8 @@ class IotCredentialsRepository {
   IotCredentialsRepository({
     required this.backendBaseUrl,
     http.Client? httpClient,
+    this.tokenStorage,
+    this.authService,
     this.authTokenProvider,
     this.onLog,
   }) : _httpClient = httpClient ?? http.Client();
@@ -28,6 +35,17 @@ class IotCredentialsRepository {
       (_cachedCredentials != null && !_cachedCredentials!.isExpired)
           ? _cachedCredentials
           : null;
+
+  /// Résout le jeton d'authentification Bearer actuel.
+  Future<String?> _resolveAccessToken() async {
+    if (authTokenProvider != null) {
+      return await authTokenProvider!();
+    }
+    if (tokenStorage != null) {
+      return await tokenStorage!.getAccessToken();
+    }
+    return null;
+  }
 
   /// Récupère des identifiants AWS STS valides.
   /// Réutilise le cache en mémoire si disponible et non expiré (marge de 5 min).
@@ -47,6 +65,14 @@ class IotCredentialsRepository {
       return _cachedCredentials!;
     }
 
+    // Récupération automatique du token d'accès chiffré
+    final token = await _resolveAccessToken();
+    if (token == null || token.trim().isEmpty) {
+      const errMsg = 'Session expirée ou utilisateur non connecté : impossible d\'obtenir les identifiants STS IoT.';
+      onLog?.call('[STS] $errMsg', isError: true);
+      throw const HttpException(errMsg);
+    }
+
     onLog?.call(
       '[STS] Requête au backend pour obtenir des identifiants STS temporaires (deviceId: ${deviceId ?? "auto"})...',
       isError: false,
@@ -61,12 +87,8 @@ class IotCredentialsRepository {
     final headers = <String, String>{
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'Authorization': 'Bearer $token',
     };
-
-    final token = authTokenProvider?.call();
-    if (token != null && token.isNotEmpty) {
-      headers['Authorization'] = 'Bearer $token';
-    }
 
     final body = jsonEncode({
       if (deviceId != null && deviceId.isNotEmpty) 'device_id': deviceId,
