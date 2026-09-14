@@ -85,7 +85,38 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _ensureBleManager();
     _initGateway();
+  }
+
+  void _ensureBleManager() {
+    if (_bleManager != null) return;
+
+    _bleManager = BleConnectionManager(
+      permissionService: _permissionService,
+      onLog: (msg) {
+        final isError = msg.contains('Erreur') || msg.contains('refusé') || msg.contains('Échec');
+        _addLog(
+          msg.startsWith('[PERM]') ? 'PERM' : 'BLE',
+          msg.replaceFirst(RegExp(r'^\[(BLE|PERM)\]\s*'), ''),
+          color: isError ? Colors.red : null,
+        );
+      },
+    );
+
+    _bleManager!.statusStream.listen((status) {
+      if (!mounted) return;
+      setState(() {
+        _bleStatus = status;
+        _connectedDevice = _bleManager?.connectedDevice;
+        _mtu = _bleManager?.negotiatedMtu ?? 23;
+      });
+
+      _addLog('BLE', 'Statut connexion : ${status.name}');
+      if (status == BleConnectionStatus.ready && _bleManager?.connectedDevice != null) {
+        _onBleDeviceReady(_bleManager!.connectedDevice!);
+      }
+    });
   }
 
   @override
@@ -188,8 +219,12 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
 
   Future<void> _initGateway() async {
     _addLog('INIT', 'Démarrage de la passerelle HealthKicks...');
+    _ensureBleManager();
 
-    // 1. Solliciter les permissions requises
+    // 1. Initialiser le broker MQTT en arrière-plan sans bloquer l'initialisation BLE
+    unawaited(_connectMqtt());
+
+    // 2. Solliciter les permissions requises et démarrer le scan BLE immédiatement dès accord
     try {
       final perms = await _permissionService.requestDetailedBlePermissions(
         onLog: (msg) => _addLog('PERM', msg),
@@ -201,7 +236,10 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
             : 'Permissions BLE incomplètes (${perms.details}).',
         color: perms.isGranted ? Colors.green : Colors.orange,
       );
-      if (!perms.isGranted && perms.isPermanentlyDenied && mounted) {
+
+      if (perms.isGranted) {
+        await _startBleScan(fromButton: false);
+      } else if (perms.isPermanentlyDenied && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Permissions Bluetooth nécessaires. Veuillez les activer dans les Paramètres.'),
@@ -214,58 +252,24 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         );
       }
     } catch (e) {
-      _addLog('PERM', 'Vérification des permissions ignorée ($e)', color: Colors.orange);
-    }
-
-    // 2. Initialiser le service MQTT
-    await _connectMqtt();
-
-    // 3. Initialiser le gestionnaire BLE
-    try {
-      _bleManager = BleConnectionManager(
-        permissionService: _permissionService,
-        onLog: (msg) {
-          final isError = msg.contains('Erreur') || msg.contains('refusé') || msg.contains('Échec');
-          _addLog(
-            msg.startsWith('[PERM]') ? 'PERM' : 'BLE',
-            msg.replaceFirst(RegExp(r'^\[(BLE|PERM)\]\s*'), ''),
-            color: isError ? Colors.red : null,
-          );
-        },
-      );
-      _bleManager!.statusStream.listen((status) {
-        if (!mounted) return;
-        setState(() {
-          _bleStatus = status;
-          _connectedDevice = _bleManager?.connectedDevice;
-          _mtu = _bleManager?.negotiatedMtu ?? 23;
-        });
-
-        _addLog('BLE', 'Statut connexion : ${status.name}');
-        if (status == BleConnectionStatus.ready && _bleManager?.connectedDevice != null) {
-          _onBleDeviceReady(_bleManager!.connectedDevice!);
-        }
-      });
-
-      await _startBleScan();
-    } catch (e) {
-      _addLog('BLE', 'Initialisation BLE : $e', color: Colors.red);
+      _addLog('PERM', 'Vérification des permissions : $e', color: Colors.orange);
+      await _startBleScan(fromButton: false);
     }
   }
 
-  Future<void> _startBleScan() async {
-    _addLog('UI', 'Bouton Re-scanner pressé');
-    if (_bleManager == null) {
-      _addLog('BLE', 'Gestionnaire BLE non initialisé.', color: Colors.red);
-      return;
+  Future<void> _startBleScan({bool fromButton = false}) async {
+    if (fromButton) {
+      _addLog('UI', 'Bouton Re-scanner pressé');
     }
+
+    _ensureBleManager();
 
     // Annuler tout scan en cours avant de relancer
     try {
       await FlutterBluePlus.stopScan();
     } catch (_) {}
 
-    _addLog('BLE', 'Scan en cours pour "$_targetDeviceId" ou Service GATT...');
+    _addLog('BLE', 'Démarrage du scan large pour "$_targetDeviceId" ou Service GATT...');
     try {
       await _bleManager!.startAutoConnect(
         targetDeviceId: _targetDeviceId,
@@ -395,12 +399,14 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final isTlsPort = portController.text.trim() == '8883';
+
             return AlertDialog(
               title: const Row(
                 children: [
                   Icon(Icons.settings_ethernet, size: 22),
                   SizedBox(width: 8),
-                  Text('Paramètres MQTT'),
+                  Text('Configuration Broker MQTT'),
                 ],
               ),
               content: SingleChildScrollView(
@@ -408,27 +414,60 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                          value: 'local',
+                          icon: Icon(Icons.laptop, size: 16),
+                          label: Text('Local (Mosquitto)', style: TextStyle(fontSize: 11)),
+                        ),
+                        ButtonSegment(
+                          value: 'cloud',
+                          icon: Icon(Icons.cloud_outlined, size: 16),
+                          label: Text('Cloud (AWS IoT)', style: TextStyle(fontSize: 11)),
+                        ),
+                      ],
+                      selected: {isTlsPort ? 'cloud' : 'local'},
+                      onSelectionChanged: (selected) {
+                        setDialogState(() {
+                          if (selected.first == 'local') {
+                            portController.text = '1883';
+                            if (hostController.text.contains('amazonaws.com')) {
+                              hostController.text = '192.168.1.105';
+                            }
+                          } else {
+                            portController.text = '8883';
+                            if (!hostController.text.contains('amazonaws.com')) {
+                              hostController.text = 'a2m9xxxxxx-ats.iot.eu-north-1.amazonaws.com';
+                            }
+                          }
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
                     TextField(
                       controller: hostController,
-                      decoration: const InputDecoration(
-                        labelText: 'Hôte Broker (IP ou Nom)',
-                        hintText: 'ex: 192.168.1.50 ou 10.0.2.2',
-                        prefixIcon: Icon(Icons.computer, size: 20),
+                      decoration: InputDecoration(
+                        labelText: isTlsPort ? 'Hôte AWS IoT FQDN' : 'Hôte IP Locale (PC)',
+                        hintText: isTlsPort ? 'ex: xxx-ats.iot.eu-north-1.amazonaws.com' : 'ex: 192.168.1.105',
+                        prefixIcon: Icon(isTlsPort ? Icons.cloud : Icons.computer, size: 20),
                         isDense: true,
-                        border: OutlineInputBorder(),
+                        border: const OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: portController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Port Broker',
                         hintText: '1883 (TCP) ou 8883 (TLS)',
-                        prefixIcon: Icon(Icons.numbers, size: 20),
+                        helperText: isTlsPort ? 'Mode TLS activé automatiquement' : 'Mode direct sans TLS (TCP clair)',
+                        prefixIcon: const Icon(Icons.numbers, size: 20),
                         isDense: true,
-                        border: OutlineInputBorder(),
+                        border: const OutlineInputBorder(),
                       ),
+                      onChanged: (_) => setDialogState(() {}),
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -443,7 +482,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Préréglages :',
+                      'Préréglages rapides :',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
@@ -452,6 +491,27 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
                       runSpacing: 6,
                       children: [
                         ActionChip(
+                          avatar: const Icon(Icons.wifi, size: 14),
+                          label: const Text('PC (192.168.1.105)', style: TextStyle(fontSize: 11)),
+                          onPressed: () {
+                            setDialogState(() {
+                              hostController.text = '192.168.1.105';
+                              portController.text = '1883';
+                            });
+                          },
+                        ),
+                        ActionChip(
+                          avatar: const Icon(Icons.wifi, size: 14),
+                          label: const Text('PC (192.168.1.127)', style: TextStyle(fontSize: 11)),
+                          onPressed: () {
+                            setDialogState(() {
+                              hostController.text = '192.168.1.127';
+                              portController.text = '1883';
+                            });
+                          },
+                        ),
+                        ActionChip(
+                          avatar: const Icon(Icons.phone_android, size: 14),
                           label: const Text('Émulateur (10.0.2.2)', style: TextStyle(fontSize: 11)),
                           onPressed: () {
                             setDialogState(() {
@@ -461,22 +521,22 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
                           },
                         ),
                         ActionChip(
-                          label: const Text('Localhost (127.0.0.1)', style: TextStyle(fontSize: 11)),
+                          avatar: const Icon(Icons.cloud_queue, size: 14),
+                          label: const Text('AWS IoT (eu-north-1)', style: TextStyle(fontSize: 11)),
                           onPressed: () {
                             setDialogState(() {
-                              hostController.text = '127.0.0.1';
-                              portController.text = '1883';
+                              hostController.text = 'a2m9xxxxxx-ats.iot.eu-north-1.amazonaws.com';
+                              portController.text = '8883';
                             });
                           },
                         ),
                         ActionChip(
-                          label: const Text('Réseau Local (192.168.x.x)', style: TextStyle(fontSize: 11)),
+                          avatar: const Icon(Icons.cloud_queue, size: 14),
+                          label: const Text('AWS IoT (eu-west-3)', style: TextStyle(fontSize: 11)),
                           onPressed: () {
                             setDialogState(() {
-                              if (!hostController.text.startsWith('192.168.')) {
-                                hostController.text = '192.168.1.';
-                              }
-                              portController.text = '1883';
+                              hostController.text = 'a2m9xxxxxx-ats.iot.eu-west-3.amazonaws.com';
+                              portController.text = '8883';
                             });
                           },
                         ),
@@ -492,7 +552,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
                 ),
                 FilledButton.icon(
                   icon: const Icon(Icons.check, size: 18),
-                  label: const Text('Appliquer'),
+                  label: const Text('Appliquer & Connecter'),
                   onPressed: () {
                     final newHost = hostController.text.trim();
                     final newPort = int.tryParse(portController.text.trim()) ?? 1883;
@@ -506,7 +566,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
                         _targetDeviceId = 'HealthKicks-$newDeviceId';
                       });
                       Navigator.of(ctx).pop();
-                      _addLog('CONFIG', 'Nouvelle configuration : $_brokerHost:$_brokerPort (Device: $_deviceId)');
+                      _addLog('CONFIG', 'Broker configuré : $_brokerHost:$_brokerPort (Device: $_deviceId)');
                       _connectMqtt();
                     }
                   },
@@ -746,7 +806,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
               height: 28,
               child: OutlinedButton(
                 style: OutlinedButton.styleFrom(padding: EdgeInsets.zero),
-                onPressed: _startBleScan,
+                onPressed: () => _startBleScan(fromButton: true),
                 child: const Text('Re-scanner', style: TextStyle(fontSize: 11)),
               ),
             ),

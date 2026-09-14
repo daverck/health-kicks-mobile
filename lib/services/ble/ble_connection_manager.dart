@@ -41,7 +41,9 @@ class BleConnectionManager {
 
   void _updateStatus(BleConnectionStatus newStatus) {
     _status = newStatus;
-    _statusController.add(newStatus);
+    if (!_statusController.isClosed) {
+      _statusController.add(newStatus);
+    }
   }
 
   /// Démarre le scan et se connecte automatiquement au premier périphérique HealthKicks détecté.

@@ -85,9 +85,19 @@ class MqttGatewayService {
       _isConnected = false;
       String errorMsg = e.toString();
       if (e is SocketException) {
-        errorMsg = 'Connexion réseau impossible vers $brokerHost:$brokerPort (${e.osError?.message ?? e.message}) - Vérifiez le pare-feu ou l\'IP.';
+        final osErr = e.osError?.message ?? e.message;
+        if (brokerPort == 1883) {
+          errorMsg = 'SocketException: $osErr vers $brokerHost:$brokerPort. Vérifiez que Mosquitto est démarré sur le PC hôte avec listener 1883 0.0.0.0 (et pare-feu Windows ouvert).';
+        } else {
+          errorMsg = 'SocketException: $osErr vers $brokerHost:$brokerPort. Hôte inaccessible ou port fermé.';
+        }
       } else if (e is HandshakeException) {
-        errorMsg = 'Échec négociation TLS/SSL sur port $brokerPort ($e).';
+        errorMsg = 'HandshakeException: Échec négociation TLS/SSL sur port $brokerPort ($e). Vérifiez les certificats mTLS ou le SecurityContext pour AWS IoT Core.';
+      } else {
+        final str = e.toString();
+        if (brokerPort == 1883 && (str.contains('refused') || str.contains('failed') || str.contains('OS Error'))) {
+          errorMsg = 'Échec de connexion vers $brokerHost:$brokerPort : Vérifiez que Mosquitto est démarré sur le PC hôte avec listener 1883 0.0.0.0 ($str)';
+        }
       }
       log?.call('Erreur MQTT : $errorMsg', isError: true);
       return false;
