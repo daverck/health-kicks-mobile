@@ -81,8 +81,9 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           FilledButton(
             onPressed: () {
-              final newUrl = controller.text.trim();
+              var newUrl = controller.text.trim();
               if (newUrl.isNotEmpty) {
+                newUrl = newUrl.replaceAll(RegExp(r'/+$'), '');
                 widget.authService.updateBackendBaseUrl(newUrl);
                 Navigator.of(ctx).pop();
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -207,7 +208,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: isServiceLoading
                         ? null
                         : () => _handleSsoLogin(
-                              widget.authService.signInWithGoogle,
+                              () => widget.authService.signInWithGoogle(
+                                backendUrl: widget.authService.backendBaseUrl,
+                              ),
                               'Google',
                             ),
                   ),
@@ -228,7 +231,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: isServiceLoading
                         ? null
                         : () => _handleSsoLogin(
-                              widget.authService.signInWithAzure,
+                              () => widget.authService.signInWithAzure(
+                                backendUrl: widget.authService.backendBaseUrl,
+                              ),
                               'Microsoft Azure',
                             ),
                   ),

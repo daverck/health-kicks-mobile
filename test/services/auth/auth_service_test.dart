@@ -39,6 +39,28 @@ void main() {
       expect(launchedMode, equals(LaunchMode.externalApplication));
     });
 
+    test('signInWithGoogle - Gère proprement le slash final sur https://healthkicks.duckdns.org/', () async {
+      Uri? launchedUri;
+
+      final authService = AuthService(
+        backendBaseUrl: 'https://healthkicks.duckdns.org/',
+        tokenStorage: tokenStorage,
+        urlLauncher: (uri, {mode = LaunchMode.platformDefault}) async {
+          launchedUri = uri;
+          return true;
+        },
+      );
+
+      final success = await authService.signInWithGoogle();
+
+      expect(success, isTrue);
+      expect(launchedUri, isNotNull);
+      expect(
+        launchedUri.toString(),
+        equals('https://healthkicks.duckdns.org/api/v1/auth/google/login?redirect=true'),
+      );
+    });
+
     test('signInWithAzure - Lance l\'URL OAuth Azure avec redirect=true', () async {
       Uri? launchedUri;
       LaunchMode? launchedMode;
@@ -59,6 +81,28 @@ void main() {
       expect(launchedUri, isNotNull);
       expect(launchedUri.toString(), equals('http://127.0.0.1:8000/api/v1/auth/azure/login?redirect=true'));
       expect(launchedMode, equals(LaunchMode.externalApplication));
+    });
+
+    test('signInWithAzure - Gère proprement le slash final et backendUrl explicite', () async {
+      Uri? launchedUri;
+
+      final authService = AuthService(
+        backendBaseUrl: 'https://healthkicks.duckdns.org',
+        tokenStorage: tokenStorage,
+        urlLauncher: (uri, {mode = LaunchMode.platformDefault}) async {
+          launchedUri = uri;
+          return true;
+        },
+      );
+
+      final success = await authService.signInWithAzure(backendUrl: 'https://healthkicks.duckdns.org/');
+
+      expect(success, isTrue);
+      expect(launchedUri, isNotNull);
+      expect(
+        launchedUri.toString(),
+        equals('https://healthkicks.duckdns.org/api/v1/auth/azure/login?redirect=true'),
+      );
     });
 
     test('handleDeepLink - Succès : extrait les tokens, interroge /me et passe en authenticated', () async {

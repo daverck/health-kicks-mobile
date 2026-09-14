@@ -71,7 +71,7 @@ class AuthService extends ChangeNotifier {
     http.Client? httpClient,
     AppLinks? appLinks,
     UrlLauncherFunction? urlLauncher,
-  })  : _backendBaseUrl = backendBaseUrl,
+  })  : _backendBaseUrl = backendBaseUrl.trim().replaceAll(RegExp(r'/+$'), ''),
         _tokenStorage = tokenStorage ?? TokenStorageService(),
         _httpClient = httpClient ?? http.Client(),
         _appLinks = appLinks ?? AppLinks(),
@@ -80,7 +80,7 @@ class AuthService extends ChangeNotifier {
   String get backendBaseUrl => _backendBaseUrl;
 
   void updateBackendBaseUrl(String newUrl) {
-    _backendBaseUrl = newUrl.trim();
+    _backendBaseUrl = newUrl.trim().replaceAll(RegExp(r'/+$'), '');
     notifyListeners();
   }
 
@@ -168,22 +168,40 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  static const String googleLoginPath = '/api/v1/auth/google/login?redirect=true';
+  static const String azureLoginPath = '/api/v1/auth/azure/login?redirect=true';
+
+  /// Construit l'URL complète d'un endpoint backend en normalisant systématiquement
+  /// les slashs finaux de l'URL de base et le slash initial du chemin.
+  String buildApiUrl(String endpointPath, {String? customBackendUrl}) {
+    var base = (customBackendUrl ?? _backendBaseUrl).trim().replaceAll(RegExp(r'/+$'), '');
+    var path = endpointPath.trim();
+    if (!path.startsWith('/')) {
+      path = '/$path';
+    }
+    return '$base$path';
+  }
+
   /// Déclenche le flux SSO Google en ouvrant le navigateur externe
-  /// vers l'endpoint backend d'initiation OAuth.
-  Future<bool> signInWithGoogle() async {
-    return _openSsoBrowser('/api/v1/auth/google/login?redirect=true');
+  /// vers l'endpoint backend d'initiation OAuth :
+  /// `<backendUrl>/api/v1/auth/google/login?redirect=true`.
+  Future<bool> signInWithGoogle({String? backendUrl}) async {
+    final fullUrl = buildApiUrl(googleLoginPath, customBackendUrl: backendUrl);
+    return _openSsoBrowser(fullUrl);
   }
 
   /// Déclenche le flux SSO Microsoft / Azure en ouvrant le navigateur externe
-  /// vers l'endpoint backend d'initiation OAuth.
-  Future<bool> signInWithAzure() async {
-    return _openSsoBrowser('/api/v1/auth/azure/login?redirect=true');
+  /// vers l'endpoint backend d'initiation OAuth :
+  /// `<backendUrl>/api/v1/auth/azure/login?redirect=true`.
+  Future<bool> signInWithAzure({String? backendUrl}) async {
+    final fullUrl = buildApiUrl(azureLoginPath, customBackendUrl: backendUrl);
+    return _openSsoBrowser(fullUrl);
   }
 
-  Future<bool> _openSsoBrowser(String path) async {
+  Future<bool> _openSsoBrowser(String fullUrl) async {
     _lastError = null;
     try {
-      final uri = Uri.parse('$_sanitizedBaseUrl$path');
+      final uri = Uri.parse(fullUrl);
       final launched = await _launchUrl(
         uri,
         mode: LaunchMode.externalApplication,
@@ -309,9 +327,7 @@ class AuthService extends ChangeNotifier {
   }
 
   String get _sanitizedBaseUrl {
-    return _backendBaseUrl.endsWith('/')
-        ? _backendBaseUrl.substring(0, _backendBaseUrl.length - 1)
-        : _backendBaseUrl;
+    return _backendBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
   }
 }
 
