@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../core/constants/ble_constants.dart';
 import '../../core/permissions/permission_service.dart';
@@ -88,13 +89,20 @@ class BleConnectionManager {
     _updateStatus(BleConnectionStatus.connecting);
 
     try {
-      await device.connect(autoConnect: true);
+      await device.connect(
+        autoConnect: false,
+        timeout: const Duration(seconds: 15),
+      );
       _updateStatus(BleConnectionStatus.connected);
 
-      // Négocier le MTU maximal (jusqu'à 512, standard 247)
-      try {
-        _negotiatedMtu = await device.requestMtu(512);
-      } catch (e) {
+      // Négocier le MTU maximal (standard 247 sous Android)
+      if (Platform.isAndroid) {
+        try {
+          _negotiatedMtu = await device.requestMtu(247);
+        } catch (_) {
+          _negotiatedMtu = 247;
+        }
+      } else {
         _negotiatedMtu = 247;
       }
 

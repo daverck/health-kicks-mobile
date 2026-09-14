@@ -12,15 +12,13 @@ class PermissionService {
       final scanStatus = await Permission.bluetoothScan.request();
       final connectStatus = await Permission.bluetoothConnect.request();
 
+      if (scanStatus.isGranted && connectStatus.isGranted) {
+        return true;
+      }
+
       // Pour les appareils plus anciens (Android 11 et inférieur), la localisation est obligatoire pour le scan BLE
       final locationStatus = await Permission.locationWhenInUse.request();
-
-      final isScanGranted = scanStatus.isGranted;
-      final isConnectGranted = connectStatus.isGranted;
-      final isLocationGranted = locationStatus.isGranted;
-
-      // Sur Android 12+, scan + connect suffisent. Sur Android < 12, location est requis.
-      return (isScanGranted && isConnectGranted) || isLocationGranted;
+      return locationStatus.isGranted;
     } else if (Platform.isIOS) {
       final bluetoothStatus = await Permission.bluetooth.request();
       return bluetoothStatus.isGranted;
@@ -34,8 +32,8 @@ class PermissionService {
     if (Platform.isAndroid) {
       final hasScan = await Permission.bluetoothScan.isGranted;
       final hasConnect = await Permission.bluetoothConnect.isGranted;
-      final hasLocation = await Permission.locationWhenInUse.isGranted;
-      return (hasScan && hasConnect) || hasLocation;
+      if (hasScan && hasConnect) return true;
+      return await Permission.locationWhenInUse.isGranted;
     } else if (Platform.isIOS) {
       return await Permission.bluetooth.isGranted;
     }

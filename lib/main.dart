@@ -63,10 +63,10 @@ class GatewayDashboardScreen extends StatefulWidget {
 }
 
 class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
-  static const String _deviceId = 'HK-2';
-  static const String _targetDeviceId = 'HealthKicks-HK-2';
-  static const String _brokerHost = '10.0.2.2'; // Gateway broker default (local/emulator)
-  static const int _brokerPort = 1883;
+  String _deviceId = 'HK-2';
+  String _targetDeviceId = 'HealthKicks-HK-2';
+  String _brokerHost = '10.0.2.2'; // Gateway broker default (local/emulator)
+  int _brokerPort = 1883;
 
   final PermissionService _permissionService = PermissionService();
   BleConnectionManager? _bleManager;
@@ -127,6 +127,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         return Colors.blue;
       case 'MQTT':
         return Colors.teal;
+      case 'CONFIG':
+        return Colors.cyan;
       case 'ACTIVITY':
         return Colors.orange;
       case 'BURST':
@@ -145,32 +147,61 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
     }
   }
 
+  Future<void> _connectMqtt() async {
+    _addLog('MQTT', 'Connexion au broker $_brokerHost:$_brokerPort (Device: $_deviceId)...');
+    try {
+      _coordinator?.stopRouting();
+      _coordinator = null;
+      _mqttService?.disconnect();
+
+      _mqttService = MqttGatewayService(
+        brokerHost: _brokerHost,
+        brokerPort: _brokerPort,
+        deviceId: _deviceId,
+      );
+
+      final connected = await _mqttService!.connect();
+      if (mounted) {
+        setState(() => _mqttConnected = connected);
+      }
+      _addLog(
+        'MQTT',
+        connected
+            ? 'Connecté au broker $_brokerHost:$_brokerPort'
+            : 'Broker MQTT non joignable ($_brokerHost:$_brokerPort)',
+        color: connected ? Colors.teal : Colors.orange,
+      );
+
+      if (connected && _bleClient != null) {
+        _coordinator = GatewayCoordinator(
+          bleClient: _bleClient!,
+          mqttService: _mqttService!,
+          deviceId: _deviceId,
+        );
+        _coordinator!.startRouting();
+        _addLog('GATEWAY', 'Routage bidirectionnel BLE <-> MQTT réactivé.');
+      }
+    } catch (e) {
+      _addLog('MQTT', 'Erreur MQTT : $e', color: Colors.red);
+      if (mounted) {
+        setState(() => _mqttConnected = false);
+      }
+    }
+  }
+
   Future<void> _initGateway() async {
     _addLog('INIT', 'Démarrage de la passerelle HealthKicks...');
 
     // 1. Solliciter les permissions requises
     try {
       final hasPerms = await _permissionService.requestBlePermissions();
-      _addLog('PERM', hasPerms ? 'Permissions BLE & Localisation accordées.' : 'Permissions BLE refusées.');
+      _addLog('PERM', hasPerms ? 'Permissions BLE accordées.' : 'Permissions BLE refusées.');
     } catch (e) {
       _addLog('PERM', 'Vérification des permissions ignorée ($e)');
     }
 
     // 2. Initialiser le service MQTT
-    try {
-      _mqttService = MqttGatewayService(
-        brokerHost: _brokerHost,
-        brokerPort: _brokerPort,
-        deviceId: _deviceId,
-      );
-      final connected = await _mqttService!.connect();
-      if (mounted) {
-        setState(() => _mqttConnected = connected);
-      }
-      _addLog('MQTT', connected ? 'Connecté au broker $_brokerHost:$_brokerPort' : 'Broker MQTT non joignable ($_brokerHost:$_brokerPort)');
-    } catch (e) {
-      _addLog('MQTT', 'Erreur MQTT : $e', color: Colors.red);
-    }
+    await _connectMqtt();
 
     // 3. Initialiser le gestionnaire BLE
     try {
@@ -292,32 +323,175 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
     }
   }
 
+  Future<void> _showMqttSettingsDialog() async {
+    final hostController = TextEditingController(text: _brokerHost);
+    final portController = TextEditingController(text: _brokerPort.toString());
+    final deviceIdController = TextEditingController(text: _deviceId);
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.settings_ethernet, size: 22),
+                  SizedBox(width: 8),
+                  Text('Paramètres MQTT'),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      controller: hostController,
+                      decoration: const InputDecoration(
+                        labelText: 'Hôte Broker (IP ou Nom)',
+                        hintText: 'ex: 192.168.1.50 ou 10.0.2.2',
+                        prefixIcon: Icon(Icons.computer, size: 20),
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: portController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Port Broker',
+                        hintText: '1883 (TCP) ou 8883 (TLS)',
+                        prefixIcon: Icon(Icons.numbers, size: 20),
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: deviceIdController,
+                      decoration: const InputDecoration(
+                        labelText: 'Device ID',
+                        hintText: 'HK-2',
+                        prefixIcon: Icon(Icons.fingerprint, size: 20),
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Préréglages :',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        ActionChip(
+                          label: const Text('Émulateur (10.0.2.2)', style: TextStyle(fontSize: 11)),
+                          onPressed: () {
+                            setDialogState(() {
+                              hostController.text = '10.0.2.2';
+                              portController.text = '1883';
+                            });
+                          },
+                        ),
+                        ActionChip(
+                          label: const Text('Localhost (127.0.0.1)', style: TextStyle(fontSize: 11)),
+                          onPressed: () {
+                            setDialogState(() {
+                              hostController.text = '127.0.0.1';
+                              portController.text = '1883';
+                            });
+                          },
+                        ),
+                        ActionChip(
+                          label: const Text('Réseau Local (192.168.x.x)', style: TextStyle(fontSize: 11)),
+                          onPressed: () {
+                            setDialogState(() {
+                              if (!hostController.text.startsWith('192.168.')) {
+                                hostController.text = '192.168.1.';
+                              }
+                              portController.text = '1883';
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Annuler'),
+                ),
+                FilledButton.icon(
+                  icon: const Icon(Icons.check, size: 18),
+                  label: const Text('Appliquer'),
+                  onPressed: () {
+                    final newHost = hostController.text.trim();
+                    final newPort = int.tryParse(portController.text.trim()) ?? 1883;
+                    final newDeviceId = deviceIdController.text.trim();
+
+                    if (newHost.isNotEmpty && newDeviceId.isNotEmpty) {
+                      setState(() {
+                        _brokerHost = newHost;
+                        _brokerPort = newPort;
+                        _deviceId = newDeviceId;
+                        _targetDeviceId = 'HealthKicks-$newDeviceId';
+                      });
+                      Navigator.of(ctx).pop();
+                      _addLog('CONFIG', 'Nouvelle configuration : $_brokerHost:$_brokerPort (Device: $_deviceId)');
+                      _connectMqtt();
+                    }
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('HealthKicks BLE-to-MQTT Gateway'),
         actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.perm_identity, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  _deviceId,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+          IconButton(
+            icon: const Icon(Icons.tune),
+            tooltip: 'Configuration Broker MQTT',
+            onPressed: _showMqttSettingsDialog,
+          ),
+          InkWell(
+            onTap: _showMqttSettingsDialog,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              margin: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.perm_identity, size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    _deviceId,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -531,16 +705,37 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(Icons.cloud, color: statusColor, size: 20),
-                const SizedBox(width: 4),
-                const Text('AWS / MQTT', style: TextStyle(fontWeight: FontWeight.bold)),
+                Row(
+                  children: [
+                    Icon(Icons.cloud, color: statusColor, size: 20),
+                    const SizedBox(width: 4),
+                    const Text('AWS / MQTT', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                InkWell(
+                  onTap: _showMqttSettingsDialog,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(2.0),
+                    child: Icon(
+                      Icons.settings,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
               ],
             ),
-            const Text(
-              '$_brokerHost:$_brokerPort',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-              overflow: TextOverflow.ellipsis,
+            const SizedBox(height: 4),
+            InkWell(
+              onTap: _showMqttSettingsDialog,
+              child: Text(
+                '$_brokerHost:$_brokerPort',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
             Row(
               children: [
@@ -557,20 +752,30 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
               ],
             ),
             const SizedBox(height: 6),
-            SizedBox(
-              width: double.infinity,
-              height: 28,
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(padding: EdgeInsets.zero),
-                onPressed: () async {
-                  _addLog('MQTT', 'Reconnexion au broker...');
-                  final ok = await _mqttService?.connect() ?? false;
-                  if (mounted) {
-                    setState(() => _mqttConnected = ok);
-                  }
-                },
-                child: const Text('Re-connecter', style: TextStyle(fontSize: 11)),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 28,
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(padding: EdgeInsets.zero),
+                      onPressed: _connectMqtt,
+                      child: const Text('Re-connecter', style: TextStyle(fontSize: 11)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                SizedBox(
+                  height: 28,
+                  width: 32,
+                  child: IconButton.outlined(
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.edit, size: 14),
+                    tooltip: 'Configurer broker',
+                    onPressed: _showMqttSettingsDialog,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
