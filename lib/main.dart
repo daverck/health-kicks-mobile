@@ -156,9 +156,9 @@ class GatewayDashboardScreen extends StatefulWidget {
 class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
   String _deviceId = 'HK-2';
   String _targetDeviceId = 'HealthKicks-HK-2';
-  String _brokerHost = '10.0.2.2'; // Gateway broker default (local/emulator)
-  int _brokerPort = 1883;
-  MqttConnectionMode _connectionMode = MqttConnectionMode.localTcp;
+  String _brokerHost = AppConfig.awsIotEndpoint;
+  int _brokerPort = 443;
+  MqttConnectionMode _connectionMode = MqttConnectionMode.cloudAwsWebSockets;
   IotCredentialsRepository? _credentialsRepo;
 
   final PermissionService _permissionService = PermissionService();
@@ -520,8 +520,12 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
   }
 
   Future<void> _showMqttSettingsDialog() async {
-    final hostController = TextEditingController(text: _brokerHost);
-    final portController = TextEditingController(text: _brokerPort.toString());
+    final hostController = TextEditingController(
+      text: _connectionMode == MqttConnectionMode.localTcp ? _brokerHost : '192.168.1.127',
+    );
+    final portController = TextEditingController(
+      text: (_connectionMode == MqttConnectionMode.localTcp ? _brokerPort : 1883).toString(),
+    );
     final deviceIdController = TextEditingController(text: _deviceId);
     var selectedMode = _connectionMode;
 
@@ -548,62 +552,60 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
                     SegmentedButton<MqttConnectionMode>(
                       segments: const [
                         ButtonSegment(
-                          value: MqttConnectionMode.localTcp,
-                          icon: Icon(Icons.laptop, size: 16),
-                          label: Text('Local (Mosquitto)', style: TextStyle(fontSize: 11)),
-                        ),
-                        ButtonSegment(
                           value: MqttConnectionMode.cloudAwsWebSockets,
                           icon: Icon(Icons.cloud_outlined, size: 16),
                           label: Text('AWS Cloud (SigV4)', style: TextStyle(fontSize: 11)),
+                        ),
+                        ButtonSegment(
+                          value: MqttConnectionMode.localTcp,
+                          icon: Icon(Icons.laptop, size: 16),
+                          label: Text('Local (Mosquitto)', style: TextStyle(fontSize: 11)),
                         ),
                       ],
                       selected: {selectedMode},
                       onSelectionChanged: (selected) {
                         setDialogState(() {
                           selectedMode = selected.first;
-                          if (selectedMode == MqttConnectionMode.localTcp) {
-                            portController.text = '1883';
-                            if (hostController.text.contains('amazonaws.com') || hostController.text.isEmpty) {
-                              hostController.text = '192.168.1.127';
-                            }
-                          } else {
-                            portController.text = '443';
-                            hostController.text = 'a2k10w7ebf2tx9-ats.iot.eu-north-1.amazonaws.com';
-                          }
                         });
                       },
                     ),
                     const SizedBox(height: 16),
                     if (isCloud) ...[
                       Container(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                          ),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                Icon(Icons.security, size: 18, color: Theme.of(context).colorScheme.primary),
+                                Icon(Icons.cloud_done, size: 20, color: Theme.of(context).colorScheme.primary),
                                 const SizedBox(width: 8),
                                 const Expanded(
                                   child: Text(
-                                    'Connexion WebSockets WSS (port 443) avec signature AWS SigV4 via les identifiants STS fournis par le backend.',
-                                    style: TextStyle(fontSize: 11),
+                                    'Connecté à AWS IoT Core (${AppConfig.awsRegion}) via STS',
+                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Endpoint ATS : ${AppConfig.awsIotEndpoint}',
+                              style: TextStyle(fontSize: 11),
+                            ),
+                            const SizedBox(height: 4),
                             Text(
                               'Backend STS : ${AppConfig.backendBaseUrl}',
                               style: TextStyle(
                                 fontSize: 11,
                                 color: Theme.of(context).colorScheme.primary,
-                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
@@ -646,62 +648,50 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
                         border: OutlineInputBorder(),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Préréglages rapides :',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        ActionChip(
-                          avatar: const Icon(Icons.cloud_done, size: 14),
-                          label: const Text('AWS Cloud (SigV4)', style: TextStyle(fontSize: 11)),
-                          onPressed: () {
-                            setDialogState(() {
-                              selectedMode = MqttConnectionMode.cloudAwsWebSockets;
-                              portController.text = '443';
-                              hostController.text = 'a2k10w7ebf2tx9-ats.iot.eu-north-1.amazonaws.com';
-                            });
-                          },
-                        ),
-                        ActionChip(
-                          avatar: const Icon(Icons.wifi, size: 14),
-                          label: const Text('Local (192.168.1.127)', style: TextStyle(fontSize: 11)),
-                          onPressed: () {
-                            setDialogState(() {
-                              selectedMode = MqttConnectionMode.localTcp;
-                              hostController.text = '192.168.1.127';
-                              portController.text = '1883';
-                            });
-                          },
-                        ),
-                        ActionChip(
-                          avatar: const Icon(Icons.wifi, size: 14),
-                          label: const Text('Local (192.168.1.105)', style: TextStyle(fontSize: 11)),
-                          onPressed: () {
-                            setDialogState(() {
-                              selectedMode = MqttConnectionMode.localTcp;
-                              hostController.text = '192.168.1.105';
-                              portController.text = '1883';
-                            });
-                          },
-                        ),
-                        ActionChip(
-                          avatar: const Icon(Icons.phone_android, size: 14),
-                          label: const Text('Émulateur (10.0.2.2)', style: TextStyle(fontSize: 11)),
-                          onPressed: () {
-                            setDialogState(() {
-                              selectedMode = MqttConnectionMode.localTcp;
-                              hostController.text = '10.0.2.2';
-                              portController.text = '1883';
-                            });
-                          },
-                        ),
-                      ],
-                    ),
+                    if (!isCloud) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        'Préréglages locaux rapides :',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          ActionChip(
+                            avatar: const Icon(Icons.wifi, size: 14),
+                            label: const Text('Local (192.168.1.127)', style: TextStyle(fontSize: 11)),
+                            onPressed: () {
+                              setDialogState(() {
+                                hostController.text = '192.168.1.127';
+                                portController.text = '1883';
+                              });
+                            },
+                          ),
+                          ActionChip(
+                            avatar: const Icon(Icons.wifi, size: 14),
+                            label: const Text('Local (192.168.1.105)', style: TextStyle(fontSize: 11)),
+                            onPressed: () {
+                              setDialogState(() {
+                                hostController.text = '192.168.1.105';
+                                portController.text = '1883';
+                              });
+                            },
+                          ),
+                          ActionChip(
+                            avatar: const Icon(Icons.phone_android, size: 14),
+                            label: const Text('Émulateur (10.0.2.2)', style: TextStyle(fontSize: 11)),
+                            onPressed: () {
+                              setDialogState(() {
+                                hostController.text = '10.0.2.2';
+                                portController.text = '1883';
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -714,8 +704,12 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
                   icon: const Icon(Icons.check, size: 18),
                   label: const Text('Appliquer & Connecter'),
                   onPressed: () {
-                    final newHost = hostController.text.trim();
-                    final newPort = int.tryParse(portController.text.trim()) ?? (selectedMode == MqttConnectionMode.cloudAwsWebSockets ? 443 : 1883);
+                    final newHost = selectedMode == MqttConnectionMode.cloudAwsWebSockets
+                        ? AppConfig.awsIotEndpoint
+                        : hostController.text.trim();
+                    final newPort = selectedMode == MqttConnectionMode.cloudAwsWebSockets
+                        ? 443
+                        : (int.tryParse(portController.text.trim()) ?? 1883);
                     final newDeviceId = deviceIdController.text.trim();
 
                     if (newDeviceId.isNotEmpty) {
@@ -729,7 +723,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
                       Navigator.of(ctx).pop();
                       _addLog(
                         'CONFIG',
-                        'Configuration mise à jour : Mode=${selectedMode.name}, Device=$_deviceId${selectedMode == MqttConnectionMode.cloudAwsWebSockets ? ", Backend=${AppConfig.backendBaseUrl}" : ", Broker=$_brokerHost:$_brokerPort"}',
+                        'Configuration mise à jour : Mode=${selectedMode.name}, Device=$_deviceId${selectedMode == MqttConnectionMode.cloudAwsWebSockets ? ", Backend=${AppConfig.backendBaseUrl}, Endpoint=${AppConfig.awsIotEndpoint}" : ", Broker=$_brokerHost:$_brokerPort"}',
                       );
                       _connectMqtt();
                     }

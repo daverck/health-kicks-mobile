@@ -105,5 +105,40 @@ void main() {
       final wsUri = uri.replace(port: 443);
       expect(wsUri.toString().contains('#'), isFalse);
     });
+
+    test('Respecte la règle AWS IoT Core omitSessionToken (signature indépendante du sessionToken)', () {
+      final creds1 = IoTCredentials(
+        accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
+        secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+        sessionToken: 'TOKEN_ALPHA',
+        expiration: DateTime.parse('2026-09-14T22:00:00Z'),
+        iotEndpoint: 'a2k10w7ebf2tx9-ats.iot.eu-north-1.amazonaws.com',
+        region: 'eu-north-1',
+      );
+
+      final creds2 = IoTCredentials(
+        accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
+        secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+        sessionToken: 'TOKEN_BETA',
+        expiration: DateTime.parse('2026-09-14T22:00:00Z'),
+        iotEndpoint: 'a2k10w7ebf2tx9-ats.iot.eu-north-1.amazonaws.com',
+        region: 'eu-north-1',
+      );
+
+      final fixedDate = DateTime.utc(2026, 9, 14, 19, 30, 0);
+
+      final url1 = SigV4Signer.buildSignedWebSocketUrl(credentials: creds1, requestDateTime: fixedDate);
+      final url2 = SigV4Signer.buildSignedWebSocketUrl(credentials: creds2, requestDateTime: fixedDate);
+
+      final uri1 = Uri.parse(url1);
+      final uri2 = Uri.parse(url2);
+
+      // La signature est calculée sans X-Amz-Security-Token selon la spécification AWS IoT Core WebSocket
+      expect(uri1.queryParameters['X-Amz-Signature'], equals(uri2.queryParameters['X-Amz-Signature']));
+
+      // Mais chaque URL contient son propre X-Amz-Security-Token
+      expect(uri1.queryParameters['X-Amz-Security-Token'], equals('TOKEN_ALPHA'));
+      expect(uri2.queryParameters['X-Amz-Security-Token'], equals('TOKEN_BETA'));
+    });
   });
 }

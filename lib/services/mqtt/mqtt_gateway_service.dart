@@ -83,6 +83,10 @@ class MqttGatewayService {
 
       final effectiveClientId = clientId.isNotEmpty ? clientId : 'healthkicks-session-$deviceId';
 
+      // Dans mqtt_client 10.11.11 :
+      // MqttServerWsConnection.connect(server, port) valide que server débute impérativement par 'ws://' ou 'wss://'.
+      // Aucune propriété 'websocketUrl' n'existe dans cette version.
+      // L'URL WSS pré-signée SigV4 complète (sans fragment #) est donc transmise comme paramètre 'server'.
       _client = MqttServerClient.withPort(
         signedWssUrl,
         effectiveClientId,

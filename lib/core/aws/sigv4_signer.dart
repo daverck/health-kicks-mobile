@@ -36,6 +36,9 @@ class SigV4Signer {
     }
 
     // 1. Paramètres de requête canoniques (triés par nom en ordre alphabétique strict)
+    // Règle spécifique AWS IoT Core MQTT over WebSockets (omitSessionToken: true) :
+    // Le paramètre X-Amz-Security-Token NE DOIT PAS être inclus dans la requête canonique
+    // signée, mais est joint directement à l'URL finale.
     final canonicalQueryParams = <String, String>{
       'X-Amz-Algorithm': _algorithm,
       'X-Amz-Credential':
@@ -43,10 +46,6 @@ class SigV4Signer {
       'X-Amz-Date': amzDate,
       'X-Amz-SignedHeaders': 'host',
     };
-
-    if (credentials.sessionToken.isNotEmpty) {
-      canonicalQueryParams['X-Amz-Security-Token'] = credentials.sessionToken;
-    }
 
     final sortedKeys = canonicalQueryParams.keys.toList()..sort();
     final canonicalQueryString = sortedKeys
@@ -92,7 +91,14 @@ class SigV4Signer {
         .toString();
 
     // 6. URL finale WSS (strictement sans fragment ni trailing #)
-    return 'wss://$endpoint/mqtt?$canonicalQueryString&X-Amz-Signature=$signature';
+    // On assemble l'URL avec les paramètres canoniques, la signature et le session token (si présent)
+    var finalQueryString = '$canonicalQueryString&X-Amz-Signature=$signature';
+    if (credentials.sessionToken.isNotEmpty) {
+      finalQueryString +=
+          '&X-Amz-Security-Token=${_uriEncodeStrict(credentials.sessionToken)}';
+    }
+
+    return 'wss://$endpoint/mqtt?$finalQueryString';
   }
 
   /// Dérivation cryptographique de la clé de signature AWS SigV4 :

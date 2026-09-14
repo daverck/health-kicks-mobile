@@ -1,3 +1,5 @@
+import '../../core/config/app_config.dart';
+
 /// Modèle de données représentant les identifiants temporaires AWS STS
 /// obtenus auprès du backend HealthKicks (`POST /api/v1/auth/iot-credentials`).
 class IoTCredentials {
@@ -26,14 +28,18 @@ class IoTCredentials {
   }
 
   /// Instancie les identifiants depuis la réponse JSON du backend.
+  /// Si le backend omet l'endpoint ou la région, les constantes de production AppConfig sont appliquées.
   factory IoTCredentials.fromJson(Map<String, dynamic> json) {
+    final rawEndpoint = (json['iot_endpoint'] as String?)?.trim() ?? '';
+    final rawRegion = (json['region'] as String?)?.trim() ?? '';
+
     return IoTCredentials(
       accessKeyId: json['access_key_id'] as String,
       secretAccessKey: json['secret_access_key'] as String,
       sessionToken: json['session_token'] as String,
       expiration: DateTime.parse(json['expiration'] as String),
-      iotEndpoint: json['iot_endpoint'] as String,
-      region: json['region'] as String,
+      iotEndpoint: rawEndpoint.isNotEmpty ? rawEndpoint : AppConfig.awsIotEndpoint,
+      region: rawRegion.isNotEmpty ? rawRegion : AppConfig.awsRegion,
     );
   }
 
