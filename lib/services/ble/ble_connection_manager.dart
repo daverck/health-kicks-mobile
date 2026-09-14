@@ -53,20 +53,25 @@ class BleConnectionManager {
 
     _updateStatus(BleConnectionStatus.scanning);
 
-    // Filtrer par le Service UUID HealthKicks
-    final serviceGuid = Guid(BleConstants.footwearServiceUuid);
-
     await FlutterBluePlus.startScan(
-      withServices: [serviceGuid],
       timeout: timeout,
     );
 
     _scanSubscription = FlutterBluePlus.scanResults.listen((results) async {
       for (final r in results) {
-        final deviceName = r.device.platformName;
-        final matchesId = targetDeviceId == null || deviceName.contains(targetDeviceId);
+        final advName = r.advertisementData.advName;
+        final platformName = r.device.platformName;
+        final name = advName.isNotEmpty ? advName : platformName;
 
-        if (matchesId) {
+        final hasServiceUuid = r.advertisementData.serviceUuids.any(
+          (u) => u.toString().toLowerCase() == BleConstants.footwearServiceUuid.toLowerCase(),
+        );
+
+        final matchesTarget = targetDeviceId != null
+            ? name.toLowerCase().contains(targetDeviceId.toLowerCase())
+            : name.toLowerCase().contains('healthkicks');
+
+        if (hasServiceUuid || matchesTarget) {
           await FlutterBluePlus.stopScan();
           await _scanSubscription?.cancel();
           _scanSubscription = null;

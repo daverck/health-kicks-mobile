@@ -34,8 +34,10 @@ class MqttGatewayService {
   /// Établit la liaison MQTT over TLS avec AWS IoT Core.
   Future<bool> connect() async {
     _client = MqttServerClient.withPort(brokerHost, clientId, brokerPort);
-    _client!.secure = true;
-    _client!.securityContext = securityContext ?? SecurityContext.defaultContext;
+    _client!.secure = (brokerPort == 8883);
+    if (_client!.secure) {
+      _client!.securityContext = securityContext ?? SecurityContext.defaultContext;
+    }
     _client!.keepAlivePeriod = 30;
     _client!.autoReconnect = true;
     _client!.logging(on: false);
