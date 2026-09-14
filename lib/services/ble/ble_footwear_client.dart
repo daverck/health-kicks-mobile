@@ -18,7 +18,15 @@ class BleFootwearClient {
   BluetoothCharacteristic? _studioBurstChar;
 
   BluetoothCharacteristic? get activityCharacteristic => _activityChar;
+  BluetoothCharacteristic? get hapticCharacteristic => _hapticChar;
+  BluetoothCharacteristic? get studioControlCharacteristic => _studioControlChar;
   BluetoothCharacteristic? get studioBurstCharacteristic => _studioBurstChar;
+
+  bool get hasHaptic => _hapticChar != null;
+  bool get hasStudioControl => _studioControlChar != null;
+  bool get hasActivityDetection => _activityChar != null;
+  bool get hasStudioBurst => _studioBurstChar != null;
+  bool get isReady => _hapticChar != null && _studioControlChar != null;
 
   final _activityController = StreamController<ActivityDetectionModel>.broadcast();
   Stream<ActivityDetectionModel> get activityStream => _activityController.stream;
@@ -99,7 +107,8 @@ class BleFootwearClient {
       throw StateError('Caractéristique Haptic Command non initialisée.');
     }
     final bytes = command.toBleBytes();
-    await _hapticChar!.write(bytes, withoutResponse: false);
+    final withoutResponse = !_hapticChar!.properties.write && _hapticChar!.properties.writeWithoutResponse;
+    await _hapticChar!.write(bytes, withoutResponse: withoutResponse);
   }
 
   /// Déclenche une session d'enregistrement Studio (START <label> <sec> <id>).

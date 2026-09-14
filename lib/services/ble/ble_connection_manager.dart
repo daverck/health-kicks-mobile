@@ -177,8 +177,10 @@ class BleConnectionManager {
           log?.call('[BLE] Périphérique déconnecté.');
           _updateStatus(BleConnectionStatus.disconnected);
         } else if (state == BluetoothConnectionState.connected) {
-          log?.call('[BLE] Périphérique reconnecté.');
-          _updateStatus(BleConnectionStatus.connected);
+          if (_status != BleConnectionStatus.ready) {
+            log?.call('[BLE] Périphérique reconnecté.');
+            _updateStatus(BleConnectionStatus.connected);
+          }
         }
       });
 

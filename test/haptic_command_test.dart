@@ -39,5 +39,16 @@ void main() {
       expect(byteData.getUint8(1), equals(255));
       expect(byteData.getUint16(2, Endian.big), equals(10000));
     });
+
+    test('Sérialise fidèlement la commande de test UI (pattern 0, intensity 200, duration 400ms)', () {
+      const command = HapticCommandModel(
+        commandId: 'manual-test-vib',
+        patternId: 0,
+        intensity: 200,
+        durationMs: 400,
+      );
+      final bytes = command.toBleBytes();
+      expect(bytes, equals([0x00, 0xC8, 0x01, 0x90])); // 200 = 0xC8, 400 = 0x0190
+    });
   });
 }

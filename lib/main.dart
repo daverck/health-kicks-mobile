@@ -113,7 +113,12 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
       });
 
       _addLog('BLE', 'Statut connexion : ${status.name}');
-      if (status == BleConnectionStatus.ready && _bleManager?.connectedDevice != null) {
+      if (status == BleConnectionStatus.disconnected) {
+        _coordinator?.stopRouting();
+        _coordinator = null;
+        _bleClient?.dispose();
+        _bleClient = null;
+      } else if (status == BleConnectionStatus.ready && _bleManager?.connectedDevice != null) {
         _onBleDeviceReady(_bleManager!.connectedDevice!);
       }
     });
@@ -309,7 +314,10 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
       _bleClient = BleFootwearClient(device: device);
       _addLog('BLE', 'Découverte des services GATT en cours...');
       await _bleClient!.initializeServices();
-      _addLog('BLE', 'Souscription active : Activity (0002), Studio Control (0004), Burst (0005)');
+      _addLog(
+        'BLE',
+        'Souscription active : Activity (0002), Studio Control (0004), Burst (0005) | Haptique (0003) ${_bleClient!.hasHaptic ? "prêt" : "non trouvé"}',
+      );
 
       // Écoute des flux BLE pour le journal en direct
       _bleClient!.activityStream.listen((detection) {
@@ -347,7 +355,11 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
   }
 
   Future<void> _sendTestHapticCommand() async {
-    if (_bleClient == null || _bleStatus != BleConnectionStatus.ready) {
+    final isConnected = _bleClient != null &&
+        (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected) &&
+        _bleClient!.hasHaptic;
+
+    if (!isConnected) {
       _addLog('HAPTIC', 'Chaussure non connectée : impossible d\'émettre la commande.', color: Colors.red);
       return;
     }
@@ -360,17 +372,21 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
     );
 
     try {
-      _addLog('HAPTIC', 'Envoi commande haptique (CMD:VIB 400ms, intensité: 200)...');
+      _addLog('HAPTIC', '[HAPTIC] Écriture sur 0003 (Intensité: ${command.intensity}, Durée: ${command.durationMs} ms)...');
       await _bleClient!.sendHapticCommand(command);
-      _addLog('HAPTIC', 'Commande haptique transmise avec succès au matériel.', color: Colors.green);
+      _addLog('HAPTIC', '[HAPTIC] Écriture sur 0003 validée avec succès (GATT write OK).', color: Colors.green);
     } catch (e) {
-      _addLog('HAPTIC', 'Échec transmission haptique : $e', color: Colors.red);
+      _addLog('HAPTIC', '[HAPTIC] Échec écriture sur 0003 : $e', color: Colors.red);
     }
   }
 
   Future<void> _triggerTestStudioSession() async {
-    if (_coordinator == null) {
-      _addLog('STUDIO', 'Passerelle non prête : impossible de démarrer la session Studio.', color: Colors.red);
+    final isConnected = _bleClient != null &&
+        (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected) &&
+        _bleClient!.hasStudioControl;
+
+    if (!isConnected) {
+      _addLog('STUDIO', 'Chaussure non connectée ou service Studio indisponible.', color: Colors.red);
       return;
     }
 
@@ -378,11 +394,19 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
     _addLog('STUDIO', 'Démarrage session Studio (5.0s, label: test_gait, id: $sessionId)...');
 
     try {
-      await _coordinator!.triggerStudioSession(
-        label: 'test_gait',
-        durationSec: 5.0,
-        sessionId: sessionId,
-      );
+      if (_coordinator != null) {
+        await _coordinator!.triggerStudioSession(
+          label: 'test_gait',
+          durationSec: 5.0,
+          sessionId: sessionId,
+        );
+      } else {
+        await _bleClient!.startStudioSession(
+          label: 'test_gait',
+          durationSec: 5.0,
+          sessionId: sessionId,
+        );
+      }
       _addLog('STUDIO', 'Ordre START envoyé à la chaussure. En attente du flux burst...', color: Colors.indigo);
     } catch (e) {
       _addLog('STUDIO', 'Échec lancement session Studio : $e', color: Colors.red);
@@ -755,7 +779,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
   }
 
   Widget _buildBleCard() {
-    final isReady = _bleStatus == BleConnectionStatus.ready;
+    final isReady = (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected) &&
+        _bleClient != null;
     final isScanning = _bleStatus == BleConnectionStatus.scanning;
     final isConnecting = _bleStatus == BleConnectionStatus.connecting;
 
