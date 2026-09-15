@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/models/activity_detection_model.dart';
 import 'package:healthkicks_mobile/models/haptic_command_model.dart';
 import 'package:healthkicks_mobile/models/imu_reading_model.dart';
+import 'package:healthkicks_mobile/models/studio_command_model.dart';
 import 'package:healthkicks_mobile/models/studio_session_model.dart';
 import 'package:healthkicks_mobile/services/ble/ble_footwear_client.dart';
 import 'package:healthkicks_mobile/services/ble/burst_reassembler.dart';
@@ -63,6 +64,7 @@ class FakeBleFootwearClient implements BleFootwearClient {
 
 class FakeMqttGatewayService implements MqttGatewayService {
   final _hapticCtrl = StreamController<HapticCommandModel>.broadcast();
+  final _studioCommandCtrl = StreamController<StudioCommandModel>.broadcast();
 
   final List<ActivityDetectionModel> publishedDetections = [];
   final List<StudioSessionModel> publishedStudioSessions = [];
@@ -73,7 +75,11 @@ class FakeMqttGatewayService implements MqttGatewayService {
   @override
   Stream<HapticCommandModel> get hapticCommandStream => _hapticCtrl.stream;
 
+  @override
+  Stream<StudioCommandModel> get studioCommandStream => _studioCommandCtrl.stream;
+
   void emitHapticCommand(HapticCommandModel cmd) => _hapticCtrl.add(cmd);
+  void emitStudioCommand(StudioCommandModel cmd) => _studioCommandCtrl.add(cmd);
 
   @override
   Future<void> publishActivityDetection(ActivityDetectionModel detection) async {
@@ -94,6 +100,7 @@ class FakeMqttGatewayService implements MqttGatewayService {
   @override
   void disconnect() {
     _hapticCtrl.close();
+    _studioCommandCtrl.close();
   }
 
   @override
@@ -245,6 +252,59 @@ void main() {
       // 4. Validation Stream UI Toast / SnackBar
       expect(savedNotifiedSession, isNotNull);
       expect(savedNotifiedSession!.sessionId, equals('88888888-9999-aaaa-bbbb-cccccccccccc'));
+
+      await sub.cancel();
+    });
+
+    test('Commande Studio distante MQTT : Déclenche la capture BLE avec le session_id officiel sans appel REST', () async {
+      StudioSessionModel? savedNotifiedSession;
+      final sub = coordinator.studioSessionSavedStream.listen((sess) {
+        savedNotifiedSession = sess;
+      });
+
+      const remoteCmd = StudioCommandModel(
+        sessionId: '99999999-aaaa-bbbb-cccc-dddddddddddd',
+        label: 'test_web_remote',
+        durationSec: 5.0,
+      );
+
+      // 1. Réception de la commande Studio distante via MQTT (Web -> AWS IoT Core -> Mobile)
+      fakeMqtt.emitStudioCommand(remoteCmd);
+      await Future<void>.delayed(const Duration(milliseconds: 15));
+
+      // Vérification qu'AUCUN appel REST n'a été fait (la session étant déjà persistée par le backend)
+      expect(fakeStudioApi.startedSessions.isEmpty, isTrue);
+
+      // Vérification que l'ordre START BLE a été envoyé avec le sessionId officiel reçu du backend
+      expect(fakeBle.lastStartedStudioSessionId, equals('99999999-aaaa-bbbb-cccc-dddddddddddd'));
+
+      // 2. Réception du flux Burst BLE
+      final frames = [
+        const ImuReadingModel(deltaMs: 0, ax: 0.2, ay: 0.8, az: -0.1, gx: 5, gy: -2, gz: 3),
+      ];
+
+      final burstResult = BurstReassemblyResult(
+        isCompleted: true,
+        isCrcValid: true,
+        totalAnnounced: 1,
+        framesRecovered: 1,
+        readings: frames,
+      );
+
+      fakeBle.emitBurst(burstResult);
+      await Future<void>.delayed(const Duration(milliseconds: 15));
+
+      // 3. Validation de la publication MQTT avec le même UUID reçu dans la commande
+      expect(fakeMqtt.publishedStudioSessions.length, equals(1));
+      final published = fakeMqtt.publishedStudioSessions.first;
+      expect(published.sessionId, equals('99999999-aaaa-bbbb-cccc-dddddddddddd'));
+      expect(published.label, equals('test_web_remote'));
+      expect(published.deviceId, equals('HK-SHOE-TEST-001'));
+      expect(published.readings.length, equals(1));
+
+      // 4. Notification UI
+      expect(savedNotifiedSession, isNotNull);
+      expect(savedNotifiedSession!.sessionId, equals('99999999-aaaa-bbbb-cccc-dddddddddddd'));
 
       await sub.cancel();
     });

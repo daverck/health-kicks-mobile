@@ -6,6 +6,7 @@ import 'mqtt/mqtt_gateway_service.dart';
 import 'studio/studio_api_service.dart';
 import '../models/activity_detection_model.dart';
 import '../models/haptic_command_model.dart';
+import '../models/studio_command_model.dart';
 import '../models/studio_session_model.dart';
 
 const _uuid = Uuid();
@@ -24,6 +25,7 @@ class GatewayCoordinator {
   StreamSubscription<ActivityDetectionModel>? _activitySub;
   StreamSubscription<HapticCommandModel>? _hapticSub;
   StreamSubscription<BurstReassemblyResult>? _burstSub;
+  StreamSubscription<StudioCommandModel>? _studioCommandSub;
 
   final _studioSessionSavedController =
       StreamController<StudioSessionModel>.broadcast();
@@ -57,7 +59,16 @@ class GatewayCoordinator {
       await bleClient.sendHapticCommand(command);
     });
 
-    // 3. Relais batch : BLE Studio Data Burst reassemblé -> Cloud MQTT DynamoDB
+    // 3. Relais descendant : Cloud MQTT Studio Start Command -> BLE Footwear
+    _studioCommandSub = mqttService.studioCommandStream.listen((command) async {
+      onLog?.call(
+        '[GATEWAY] Commande Studio distante reçue (session_id: ${command.sessionId}, label: ${command.label}, durée: ${command.durationSec}s)',
+        isError: false,
+      );
+      await handleRemoteStudioCommand(command);
+    });
+
+    // 4. Relais batch : BLE Studio Data Burst reassemblé -> Cloud MQTT DynamoDB
     _burstSub = bleClient.burstResultStream.listen((result) async {
       onLog?.call(
         '[GATEWAY] Paquet fin de burst reçu : complété=${result.isCompleted}, '
@@ -169,11 +180,35 @@ class GatewayCoordinator {
     );
   }
 
+  /// Traite une commande Studio déclenchée à distance depuis le Web / Backend via MQTT.
+  /// Réutilise strictement le [session_id] déjà alloué et persisté par le backend dans PostgreSQL,
+  /// sans ré-effectuer d'appel REST de réservation redondant.
+  Future<void> handleRemoteStudioCommand(StudioCommandModel command) async {
+    _currentStudioSessionId = command.sessionId;
+    _currentStudioLabel = command.label;
+    _currentStudioDurationSec = command.durationSec;
+    _currentStudioStartTimestamp =
+        DateTime.now().millisecondsSinceEpoch / 1000.0;
+
+    onLog?.call(
+      '[GATEWAY] Déclenchement de la capture BLE pour la commande distante (session: ${command.sessionId})...',
+      isError: false,
+    );
+
+    await bleClient.startStudioSession(
+      label: command.label,
+      durationSec: command.durationSec,
+      sessionId: command.sessionId,
+    );
+  }
+
   void stopRouting() {
     _activitySub?.cancel();
     _activitySub = null;
     _hapticSub?.cancel();
     _hapticSub = null;
+    _studioCommandSub?.cancel();
+    _studioCommandSub = null;
     _burstSub?.cancel();
     _burstSub = null;
   }

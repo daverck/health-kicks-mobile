@@ -5,6 +5,7 @@ import 'package:mqtt_client/mqtt_server_client.dart';
 import '../../core/aws/sigv4_signer.dart';
 import '../../models/activity_detection_model.dart';
 import '../../models/haptic_command_model.dart';
+import '../../models/studio_command_model.dart';
 import '../../models/studio_session_model.dart';
 import '../auth/iot_credentials_repository.dart';
 
@@ -24,6 +25,9 @@ class MqttGatewayService {
 
   final _hapticCommandsController = StreamController<HapticCommandModel>.broadcast();
   Stream<HapticCommandModel> get hapticCommandStream => _hapticCommandsController.stream;
+
+  final _studioCommandsController = StreamController<StudioCommandModel>.broadcast();
+  Stream<StudioCommandModel> get studioCommandStream => _studioCommandsController.stream;
 
   MqttGatewayService({
     required this.deviceId,
@@ -111,7 +115,7 @@ class MqttGatewayService {
 
       if (_isConnected) {
         log?.call('[MQTT] Connecté avec succès à AWS IoT Core en WebSockets SigV4.', isError: false);
-        _subscribeToHapticCommands();
+        _subscribeToCommands();
         await publishGatewayStatus(online: true);
       } else {
         log?.call(
@@ -127,23 +131,43 @@ class MqttGatewayService {
     }
   }
 
-  void _subscribeToHapticCommands() {
-    final topic = 'healthkicks/v1/$deviceId/commands/haptic';
-    _client?.subscribe(topic, MqttQos.atLeastOnce);
+  void _subscribeToCommands() {
+    final log = onLog;
+    final hapticTopic = 'healthkicks/v1/$deviceId/commands/haptic';
+    final studioStartTopic = 'healthkicks/v1/$deviceId/commands/studio/start';
+
+    _client?.subscribe(hapticTopic, MqttQos.atLeastOnce);
+    _client?.subscribe(studioStartTopic, MqttQos.atLeastOnce);
+
+    log?.call('[MQTT] Souscriptions actives : $hapticTopic & $studioStartTopic', isError: false);
 
     _client?.updates?.listen((List<MqttReceivedMessage<MqttMessage>> messages) {
       for (final msg in messages) {
-        if (msg.topic == topic) {
-          final recMessage = msg.payload as MqttPublishMessage;
-          final payloadStr = MqttPublishPayload.bytesToStringAsString(
-            recMessage.payload.message,
-          );
+        final recMessage = msg.payload as MqttPublishMessage;
+        final payloadStr = MqttPublishPayload.bytesToStringAsString(
+          recMessage.payload.message,
+        );
 
+        if (msg.topic == hapticTopic) {
           try {
             final jsonMap = jsonDecode(payloadStr) as Map<String, dynamic>;
             final command = HapticCommandModel.fromJson(jsonMap);
             _hapticCommandsController.add(command);
-          } catch (_) {}
+          } catch (e) {
+            log?.call('[MQTT] Erreur décodage commande haptique : $e', isError: true);
+          }
+        } else if (msg.topic == studioStartTopic || msg.topic.endsWith('/commands/studio/start')) {
+          try {
+            final jsonMap = jsonDecode(payloadStr) as Map<String, dynamic>;
+            final command = StudioCommandModel.fromJson(jsonMap);
+            log?.call(
+              '[MQTT] Commande Studio distante reçue (session: ${command.sessionId}, label: ${command.label}, durée: ${command.durationSec}s)',
+              isError: false,
+            );
+            _studioCommandsController.add(command);
+          } catch (e) {
+            log?.call('[MQTT] Erreur décodage commande Studio distante : $e', isError: true);
+          }
         }
       }
     });
@@ -255,5 +279,6 @@ class MqttGatewayService {
     _client?.disconnect();
     _isConnected = false;
     _hapticCommandsController.close();
+    _studioCommandsController.close();
   }
 }
