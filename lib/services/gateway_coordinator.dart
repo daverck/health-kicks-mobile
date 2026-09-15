@@ -84,9 +84,7 @@ class GatewayCoordinator {
   }) async {
     String effectiveSessionId;
 
-    if (sessionId != null && sessionId.isNotEmpty) {
-      effectiveSessionId = sessionId;
-    } else if (studioApiService != null) {
+    if (studioApiService != null) {
       try {
         final response = await studioApiService!.startStudioSession(
           deviceId: deviceId,
@@ -95,8 +93,12 @@ class GatewayCoordinator {
         );
         effectiveSessionId = response.sessionId;
       } catch (_) {
-        effectiveSessionId = _uuid.v4();
+        effectiveSessionId = (sessionId != null && sessionId.isNotEmpty)
+            ? sessionId
+            : _uuid.v4();
       }
+    } else if (sessionId != null && sessionId.isNotEmpty) {
+      effectiveSessionId = sessionId;
     } else {
       effectiveSessionId = _uuid.v4();
     }

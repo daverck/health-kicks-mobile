@@ -322,7 +322,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
   }
 
   void _setupCoordinator() {
-    if (_bleClient == null || _mqttService == null || !_mqttConnected) return;
+    if (_bleClient == null || _mqttService == null) return;
 
     _coordinator?.stopRouting();
     _studioSavedSub?.cancel();
@@ -482,7 +482,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
       });
 
       // Brancher le coordinateur de routage bidirectionnel
-      if (_mqttService != null && _mqttConnected) {
+      if (_mqttService != null) {
         _setupCoordinator();
       }
     } catch (e) {
@@ -526,17 +526,42 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
       return;
     }
 
-    final sessionId = const Uuid().v4();
-    _addLog('STUDIO', 'Démarrage session Studio (5.0s, label: test_gait, id: $sessionId)...');
+    _addLog('STUDIO', 'Démarrage session Studio (5.0s, label: test_gait)...');
 
     try {
+      _setupCoordinator();
+
       if (_coordinator != null) {
+        _addLog('STUDIO', 'Réservation REST de la session auprès du backend FastAPI (/commands/studio/start)...');
         await _coordinator!.triggerStudioSession(
           label: 'test_gait',
           durationSec: 5.0,
-          sessionId: sessionId,
         );
       } else {
+        _studioApiService ??= StudioApiService(
+          backendBaseUrl: AppConfig.backendBaseUrl,
+          tokenStorage: TokenStorageService(),
+          authService: widget.authService,
+          onLog: (msg, {bool isError = false}) {
+            _addLog('STUDIO', msg, color: isError ? Colors.red : Colors.green);
+          },
+        );
+
+        String sessionId;
+        try {
+          _addLog('STUDIO', 'Réservation REST directe auprès du backend FastAPI...');
+          final resp = await _studioApiService!.startStudioSession(
+            deviceId: _deviceId,
+            label: 'test_gait',
+            durationSec: 5.0,
+          );
+          sessionId = resp.sessionId;
+          _addLog('STUDIO', 'Session réservée : $sessionId', color: Colors.green);
+        } catch (e) {
+          sessionId = const Uuid().v4();
+          _addLog('STUDIO', 'Erreur réservation REST ($e), fallback local : $sessionId', color: Colors.orange);
+        }
+
         await _bleClient!.startStudioSession(
           label: 'test_gait',
           durationSec: 5.0,
