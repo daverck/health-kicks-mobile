@@ -8,6 +8,48 @@ import '../auth/token_storage_service.dart';
 
 typedef StudioLogCallback = void Function(String message, {bool isError});
 
+/// Réponse retournée par l'API backend lors de l'initiation d'une commande Studio.
+/// Conforme au schéma Pydantic `StudioStartResponse`.
+class StudioStartResponse {
+  final String status;
+  final String deviceId;
+  final String sessionId;
+  final String label;
+  final double durationSec;
+  final String topic;
+
+  const StudioStartResponse({
+    required this.status,
+    required this.deviceId,
+    required this.sessionId,
+    required this.label,
+    required this.durationSec,
+    required this.topic,
+  });
+
+  factory StudioStartResponse.fromJson(Map<String, dynamic> json) {
+    return StudioStartResponse(
+      status: json['status'] as String? ?? 'command_dispatched',
+      deviceId: json['device_id'] as String,
+      sessionId: json['session_id'] as String,
+      label: json['label'] as String,
+      durationSec: (json['duration_sec'] as num).toDouble(),
+      topic: json['topic'] as String? ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'status': status,
+      'device_id': deviceId,
+      'session_id': sessionId,
+      'label': label,
+      'duration_sec': durationSec,
+      'topic': topic,
+    };
+  }
+}
+
 /// Service client REST pour la gestion et la persistance des sessions Studio
 /// auprès de l'API backend FastAPI HealthKicks.
 class StudioApiService {
@@ -33,30 +75,35 @@ class StudioApiService {
 
   String get backendBaseUrl => _backendBaseUrl;
 
-  /// Déclare et persiste une session Studio autonome dans la table PostgreSQL
-  /// `studio_sessions` via l'API REST du backend FastAPI.
-  Future<bool> createStudioSession({
-    required String id,
+  /// Déclenche et réserve une session Studio dans la table PostgreSQL
+  /// `studio_sessions` via l'API REST du backend FastAPI :
+  /// `POST /api/v1/devices/{device_id}/commands/studio/start`
+  /// Retourne un [StudioStartResponse] contenant l'UUID officiel [sessionId].
+  Future<StudioStartResponse> startStudioSession({
     required String deviceId,
     required String label,
-    required double durationSec,
-    required int sampleCount,
+    double durationSec = 5.0,
+    int? pulseCount,
+    int? pulseDurationMs,
+    int? pulsePauseMs,
+    int? pulseIntensity,
   }) async {
     String? token = await _tokenStorage.getAccessToken();
 
     if (token == null || token.trim().isEmpty) {
-      const msg = '[Studio] Aucun jeton d\'accès disponible pour persister la session Studio.';
+      const msg = '[Studio] Aucun jeton d\'accès disponible pour déclencher la session Studio.';
       onLog?.call(msg, isError: true);
       throw const HttpException(msg);
     }
 
-    final uri = Uri.parse('$_backendBaseUrl/api/v1/studio/sessions');
-    final payload = {
-      'id': id,
-      'device_id': deviceId,
+    final uri = Uri.parse('$_backendBaseUrl/api/v1/devices/$deviceId/commands/studio/start');
+    final payload = <String, dynamic>{
       'label': label,
       'duration_sec': durationSec,
-      'sample_count': sampleCount,
+      if (pulseCount != null) 'pulse_count': pulseCount,
+      if (pulseDurationMs != null) 'pulse_duration_ms': pulseDurationMs,
+      if (pulsePauseMs != null) 'pulse_pause_ms': pulsePauseMs,
+      if (pulseIntensity != null) 'pulse_intensity': pulseIntensity,
     };
     final body = jsonEncode(payload);
 
@@ -104,22 +151,40 @@ class StudioApiService {
       }
 
       if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final startResponse = StudioStartResponse.fromJson(data);
         onLog?.call(
-          '[Studio] Session persistée avec succès dans le backend (id: $id)',
+          '[Studio] Session réservée avec succès dans le backend (id: ${startResponse.sessionId})',
           isError: false,
         );
-        return true;
+        return startResponse;
       } else {
         final errorMsg =
-            '[Studio] Échec HTTP ${response.statusCode} lors de la persistance Studio : ${response.body}';
+            '[Studio] Échec HTTP ${response.statusCode} lors de l\'initiation Studio : ${response.body}';
         onLog?.call(errorMsg, isError: true);
         throw HttpException(errorMsg, uri: uri);
       }
     } catch (e) {
       if (e is! HttpException) {
-        onLog?.call('[Studio] Erreur réseau lors de la persistance Studio : $e', isError: true);
+        onLog?.call('[Studio] Erreur réseau lors de l\'initiation Studio : $e', isError: true);
       }
       rethrow;
     }
+  }
+
+  /// Alias de rétrocompatibilité créant et réservant la session auprès du backend.
+  Future<bool> createStudioSession({
+    String? id,
+    required String deviceId,
+    required String label,
+    required double durationSec,
+    int? sampleCount,
+  }) async {
+    await startStudioSession(
+      deviceId: deviceId,
+      label: label,
+      durationSec: durationSec,
+    );
+    return true;
   }
 }

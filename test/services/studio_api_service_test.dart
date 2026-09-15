@@ -73,7 +73,7 @@ class FakeFlutterSecureStorage implements FlutterSecureStorage {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('StudioApiService - Déclaration REST des sessions Studio', () {
+  group('StudioApiService - Déclenchement & Réservation REST Studio (/commands/studio/start)', () {
     late TokenStorageService tokenStorage;
     const testUuid = '11111111-2222-3333-4444-555555555555';
 
@@ -85,25 +85,25 @@ void main() {
       );
     });
 
-    test('Émet un POST conforme avec Bearer token et retourne true sur code 201', () async {
+    test('startStudioSession émet un POST vers /api/v1/devices/{device_id}/commands/studio/start et extrait session_id', () async {
       late http.Request capturedRequest;
       final mockClient = MockClient((request) async {
         capturedRequest = request;
-        if (request.url.path == '/api/v1/studio/sessions' && request.method == 'POST') {
+        if (request.url.path == '/api/v1/devices/HK-2/commands/studio/start' && request.method == 'POST') {
           return http.Response(
             jsonEncode({
-              'id': testUuid,
+              'status': 'command_dispatched',
               'device_id': 'HK-2',
+              'session_id': testUuid,
               'label': 'test_gait',
               'duration_sec': 5.0,
-              'sample_count': 94,
-              'created_at': DateTime.now().toUtc().toIso8601String(),
+              'topic': 'healthkicks/v1/HK-2/commands/studio',
             }),
-            201,
+            200,
             headers: {'content-type': 'application/json'},
           );
         }
-        return http.Response('Not Found', 404);
+        return http.Response('Not Found: ${request.url.path}', 404);
       });
 
       final service = StudioApiService(
@@ -112,25 +112,26 @@ void main() {
         tokenStorage: tokenStorage,
       );
 
-      final result = await service.createStudioSession(
-        id: testUuid,
+      final response = await service.startStudioSession(
         deviceId: 'HK-2',
         label: 'test_gait',
         durationSec: 5.0,
-        sampleCount: 94,
       );
 
-      expect(result, isTrue);
-      expect(capturedRequest.url.toString(), equals('https://healthkicks.duckdns.org:8443/api/v1/studio/sessions'));
+      expect(response.sessionId, equals(testUuid));
+      expect(response.deviceId, equals('HK-2'));
+      expect(response.label, equals('test_gait'));
+      expect(response.durationSec, equals(5.0));
+      expect(response.status, equals('command_dispatched'));
+
+      expect(capturedRequest.url.toString(), equals('https://healthkicks.duckdns.org:8443/api/v1/devices/HK-2/commands/studio/start'));
       expect(capturedRequest.headers['Authorization'], equals('Bearer initial-valid-jwt-token'));
       expect(capturedRequest.headers['Content-Type'], equals('application/json'));
 
       final payload = jsonDecode(capturedRequest.body) as Map<String, dynamic>;
-      expect(payload['id'], equals(testUuid));
-      expect(payload['device_id'], equals('HK-2'));
       expect(payload['label'], equals('test_gait'));
       expect(payload['duration_sec'], equals(5.0));
-      expect(payload['sample_count'], equals(94));
+      expect(payload.containsKey('id'), isFalse); // StrictModel extra=forbid
     });
 
     test('Lève une exception immédiate si aucun jeton d\'accès n\'est présent', () async {
@@ -142,12 +143,10 @@ void main() {
       );
 
       expect(
-        () => service.createStudioSession(
-          id: testUuid,
+        () => service.startStudioSession(
           deviceId: 'HK-2',
           label: 'test_gait',
           durationSec: 5.0,
-          sampleCount: 94,
         ),
         throwsA(isA<HttpException>()),
       );
@@ -167,8 +166,15 @@ void main() {
         } else {
           // Deuxième appel : token rafraîchi
           return http.Response(
-            jsonEncode({'id': testUuid, 'status': 'created'}),
-            201,
+            jsonEncode({
+              'status': 'command_dispatched',
+              'device_id': 'HK-2',
+              'session_id': testUuid,
+              'label': 'course',
+              'duration_sec': 10.0,
+              'topic': 'healthkicks/v1/HK-2/commands/studio',
+            }),
+            200,
           );
         }
       });
@@ -188,15 +194,13 @@ void main() {
         },
       );
 
-      final result = await service.createStudioSession(
-        id: testUuid,
+      final response = await service.startStudioSession(
         deviceId: 'HK-2',
         label: 'course',
         durationSec: 10.0,
-        sampleCount: 200,
       );
 
-      expect(result, isTrue);
+      expect(response.sessionId, equals(testUuid));
       expect(requestCount, equals(2));
       expect(refreshCalled, isTrue);
       expect(tokensUsed[0], equals('Bearer initial-valid-jwt-token'));
@@ -216,12 +220,10 @@ void main() {
       );
 
       expect(
-        () => service.createStudioSession(
-          id: testUuid,
+        () => service.startStudioSession(
           deviceId: 'HK-2',
           label: 'course',
           durationSec: 10.0,
-          sampleCount: 200,
         ),
         throwsA(isA<HttpException>()),
       );
@@ -239,12 +241,10 @@ void main() {
       );
 
       expect(
-        () => service.createStudioSession(
-          id: testUuid,
+        () => service.startStudioSession(
           deviceId: 'HK-2',
           label: 'course',
           durationSec: 10.0,
-          sampleCount: 200,
         ),
         throwsA(isA<HttpException>()),
       );

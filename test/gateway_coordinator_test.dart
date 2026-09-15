@@ -98,24 +98,32 @@ class FakeMqttGatewayService implements MqttGatewayService {
 }
 
 class FakeStudioApiService implements StudioApiService {
-  final List<Map<String, dynamic>> createdSessions = [];
+  final List<Map<String, dynamic>> startedSessions = [];
+  String nextSessionId = '77777777-8888-9999-aaaa-bbbbbbbbbbbb';
 
   @override
-  Future<bool> createStudioSession({
-    required String id,
+  Future<StudioStartResponse> startStudioSession({
     required String deviceId,
     required String label,
-    required double durationSec,
-    required int sampleCount,
+    double durationSec = 5.0,
+    int? pulseCount,
+    int? pulseDurationMs,
+    int? pulsePauseMs,
+    int? pulseIntensity,
   }) async {
-    createdSessions.add({
-      'id': id,
+    startedSessions.add({
       'device_id': deviceId,
       'label': label,
       'duration_sec': durationSec,
-      'sample_count': sampleCount,
     });
-    return true;
+    return StudioStartResponse(
+      status: 'command_dispatched',
+      deviceId: deviceId,
+      sessionId: nextSessionId,
+      label: label,
+      durationSec: durationSec,
+      topic: 'healthkicks/v1/$deviceId/commands/studio',
+    );
   }
 
   @override
@@ -183,19 +191,30 @@ void main() {
       expect(fakeBle.sentHapticCommands.first.durationMs, equals(300));
     });
 
-    test('Relais Studio Burst : Réassemblage validé publié en session batch MQTT ET déclaré en REST', () async {
+    test('Relais Studio Burst : Réserve la session en REST (/commands/studio/start) puis publie en MQTT avec le même UUID', () async {
       StudioSessionModel? savedNotifiedSession;
       final sub = coordinator.studioSessionSavedStream.listen((sess) {
         savedNotifiedSession = sess;
       });
 
-      const testSessionUuid = '77777777-8888-9999-aaaa-bbbbbbbbbbbb';
+      fakeStudioApi.nextSessionId = '88888888-9999-aaaa-bbbb-cccccccccccc';
+
+      // 1. Déclenchement : appel REST backend automatique pour réserver la session
       await coordinator.triggerStudioSession(
         label: 'course_fractionne',
         durationSec: 30.0,
-        sessionId: testSessionUuid,
       );
 
+      // Validation que le backend a été sollicité dès l'ordre START
+      expect(fakeStudioApi.startedSessions.length, equals(1));
+      expect(fakeStudioApi.startedSessions.first['device_id'], equals('HK-SHOE-TEST-001'));
+      expect(fakeStudioApi.startedSessions.first['label'], equals('course_fractionne'));
+      expect(fakeStudioApi.startedSessions.first['duration_sec'], equals(30.0));
+
+      // Validation que le sessionId retourné par l'API REST a été envoyé à la chaussure
+      expect(fakeBle.lastStartedStudioSessionId, equals('88888888-9999-aaaa-bbbb-cccccccccccc'));
+
+      // 2. Réception du flux Burst BLE
       final frames = [
         const ImuReadingModel(deltaMs: 0, ax: 0.1, ay: 0.9, az: -0.2, gx: 10, gy: -5, gz: 0),
         const ImuReadingModel(deltaMs: 20, ax: 0.12, ay: 0.88, az: -0.19, gx: 12, gy: -4, gz: 1),
@@ -212,32 +231,30 @@ void main() {
       fakeBle.emitBurst(burstResult);
       await Future<void>.delayed(const Duration(milliseconds: 15));
 
-      // 1. Validation MQTT
+      // 3. Validation publication MQTT avec l'UUID officiel réservé
       expect(fakeMqtt.publishedStudioSessions.length, equals(1));
       final publishedSession = fakeMqtt.publishedStudioSessions.first;
-      expect(publishedSession.sessionId, equals(testSessionUuid));
+      expect(publishedSession.sessionId, equals('88888888-9999-aaaa-bbbb-cccccccccccc'));
       expect(publishedSession.label, equals('course_fractionne'));
       expect(publishedSession.deviceId, equals('HK-SHOE-TEST-001'));
       expect(publishedSession.readings.length, equals(2));
 
-      // 2. Validation Appel REST Studio
-      expect(fakeStudioApi.createdSessions.length, equals(1));
-      final restSession = fakeStudioApi.createdSessions.first;
-      expect(restSession['id'], equals(testSessionUuid));
-      expect(restSession['device_id'], equals('HK-SHOE-TEST-001'));
-      expect(restSession['label'], equals('course_fractionne'));
-      expect(restSession['duration_sec'], equals(30.0));
-      expect(restSession['sample_count'], equals(2));
-
-      // 3. Validation Stream UI Toast / SnackBar
+      // 4. Validation Stream UI Toast / SnackBar
       expect(savedNotifiedSession, isNotNull);
-      expect(savedNotifiedSession!.sessionId, equals(testSessionUuid));
+      expect(savedNotifiedSession!.sessionId, equals('88888888-9999-aaaa-bbbb-cccccccccccc'));
 
       await sub.cancel();
     });
 
-    test('triggerStudioSession génère un UUID v4 valide si aucun sessionId n\'est fourni', () async {
-      await coordinator.triggerStudioSession(
+    test('triggerStudioSession génère un UUID v4 valide si aucun service REST n\'est configuré', () async {
+      final standaloneCoordinator = GatewayCoordinator(
+        bleClient: fakeBle,
+        mqttService: fakeMqtt,
+        deviceId: 'HK-SHOE-TEST-001',
+      );
+      standaloneCoordinator.startRouting();
+
+      await standaloneCoordinator.triggerStudioSession(
         label: 'auto_uuid_test',
         durationSec: 5.0,
       );
@@ -247,6 +264,8 @@ void main() {
         r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
       );
       expect(uuidRegex.hasMatch(fakeBle.lastStartedStudioSessionId!), isTrue);
+
+      standaloneCoordinator.stopRouting();
     });
   });
 }

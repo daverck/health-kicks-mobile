@@ -11,7 +11,7 @@ import '../models/studio_session_model.dart';
 const _uuid = Uuid();
 
 /// Coordinateur central assurant le routage transparent bidirectionnel BLE <-> MQTT
-/// et la synchronisation des sessions Studio auprès du Backend FastAPI.
+/// et l'initiation des sessions Studio auprès du Backend FastAPI.
 class GatewayCoordinator {
   final BleFootwearClient bleClient;
   final MqttGatewayService mqttService;
@@ -25,7 +25,7 @@ class GatewayCoordinator {
   final _studioSessionSavedController =
       StreamController<StudioSessionModel>.broadcast();
 
-  /// Flux notifiant la fin d'enregistrement et la synchronisation réussie d'une session Studio.
+  /// Flux notifiant la fin d'enregistrement et la synchronisation d'une session Studio.
   Stream<StudioSessionModel> get studioSessionSavedStream =>
       _studioSessionSavedController.stream;
 
@@ -53,7 +53,7 @@ class GatewayCoordinator {
       await bleClient.sendHapticCommand(command);
     });
 
-    // 3. Relais batch : BLE Studio Data Burst reassemblé -> Cloud MQTT DynamoDB + REST Aurora
+    // 3. Relais batch : BLE Studio Data Burst reassemblé -> Cloud MQTT DynamoDB
     _burstSub = bleClient.burstResultStream.listen((result) async {
       if (result.isSuccess) {
         final session = StudioSessionModel(
@@ -70,33 +70,37 @@ class GatewayCoordinator {
         // Publication MQTT vers DynamoDB
         await mqttService.publishStudioSession(session);
 
-        // Déclaration REST auprès de l'API FastAPI pour persistance PostgreSQL/Aurora
-        if (studioApiService != null) {
-          try {
-            await studioApiService!.createStudioSession(
-              id: session.sessionId,
-              deviceId: session.deviceId,
-              label: session.label,
-              durationSec: session.durationSec,
-              sampleCount: session.readings.length,
-            );
-          } catch (_) {
-            // L'erreur est capturée et journalisée en interne par studioApiService
-          }
-        }
-
         _studioSessionSavedController.add(session);
       }
     });
   }
 
-  /// Déclenche une session Studio et mémorise le contexte pour la sérialisation du burst.
+  /// Déclenche une session Studio, réserve la session dans PostgreSQL via l'API REST
+  /// du backend FastAPI pour obtenir l'UUID officiel [sessionId], puis commande la chaussure en BLE.
   Future<void> triggerStudioSession({
     required String label,
     required double durationSec,
     String? sessionId,
   }) async {
-    final effectiveSessionId = sessionId ?? _uuid.v4();
+    String effectiveSessionId;
+
+    if (sessionId != null && sessionId.isNotEmpty) {
+      effectiveSessionId = sessionId;
+    } else if (studioApiService != null) {
+      try {
+        final response = await studioApiService!.startStudioSession(
+          deviceId: deviceId,
+          label: label,
+          durationSec: durationSec,
+        );
+        effectiveSessionId = response.sessionId;
+      } catch (_) {
+        effectiveSessionId = _uuid.v4();
+      }
+    } else {
+      effectiveSessionId = _uuid.v4();
+    }
+
     _currentStudioSessionId = effectiveSessionId;
     _currentStudioLabel = label;
     _currentStudioDurationSec = durationSec;
