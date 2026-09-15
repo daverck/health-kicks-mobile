@@ -341,6 +341,9 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
       mqttService: _mqttService!,
       studioApiService: _studioApiService,
       deviceId: _deviceId,
+      onLog: (msg, {bool isError = false}) {
+        _addLog('GATEWAY', msg, color: isError ? Colors.red : Colors.green);
+      },
     );
 
     _studioSavedSub = _coordinator!.studioSessionSavedStream.listen((savedSession) {
@@ -453,7 +456,12 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
     _addLog('BLE', 'Appareil connecté : ${device.platformName} (MTU: $_mtu octets)');
 
     try {
-      _bleClient = BleFootwearClient(device: device);
+      _bleClient = BleFootwearClient(
+        device: device,
+        onLog: (msg, {bool isError = false}) {
+          _addLog('BLE', msg, color: isError ? Colors.red : Colors.blue);
+        },
+      );
       _addLog('BLE', 'Découverte des services GATT en cours...');
       await _bleClient!.initializeServices();
       _addLog(
@@ -529,6 +537,15 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
     _addLog('STUDIO', 'Démarrage session Studio (5.0s, label: test_gait)...');
 
     try {
+      // 1. S'assurer que le service MQTT est initialisé et connecté
+      if (_mqttService == null) {
+        _addLog('STUDIO', 'Initialisation et connexion au service MQTT AWS IoT...', color: Colors.indigo);
+        await _connectMqtt();
+      } else if (!_mqttService!.isConnected) {
+        _addLog('STUDIO', 'Reconnexion au service MQTT AWS IoT...', color: Colors.indigo);
+        await _mqttService!.connect();
+      }
+
       _setupCoordinator();
 
       if (_coordinator != null) {

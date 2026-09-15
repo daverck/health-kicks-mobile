@@ -45,7 +45,8 @@ class BurstReassemblyResult {
     this.errorMessage,
   });
 
-  bool get isSuccess => isCompleted && isCrcValid && (framesRecovered == totalAnnounced);
+  bool get isSuccess =>
+      isCompleted && isCrcValid && (totalAnnounced == 0 || framesRecovered == totalAnnounced);
 }
 
 /// Réassembleur de flux binaire Studio Data Burst (Caractéristique 7a5a0005).

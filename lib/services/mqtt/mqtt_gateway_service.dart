@@ -73,6 +73,22 @@ class MqttGatewayService {
       _client!.autoReconnect = true;
       _client!.logging(on: false);
 
+      _client!.onConnected = () {
+        _isConnected = true;
+        log?.call('[MQTT] WebSocket connecté à AWS IoT Core.', isError: false);
+      };
+      _client!.onDisconnected = () {
+        _isConnected = false;
+        log?.call('[MQTT] WebSocket déconnecté d\'AWS IoT Core.', isError: true);
+      };
+      _client!.onAutoReconnect = () {
+        log?.call('[MQTT] Reconnexion automatique MQTT en cours...', isError: false);
+      };
+      _client!.onAutoReconnected = () {
+        _isConnected = true;
+        log?.call('[MQTT] Reconnexion automatique MQTT réussie.', isError: false);
+      };
+
       // Configuration Last Will & Testament (LWT)
       final lwtPayload = jsonEncode({
         'device_id': deviceId,
@@ -135,7 +151,14 @@ class MqttGatewayService {
 
   /// Publie un événement de détection d'activité vers AWS IoT Core (QoS 1).
   Future<void> publishActivityDetection(ActivityDetectionModel detection) async {
-    if (!_isConnected || _client == null) return;
+    final log = onLog;
+    final isClientConnected = _client != null &&
+        _client!.connectionStatus?.state == MqttConnectionState.connected;
+
+    if (!_isConnected || !isClientConnected) {
+      log?.call('[MQTT] Impossible de publier la détection : MQTT non connecté.', isError: true);
+      return;
+    }
 
     final topic = 'healthkicks/v1/$deviceId/events/detection';
     final payload = detection.toMqttPayload(deviceId);
@@ -150,17 +173,62 @@ class MqttGatewayService {
   /// Publie les sessions Studio réassemblées vers DynamoDB via AWS IoT Core (QoS 1).
   /// S'assure que chaque lot reste bien sous la limite AWS de 128 Ko.
   Future<void> publishStudioSession(StudioSessionModel session) async {
-    if (!_isConnected || _client == null) return;
+    final log = onLog;
+
+    // 1. Vérifier la connexion et tenter une reconnexion automatique si besoin
+    final isClientConnected = _client != null &&
+        _client!.connectionStatus?.state == MqttConnectionState.connected;
+
+    if (!_isConnected || !isClientConnected) {
+      log?.call(
+        '[MQTT] Client non connecté lors de la publication Studio. Reconnexion automatique...',
+        isError: false,
+      );
+      final connected = await connect(onLog: log);
+      if (!connected) {
+        log?.call(
+          '[MQTT] Échec de reconnexion MQTT : impossible de publier les données Studio.',
+          isError: true,
+        );
+        return;
+      }
+    }
+
+    if (session.readings.isEmpty) {
+      log?.call(
+        '[MQTT] Avertissement : session Studio vide (0 échantillon). Aucun lot à publier.',
+        isError: true,
+      );
+      return;
+    }
 
     final topic = 'healthkicks/v1/$deviceId/telemetry/raw';
     final chunks = session.toMqttBatchPayloads(maxReadingsPerChunk: 500);
 
-    for (final chunk in chunks) {
-      final jsonString = jsonEncode(chunk);
-      final builder = MqttClientPayloadBuilder();
-      builder.addString(jsonString);
+    log?.call(
+      '[MQTT] Début publication Studio (${session.readings.length} trames sur $topic en ${chunks.length} lot(s))...',
+      isError: false,
+    );
 
-      _client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
+    for (int i = 0; i < chunks.length; i++) {
+      final chunk = chunks[i];
+      try {
+        final jsonString = jsonEncode(chunk);
+        final builder = MqttClientPayloadBuilder();
+        builder.addString(jsonString);
+
+        _client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
+        final readingCount = (chunk['readings'] as List?)?.length ?? 0;
+        log?.call(
+          '[MQTT] Lot ${i + 1}/${chunks.length} publié avec succès ($readingCount trames)',
+          isError: false,
+        );
+      } catch (e) {
+        log?.call(
+          '[MQTT] Erreur lors de la publication du lot ${i + 1}/${chunks.length} : $e',
+          isError: true,
+        );
+      }
     }
   }
 

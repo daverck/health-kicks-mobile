@@ -68,6 +68,9 @@ class FakeMqttGatewayService implements MqttGatewayService {
   final List<StudioSessionModel> publishedStudioSessions = [];
 
   @override
+  bool get isConnected => true;
+
+  @override
   Stream<HapticCommandModel> get hapticCommandStream => _hapticCtrl.stream;
 
   void emitHapticCommand(HapticCommandModel cmd) => _hapticCtrl.add(cmd);
@@ -266,6 +269,73 @@ void main() {
       expect(uuidRegex.hasMatch(fakeBle.lastStartedStudioSessionId!), isTrue);
 
       standaloneCoordinator.stopRouting();
+    });
+
+    test('Relais Studio Burst : Transmet les trames même si CRC32 présente une anomalie pour éviter la perte de données', () async {
+      final List<String> logs = [];
+      final testBle = FakeBleFootwearClient();
+      final testMqtt = FakeMqttGatewayService();
+      final loggedCoordinator = GatewayCoordinator(
+        bleClient: testBle,
+        mqttService: testMqtt,
+        deviceId: 'HK-SHOE-TEST-001',
+        onLog: (msg, {bool isError = false}) => logs.add(msg),
+      );
+      loggedCoordinator.startRouting();
+
+      final frames = [
+        const ImuReadingModel(deltaMs: 0, ax: 0.1, ay: 0.9, az: -0.2, gx: 10, gy: -5, gz: 0),
+      ];
+
+      // Burst complété avec CRC invalide
+      final burstResult = BurstReassemblyResult(
+        isCompleted: true,
+        isCrcValid: false,
+        totalAnnounced: 2,
+        framesRecovered: 1,
+        readings: frames,
+      );
+
+      testBle.emitBurst(burstResult);
+      await Future<void>.delayed(const Duration(milliseconds: 15));
+
+      expect(testMqtt.publishedStudioSessions.length, equals(1));
+      expect(logs.any((l) => l.contains('CRC32 non concordant')), isTrue);
+
+      loggedCoordinator.stopRouting();
+      testBle.dispose();
+      testMqtt.disconnect();
+    });
+
+    test('Relais Studio Burst : Ignore la publication si le burst ne contient aucun échantillon IMU', () async {
+      final List<String> logs = [];
+      final testBle = FakeBleFootwearClient();
+      final testMqtt = FakeMqttGatewayService();
+      final loggedCoordinator = GatewayCoordinator(
+        bleClient: testBle,
+        mqttService: testMqtt,
+        deviceId: 'HK-SHOE-TEST-001',
+        onLog: (msg, {bool isError = false}) => logs.add(msg),
+      );
+      loggedCoordinator.startRouting();
+
+      const burstResult = BurstReassemblyResult(
+        isCompleted: true,
+        isCrcValid: true,
+        totalAnnounced: 0,
+        framesRecovered: 0,
+        readings: [],
+      );
+
+      testBle.emitBurst(burstResult);
+      await Future<void>.delayed(const Duration(milliseconds: 15));
+
+      expect(testMqtt.publishedStudioSessions.isEmpty, isTrue);
+      expect(logs.any((l) => l.contains('Aucun échantillon IMU')), isTrue);
+
+      loggedCoordinator.stopRouting();
+      testBle.dispose();
+      testMqtt.disconnect();
     });
   });
 }

@@ -6,10 +6,13 @@ import '../../models/activity_detection_model.dart';
 import '../../models/haptic_command_model.dart';
 import 'burst_reassembler.dart';
 
+typedef BleLogCallback = void Function(String message, {bool isError});
+
 /// Client GATT pour la chaussure connectée HealthKicks.
 /// Orchestre les souscriptions aux notifications et les écritures sur les 4 caractéristiques.
 class BleFootwearClient {
   final BluetoothDevice device;
+  final BleLogCallback? onLog;
   final BurstReassembler _burstReassembler = BurstReassembler();
 
   BluetoothCharacteristic? _activityChar;
@@ -37,7 +40,7 @@ class BleFootwearClient {
   final _burstResultController = StreamController<BurstReassemblyResult>.broadcast();
   Stream<BurstReassemblyResult> get burstResultStream => _burstResultController.stream;
 
-  BleFootwearClient({required this.device});
+  BleFootwearClient({required this.device, this.onLog});
 
   /// Découvre les services et s'abonne aux notifications des caractéristiques 0002, 0004 et 0005.
   Future<void> initializeServices() async {
@@ -68,8 +71,7 @@ class BleFootwearClient {
   }
 
   Future<void> _subscribeToActivityDetection(BluetoothCharacteristic char) async {
-    await char.setNotifyValue(true);
-    char.lastValueStream.listen((bytes) {
+    final sub = char.onValueReceived.listen((bytes) {
       if (bytes.length >= 7) {
         try {
           final model = ActivityDetectionModel.fromBytes(bytes);
@@ -77,28 +79,38 @@ class BleFootwearClient {
         } catch (_) {}
       }
     });
+    device.cancelWhenDisconnected(sub);
+    await char.setNotifyValue(true);
   }
 
   Future<void> _subscribeToStudioControl(BluetoothCharacteristic char) async {
-    await char.setNotifyValue(true);
-    char.lastValueStream.listen((bytes) {
+    final sub = char.onValueReceived.listen((bytes) {
       if (bytes.isNotEmpty) {
         final statusMsg = utf8.decode(bytes, allowMalformed: true).trim();
+        onLog?.call('[BLE] Notification Studio Control (0004) : "$statusMsg"', isError: false);
         _studioStatusController.add(statusMsg);
       }
     });
+    device.cancelWhenDisconnected(sub);
+    await char.setNotifyValue(true);
   }
 
   Future<void> _subscribeToStudioBurst(BluetoothCharacteristic char) async {
-    await char.setNotifyValue(true);
-    char.lastValueStream.listen((bytes) {
+    final sub = char.onValueReceived.listen((bytes) {
       if (bytes.isNotEmpty) {
+        onLog?.call('[BLE] Paquet Burst reçu (taille=${bytes.length} octets)', isError: false);
         final result = _burstReassembler.processPacket(bytes);
         if (result != null) {
+          onLog?.call(
+            '[BLE] Fin du Burst détectée : ${result.framesRecovered}/${result.totalAnnounced} trames réassemblées (CRC32: ${result.isCrcValid ? "OK" : "Échec"})',
+            isError: !result.isSuccess,
+          );
           _burstResultController.add(result);
         }
       }
     });
+    device.cancelWhenDisconnected(sub);
+    await char.setNotifyValue(true);
   }
 
   /// Écrit une commande de vibration haptique (4 octets Big-Endian).

@@ -10,6 +10,8 @@ import '../models/studio_session_model.dart';
 
 const _uuid = Uuid();
 
+typedef CoordinatorLogCallback = void Function(String message, {bool isError});
+
 /// Coordinateur central assurant le routage transparent bidirectionnel BLE <-> MQTT
 /// et l'initiation des sessions Studio auprès du Backend FastAPI.
 class GatewayCoordinator {
@@ -17,6 +19,7 @@ class GatewayCoordinator {
   final MqttGatewayService mqttService;
   final StudioApiService? studioApiService;
   final String deviceId;
+  final CoordinatorLogCallback? onLog;
 
   StreamSubscription<ActivityDetectionModel>? _activitySub;
   StreamSubscription<HapticCommandModel>? _hapticSub;
@@ -39,6 +42,7 @@ class GatewayCoordinator {
     required this.mqttService,
     this.studioApiService,
     required this.deviceId,
+    this.onLog,
   });
 
   /// Démarre le routage bidirectionnel entre le BLE et le MQTT.
@@ -55,22 +59,55 @@ class GatewayCoordinator {
 
     // 3. Relais batch : BLE Studio Data Burst reassemblé -> Cloud MQTT DynamoDB
     _burstSub = bleClient.burstResultStream.listen((result) async {
-      if (result.isSuccess) {
-        final session = StudioSessionModel(
-          sessionId: _currentStudioSessionId ?? _uuid.v4(),
-          label: _currentStudioLabel ?? 'unlabeled',
-          deviceId: deviceId,
-          startTimestampEpoch: _currentStudioStartTimestamp > 0
-              ? _currentStudioStartTimestamp
-              : DateTime.now().millisecondsSinceEpoch / 1000.0,
-          durationSec: _currentStudioDurationSec,
-          readings: result.readings,
+      onLog?.call(
+        '[GATEWAY] Paquet fin de burst reçu : complété=${result.isCompleted}, '
+        'CRC valide=${result.isCrcValid}, trames=${result.framesRecovered}/${result.totalAnnounced}',
+        isError: !result.isSuccess,
+      );
+
+      if (result.readings.isEmpty) {
+        onLog?.call(
+          '[GATEWAY] Aucun échantillon IMU contenu dans le burst reçu.',
+          isError: true,
         );
+        return;
+      }
 
-        // Publication MQTT vers DynamoDB
+      if (!result.isCrcValid) {
+        onLog?.call(
+          '[GATEWAY] Avertissement CRC32 non concordant. Les ${result.readings.length} trames reçues sont tout de même transmises.',
+          isError: true,
+        );
+      }
+
+      final session = StudioSessionModel(
+        sessionId: _currentStudioSessionId ?? _uuid.v4(),
+        label: _currentStudioLabel ?? 'unlabeled',
+        deviceId: deviceId,
+        startTimestampEpoch: _currentStudioStartTimestamp > 0
+            ? _currentStudioStartTimestamp
+            : DateTime.now().millisecondsSinceEpoch / 1000.0,
+        durationSec: _currentStudioDurationSec,
+        readings: result.readings,
+      );
+
+      // Publication MQTT vers DynamoDB
+      try {
+        onLog?.call(
+          '[GATEWAY] Publication de la session ${session.sessionId} (${session.readings.length} trames) vers MQTT...',
+          isError: false,
+        );
         await mqttService.publishStudioSession(session);
-
         _studioSessionSavedController.add(session);
+        onLog?.call(
+          '[GATEWAY] Session ${session.sessionId} publiée avec succès via MQTT.',
+          isError: false,
+        );
+      } catch (e) {
+        onLog?.call(
+          '[GATEWAY] Erreur lors de la publication MQTT : $e',
+          isError: true,
+        );
       }
     });
   }
@@ -82,6 +119,22 @@ class GatewayCoordinator {
     required double durationSec,
     String? sessionId,
   }) async {
+    // 1. Sécuriser la connexion MQTT avant de lancer la session d'enregistrement
+    if (!mqttService.isConnected) {
+      onLog?.call(
+        '[GATEWAY] MQTT non connecté. Connexion préventive avant de déclencher la capture Studio...',
+        isError: false,
+      );
+      try {
+        await mqttService.connect();
+      } catch (e) {
+        onLog?.call(
+          '[GATEWAY] Avertissement : échec connexion MQTT préalable ($e). Poursuite du flux.',
+          isError: true,
+        );
+      }
+    }
+
     String effectiveSessionId;
 
     if (studioApiService != null) {
