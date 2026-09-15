@@ -198,5 +198,44 @@ void main() {
       expect(parsed.readings.first.payload.ax, equals(1.0));
       expect(parsed.readings.first.payload.gz, equals(6.0));
     });
+
+    test('StudioSessionModel.create génère automatiquement un UUID v4 canonique et toRestApiPayload est conforme', () {
+      final session = StudioSessionModel.create(
+        label: 'course_vitesse',
+        deviceId: 'HK-SHOE-777',
+        durationSec: 8.5,
+        readings: [
+          const ImuReadingModel(
+            deltaMs: 0,
+            ax: 0.1,
+            ay: 0.9,
+            az: 0.0,
+            gx: 0.0,
+            gy: 0.0,
+            gz: 0.0,
+          ),
+          const ImuReadingModel(
+            deltaMs: 20,
+            ax: 0.2,
+            ay: 0.8,
+            az: 0.1,
+            gx: 1.0,
+            gy: 0.0,
+            gz: 0.0,
+          ),
+        ],
+      );
+
+      expect(uuidRegex.hasMatch(session.sessionId), isTrue);
+      expect(session.durationSec, equals(8.5));
+
+      final restPayload = session.toRestApiPayload();
+      expect(restPayload['id'], equals(session.sessionId));
+      expect(uuidRegex.hasMatch(restPayload['id'] as String), isTrue);
+      expect(restPayload['device_id'], equals('HK-SHOE-777'));
+      expect(restPayload['label'], equals('course_vitesse'));
+      expect(restPayload['duration_sec'], equals(8.5));
+      expect(restPayload['sample_count'], equals(2));
+    });
   });
 }

@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:uuid/uuid.dart';
 
 import 'core/config/app_config.dart';
 import 'core/permissions/permission_service.dart';
 import 'models/haptic_command_model.dart';
+import 'models/studio_session_model.dart';
 import 'services/auth/auth_service.dart';
 import 'services/auth/iot_credentials_repository.dart';
 import 'services/auth/token_storage_service.dart';
@@ -12,6 +14,7 @@ import 'services/ble/ble_connection_manager.dart';
 import 'services/ble/ble_footwear_client.dart';
 import 'services/gateway_coordinator.dart';
 import 'services/mqtt/mqtt_gateway_service.dart';
+import 'services/studio/studio_api_service.dart';
 import 'ui/screens/login_screen.dart';
 
 void main() {
@@ -163,6 +166,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
   BleFootwearClient? _bleClient;
   MqttGatewayService? _mqttService;
   GatewayCoordinator? _coordinator;
+  StudioApiService? _studioApiService;
+  StreamSubscription<StudioSessionModel>? _studioSavedSub;
 
   BleConnectionStatus _bleStatus = BleConnectionStatus.disconnected;
   BluetoothDevice? _connectedDevice;
@@ -204,6 +209,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
 
       _addLog('BLE', 'Statut connexion : ${status.name}');
       if (status == BleConnectionStatus.disconnected) {
+        _studioSavedSub?.cancel();
         _coordinator?.stopRouting();
         _coordinator = null;
         _bleClient?.dispose();
@@ -216,6 +222,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
 
   @override
   void dispose() {
+    _studioSavedSub?.cancel();
     _coordinator?.stopRouting();
     _bleClient?.dispose();
     _bleManager?.dispose();
@@ -304,13 +311,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
       }
 
       if (connected && _bleClient != null) {
-        _coordinator = GatewayCoordinator(
-          bleClient: _bleClient!,
-          mqttService: _mqttService!,
-          deviceId: _deviceId,
-        );
-        _coordinator!.startRouting();
-        _addLog('GATEWAY', 'Routage bidirectionnel transparent BLE <-> MQTT réactivé.', color: Colors.green);
+        _setupCoordinator();
       }
     } catch (e) {
       _addLog('MQTT', 'Erreur MQTT inattendue : $e', color: Colors.red);
@@ -318,6 +319,49 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         setState(() => _mqttConnected = false);
       }
     }
+  }
+
+  void _setupCoordinator() {
+    if (_bleClient == null || _mqttService == null || !_mqttConnected) return;
+
+    _coordinator?.stopRouting();
+    _studioSavedSub?.cancel();
+
+    _studioApiService ??= StudioApiService(
+      backendBaseUrl: AppConfig.backendBaseUrl,
+      tokenStorage: TokenStorageService(),
+      authService: widget.authService,
+      onLog: (msg, {bool isError = false}) {
+        _addLog('STUDIO', msg, color: isError ? Colors.red : Colors.green);
+      },
+    );
+
+    _coordinator = GatewayCoordinator(
+      bleClient: _bleClient!,
+      mqttService: _mqttService!,
+      studioApiService: _studioApiService,
+      deviceId: _deviceId,
+    );
+
+    _studioSavedSub = _coordinator!.studioSessionSavedStream.listen((savedSession) {
+      if (mounted) {
+        final shortId = savedSession.sessionId.length > 8
+            ? savedSession.sessionId.substring(0, 8)
+            : savedSession.sessionId;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Session Studio synchronisée ($shortId, ${savedSession.readings.length} trames)',
+            ),
+            backgroundColor: const Color(0xFF0F766E),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    });
+
+    _coordinator!.startRouting();
+    _addLog('GATEWAY', 'Routage bidirectionnel BLE <-> MQTT + Sync REST activé.', color: Colors.green);
   }
 
   Future<void> _initGateway() async {
@@ -438,14 +482,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
       });
 
       // Brancher le coordinateur de routage bidirectionnel
-      if (_mqttService != null) {
-        _coordinator = GatewayCoordinator(
-          bleClient: _bleClient!,
-          mqttService: _mqttService!,
-          deviceId: _deviceId,
-        );
-        _coordinator!.startRouting();
-        _addLog('GATEWAY', 'Routage bidirectionnel transparent BLE <-> MQTT activé.');
+      if (_mqttService != null && _mqttConnected) {
+        _setupCoordinator();
       }
     } catch (e) {
       _addLog('BLE', 'Erreur initialisation GATT : $e', color: Colors.red);
@@ -488,7 +526,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
       return;
     }
 
-    final sessionId = 'sess-${DateTime.now().millisecondsSinceEpoch}';
+    final sessionId = const Uuid().v4();
     _addLog('STUDIO', 'Démarrage session Studio (5.0s, label: test_gait, id: $sessionId)...');
 
     try {

@@ -8,6 +8,7 @@ import 'package:healthkicks_mobile/services/ble/ble_footwear_client.dart';
 import 'package:healthkicks_mobile/services/ble/burst_reassembler.dart';
 import 'package:healthkicks_mobile/services/gateway_coordinator.dart';
 import 'package:healthkicks_mobile/services/mqtt/mqtt_gateway_service.dart';
+import 'package:healthkicks_mobile/services/studio/studio_api_service.dart';
 
 class FakeBleFootwearClient implements BleFootwearClient {
   final _activityCtrl = StreamController<ActivityDetectionModel>.broadcast();
@@ -96,18 +97,46 @@ class FakeMqttGatewayService implements MqttGatewayService {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class FakeStudioApiService implements StudioApiService {
+  final List<Map<String, dynamic>> createdSessions = [];
+
+  @override
+  Future<bool> createStudioSession({
+    required String id,
+    required String deviceId,
+    required String label,
+    required double durationSec,
+    required int sampleCount,
+  }) async {
+    createdSessions.add({
+      'id': id,
+      'device_id': deviceId,
+      'label': label,
+      'duration_sec': durationSec,
+      'sample_count': sampleCount,
+    });
+    return true;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
-  group('GatewayCoordinator - Routage bidirectionnel BLE <-> MQTT', () {
+  group('GatewayCoordinator - Routage bidirectionnel BLE <-> MQTT & Synchronisation REST Studio', () {
     late FakeBleFootwearClient fakeBle;
     late FakeMqttGatewayService fakeMqtt;
+    late FakeStudioApiService fakeStudioApi;
     late GatewayCoordinator coordinator;
 
     setUp(() {
       fakeBle = FakeBleFootwearClient();
       fakeMqtt = FakeMqttGatewayService();
+      fakeStudioApi = FakeStudioApiService();
       coordinator = GatewayCoordinator(
         bleClient: fakeBle,
         mqttService: fakeMqtt,
+        studioApiService: fakeStudioApi,
         deviceId: 'HK-SHOE-TEST-001',
       );
       coordinator.startRouting();
@@ -154,11 +183,17 @@ void main() {
       expect(fakeBle.sentHapticCommands.first.durationMs, equals(300));
     });
 
-    test('Relais Studio Burst : Réassemblage validé publié en session batch MQTT', () async {
+    test('Relais Studio Burst : Réassemblage validé publié en session batch MQTT ET déclaré en REST', () async {
+      StudioSessionModel? savedNotifiedSession;
+      final sub = coordinator.studioSessionSavedStream.listen((sess) {
+        savedNotifiedSession = sess;
+      });
+
+      const testSessionUuid = '77777777-8888-9999-aaaa-bbbbbbbbbbbb';
       await coordinator.triggerStudioSession(
         label: 'course_fractionne',
         durationSec: 30.0,
-        sessionId: 'session_abc_123',
+        sessionId: testSessionUuid,
       );
 
       final frames = [
@@ -175,14 +210,43 @@ void main() {
       );
 
       fakeBle.emitBurst(burstResult);
-      await Future<void>.delayed(const Duration(milliseconds: 10));
+      await Future<void>.delayed(const Duration(milliseconds: 15));
 
+      // 1. Validation MQTT
       expect(fakeMqtt.publishedStudioSessions.length, equals(1));
       final publishedSession = fakeMqtt.publishedStudioSessions.first;
-      expect(publishedSession.sessionId, equals('session_abc_123'));
+      expect(publishedSession.sessionId, equals(testSessionUuid));
       expect(publishedSession.label, equals('course_fractionne'));
       expect(publishedSession.deviceId, equals('HK-SHOE-TEST-001'));
       expect(publishedSession.readings.length, equals(2));
+
+      // 2. Validation Appel REST Studio
+      expect(fakeStudioApi.createdSessions.length, equals(1));
+      final restSession = fakeStudioApi.createdSessions.first;
+      expect(restSession['id'], equals(testSessionUuid));
+      expect(restSession['device_id'], equals('HK-SHOE-TEST-001'));
+      expect(restSession['label'], equals('course_fractionne'));
+      expect(restSession['duration_sec'], equals(30.0));
+      expect(restSession['sample_count'], equals(2));
+
+      // 3. Validation Stream UI Toast / SnackBar
+      expect(savedNotifiedSession, isNotNull);
+      expect(savedNotifiedSession!.sessionId, equals(testSessionUuid));
+
+      await sub.cancel();
+    });
+
+    test('triggerStudioSession génère un UUID v4 valide si aucun sessionId n\'est fourni', () async {
+      await coordinator.triggerStudioSession(
+        label: 'auto_uuid_test',
+        durationSec: 5.0,
+      );
+
+      expect(fakeBle.lastStartedStudioSessionId, isNotNull);
+      final uuidRegex = RegExp(
+        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+      );
+      expect(uuidRegex.hasMatch(fakeBle.lastStartedStudioSessionId!), isTrue);
     });
   });
 }
