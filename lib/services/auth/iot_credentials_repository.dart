@@ -95,11 +95,53 @@ class IotCredentialsRepository {
     });
 
     try {
-      final response = await _httpClient.post(
+      var response = await _httpClient.post(
         uri,
         headers: headers,
         body: body,
       );
+
+      // Gestion du jeton expiré (HTTP 401)
+      if (response.statusCode == 401) {
+        onLog?.call(
+          '[STS] Jeton d\'accès expiré (HTTP 401), tentative de rafraîchissement...',
+          isError: false,
+        );
+
+        bool refreshed = false;
+        if (authService != null) {
+          try {
+            refreshed = await authService!.refreshToken();
+          } catch (_) {
+            refreshed = false;
+          }
+        }
+
+        if (refreshed) {
+          final refreshedToken = await _resolveAccessToken();
+          if (refreshedToken != null && refreshedToken.isNotEmpty) {
+            headers['Authorization'] = 'Bearer $refreshedToken';
+            response = await _httpClient.post(
+              uri,
+              headers: headers,
+              body: body,
+            );
+          }
+        }
+
+        // Si le rafraîchissement a échoué ou que le serveur renvoie toujours 401
+        if (response.statusCode == 401) {
+          onLog?.call(
+            '[STS] Session définitivement expirée (HTTP 401) : déconnexion automatique de l\'utilisateur vers le login SSO.',
+            isError: true,
+          );
+          await authService?.logout();
+          await tokenStorage?.clearTokens();
+          const errorMsg =
+              '[STS] Échec HTTP 401 (token expired) : utilisateur déconnecté pour ré-authentification SSO.';
+          throw HttpException(errorMsg, uri: uri);
+        }
+      }
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;

@@ -146,6 +146,8 @@ class StudioApiService {
         } else {
           const msg = '[Studio] Échec du rafraîchissement du jeton d\'authentification : reconnexion requise.';
           onLog?.call(msg, isError: true);
+          await _authService?.logout();
+          await _tokenStorage.clearTokens();
           throw const HttpException(msg);
         }
       }

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:healthkicks_mobile/services/auth/auth_service.dart';
 import 'package:healthkicks_mobile/services/auth/iot_credentials_model.dart';
 import 'package:healthkicks_mobile/services/auth/iot_credentials_repository.dart';
 
@@ -118,5 +119,89 @@ void main() {
         throwsA(isA<Exception>()),
       );
     });
+
+    test('fetchCredentials - En cas de 401, tente refreshToken puis rejoue avec succès', () async {
+      int requestCount = 0;
+      final mockClient = MockClient((request) async {
+        requestCount++;
+        if (requestCount == 1) {
+          expect(request.headers['Authorization'], equals('Bearer old_token'));
+          return http.Response(jsonEncode({'detail': 'token expired'}), 401);
+        } else {
+          expect(request.headers['Authorization'], equals('Bearer new_token'));
+          return http.Response(jsonEncode(validJson), 200, headers: {
+            'content-type': 'application/json',
+          });
+        }
+      });
+
+      final fakeAuth = FakeAuthServiceForRepoTest(shouldSucceedRefresh: true);
+      String currentToken = 'old_token';
+
+      final repo = IotCredentialsRepository(
+        backendBaseUrl: 'http://192.168.1.100:8000',
+        httpClient: mockClient,
+        authService: fakeAuth,
+        authTokenProvider: () => currentToken,
+      );
+
+      fakeAuth.onRefreshHook = () {
+        currentToken = 'new_token';
+      };
+
+      final creds = await repo.fetchCredentials(deviceId: 'HK-1');
+      expect(creds.accessKeyId, equals('ASIA_TEST_ACCESS_KEY'));
+      expect(fakeAuth.refreshTokenCalled, isTrue);
+      expect(fakeAuth.logoutCalled, isFalse);
+      expect(requestCount, equals(2));
+    });
+
+    test('fetchCredentials - En cas de 401 avec échec de refreshToken, appelle authService.logout() pour retour SSO', () async {
+      final mockClient = MockClient((request) async {
+        return http.Response(jsonEncode({'detail': 'token expired'}), 401);
+      });
+
+      final fakeAuth = FakeAuthServiceForRepoTest(shouldSucceedRefresh: false);
+
+      final repo = IotCredentialsRepository(
+        backendBaseUrl: 'http://192.168.1.100:8000',
+        httpClient: mockClient,
+        authService: fakeAuth,
+        authTokenProvider: () => 'expired_token',
+      );
+
+      expect(
+        () => repo.fetchCredentials(deviceId: 'HK-1'),
+        throwsA(isA<Exception>()),
+      );
+
+      // Laisser le cycle async se terminer
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(fakeAuth.refreshTokenCalled, isTrue);
+      expect(fakeAuth.logoutCalled, isTrue);
+    });
   });
 }
+
+class FakeAuthServiceForRepoTest extends AuthService {
+  bool refreshTokenCalled = false;
+  bool logoutCalled = false;
+  bool shouldSucceedRefresh = false;
+  void Function()? onRefreshHook;
+
+  FakeAuthServiceForRepoTest({this.shouldSucceedRefresh = false});
+
+  @override
+  Future<bool> refreshToken() async {
+    refreshTokenCalled = true;
+    onRefreshHook?.call();
+    return shouldSucceedRefresh;
+  }
+
+  @override
+  Future<void> logout() async {
+    logoutCalled = true;
+  }
+}
+
