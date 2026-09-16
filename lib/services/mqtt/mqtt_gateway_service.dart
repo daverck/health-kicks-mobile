@@ -58,70 +58,72 @@ class MqttGatewayService {
       );
 
       final effectiveClientId = clientId.isNotEmpty ? clientId : 'healthkicks-session-$deviceId';
+      final effectiveUserId = userId;
+      final bool hasUserId = effectiveUserId != null && effectiveUserId.isNotEmpty;
 
-      // Dans mqtt_client 10.11.11 :
-      // MqttServerWsConnection.connect(server, port) valide que server débute impérativement par 'ws://' ou 'wss://'.
-      // Aucune propriété 'websocketUrl' n'existe dans cette version.
-      // L'URL WSS pré-signée SigV4 complète (sans fragment #) est donc transmise comme paramètre 'server'.
-      _client = MqttServerClient.withPort(
-        signedWssUrl,
-        effectiveClientId,
-        443,
-      );
+      bool connected = false;
 
-      // AWS IoT Core exige strictement le sous-protocole WebSocket unique 'mqtt'.
-      // Le défaut multi-protocoles de mqtt_client ('mqtt', 'mqttv3.1', 'mqttv3.11') provoque une erreur HTTP 403.
-      _client!.websocketProtocols = MqttClientConstants.protocolsSingleDefault;
-      _client!.setProtocolV311();
-      _client!.useWebSocket = true;
-      _client!.secure = false; // Le chiffrement TLS est géré au niveau du protocole wss://
-      _client!.keepAlivePeriod = 30;
-      _client!.autoReconnect = true;
-      _client!.logging(on: false);
+      // 1. Tenter la connexion avec le LWT passerelle utilisateur (healthkicks/v1/users/{user_id}/gateway-status)
+      // si l'identifiant utilisateur est renseigné.
+      if (hasUserId) {
+        final userLwtTopic = 'healthkicks/v1/users/$effectiveUserId/gateway-status';
+        final userLwtPayload = jsonEncode({
+          'user_id': effectiveUserId,
+          'state': 'offline',
+          'gateway': 'mobile',
+        });
 
-      _client!.onConnected = () {
-        _isConnected = true;
-        log?.call('[MQTT] WebSocket connecté à AWS IoT Core.', isError: false);
-      };
-      _client!.onDisconnected = () {
-        _isConnected = false;
-        log?.call('[MQTT] WebSocket déconnecté d\'AWS IoT Core.', isError: true);
-      };
-      _client!.onAutoReconnect = () {
-        log?.call('[MQTT] Reconnexion automatique MQTT en cours...', isError: false);
-      };
-      _client!.onAutoReconnected = () {
-        _isConnected = true;
-        log?.call('[MQTT] Reconnexion automatique MQTT réussie.', isError: false);
-      };
+        log?.call(
+          '[MQTT] Tentative de connexion avec LWT utilisateur ($userLwtTopic)...',
+          isError: false,
+        );
 
-      // Configuration Last Will & Testament (LWT) basée sur user_id (rupture passerelle)
-      final effectiveUserId = userId ?? 'unknown';
-      final lwtTopic = 'healthkicks/v1/users/$effectiveUserId/gateway-status';
-      final lwtPayload = jsonEncode({
-        'user_id': effectiveUserId,
-        'state': 'offline',
-        'gateway': 'mobile',
-      });
+        connected = await _tryConnectWithLwt(
+          signedWssUrl: signedWssUrl,
+          effectiveClientId: effectiveClientId,
+          lwtTopic: userLwtTopic,
+          lwtPayload: userLwtPayload,
+        );
 
-      final connMessage = MqttConnectMessage()
-          .withClientIdentifier(effectiveClientId)
-          .startClean()
-          .withWillTopic(lwtTopic)
-          .withWillMessage(lwtPayload)
-          .withWillQos(MqttQos.atLeastOnce);
+        if (!connected) {
+          log?.call(
+            '[MQTT] Connexion avec LWT utilisateur non aboutie (broker non répondant ou politique STS restrictive). Bascule automatique vers LWT équipement...',
+            isError: true,
+          );
+        }
+      }
 
-      _client!.connectionMessage = connMessage;
+      // 2. Repli / Fallback vers LWT équipement (healthkicks/v1/{device_id}/status)
+      // si aucun utilisateur n'est configuré ou si la politique STS distante restreint encore l'accès aux topics d'équipement.
+      if (!connected) {
+        final deviceLwtTopic = 'healthkicks/v1/$deviceId/status';
+        final deviceLwtPayload = jsonEncode({
+          'device_id': deviceId,
+          'state': 'offline',
+          'gateway': 'mobile',
+        });
 
-      final status = await _client!.connect();
-      _isConnected = status?.state == MqttConnectionState.connected;
+        log?.call(
+          '[MQTT] Connexion avec LWT équipement ($deviceLwtTopic)...',
+          isError: false,
+        );
+
+        connected = await _tryConnectWithLwt(
+          signedWssUrl: signedWssUrl,
+          effectiveClientId: effectiveClientId,
+          lwtTopic: deviceLwtTopic,
+          lwtPayload: deviceLwtPayload,
+        );
+      }
+
+      _isConnected = connected;
 
       if (_isConnected) {
         log?.call('[MQTT] Connecté avec succès à AWS IoT Core en WebSockets SigV4.', isError: false);
         _subscribeToCommands();
       } else {
         log?.call(
-          '[MQTT] Échec connexion AWS IoT Core WSS : statut ${status?.state}.',
+          '[MQTT] Échec définitif de connexion AWS IoT Core WSS.',
           isError: true,
         );
       }
@@ -129,6 +131,72 @@ class MqttGatewayService {
     } catch (e) {
       _isConnected = false;
       log?.call('[MQTT] WebSocket error: $e', isError: true);
+      return false;
+    }
+  }
+
+  MqttServerClient _createMqttClient(String signedWssUrl, String effectiveClientId) {
+    final client = MqttServerClient.withPort(
+      signedWssUrl,
+      effectiveClientId,
+      443,
+    );
+
+    // AWS IoT Core exige strictement le sous-protocole WebSocket unique 'mqtt'.
+    // Le défaut multi-protocoles de mqtt_client ('mqtt', 'mqttv3.1', 'mqttv3.11') provoque une erreur HTTP 403.
+    client.websocketProtocols = MqttClientConstants.protocolsSingleDefault;
+    client.setProtocolV311();
+    client.useWebSocket = true;
+    client.secure = false; // Le chiffrement TLS est géré au niveau du protocole wss://
+    client.keepAlivePeriod = 30;
+    client.autoReconnect = true;
+    client.logging(on: false);
+
+    client.onConnected = () {
+      _isConnected = true;
+      onLog?.call('[MQTT] WebSocket connecté à AWS IoT Core.', isError: false);
+    };
+    client.onDisconnected = () {
+      _isConnected = false;
+      onLog?.call('[MQTT] WebSocket déconnecté d\'AWS IoT Core.', isError: true);
+    };
+    client.onAutoReconnect = () {
+      onLog?.call('[MQTT] Reconnexion automatique MQTT en cours...', isError: false);
+    };
+    client.onAutoReconnected = () {
+      _isConnected = true;
+      onLog?.call('[MQTT] Reconnexion automatique MQTT réussie.', isError: false);
+    };
+
+    return client;
+  }
+
+  Future<bool> _tryConnectWithLwt({
+    required String signedWssUrl,
+    required String effectiveClientId,
+    required String lwtTopic,
+    required String lwtPayload,
+  }) async {
+    try {
+      _client?.disconnect();
+    } catch (_) {}
+
+    _client = _createMqttClient(signedWssUrl, effectiveClientId);
+
+    final connMessage = MqttConnectMessage()
+        .withClientIdentifier(effectiveClientId)
+        .startClean()
+        .withWillTopic(lwtTopic)
+        .withWillMessage(lwtPayload)
+        .withWillQos(MqttQos.atLeastOnce);
+
+    _client!.connectionMessage = connMessage;
+
+    try {
+      final status = await _client!.connect();
+      return status?.state == MqttConnectionState.connected;
+    } catch (e) {
+      onLog?.call('[MQTT] Tentative connect avec LWT ($lwtTopic) a échoué: $e', isError: true);
       return false;
     }
   }
