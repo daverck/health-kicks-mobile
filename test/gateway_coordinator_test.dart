@@ -91,8 +91,12 @@ class FakeMqttGatewayService implements MqttGatewayService {
     publishedStudioSessions.add(session);
   }
 
+  final List<bool> publishedGatewayStatuses = [];
+
   @override
-  Future<void> publishGatewayStatus({required bool online}) async {}
+  Future<void> publishGatewayStatus({required bool online}) async {
+    publishedGatewayStatuses.add(online);
+  }
 
   @override
   Future<bool> connect({MqttLogCallback? onLog}) async => true;
@@ -396,6 +400,29 @@ void main() {
       loggedCoordinator.stopRouting();
       testBle.dispose();
       testMqtt.disconnect();
+    });
+
+    test('Présence unitaire BLE : startRouting et stopRouting émettent online et offline sur status', () async {
+      final localBle = FakeBleFootwearClient();
+      final localMqtt = FakeMqttGatewayService();
+      final localCoordinator = GatewayCoordinator(
+        bleClient: localBle,
+        mqttService: localMqtt,
+        deviceId: 'HK-TEST-PRESENCE',
+      );
+
+      // 1. Démarrage du routage -> présence "online"
+      localCoordinator.startRouting();
+      await Future<void>.delayed(const Duration(milliseconds: 15));
+      expect(localMqtt.publishedGatewayStatuses, contains(true));
+
+      // 2. Arrêt du routage (déconnexion BLE) -> présence "offline"
+      localCoordinator.stopRouting();
+      await Future<void>.delayed(const Duration(milliseconds: 15));
+      expect(localMqtt.publishedGatewayStatuses.last, equals(false));
+
+      localBle.dispose();
+      localMqtt.disconnect();
     });
   });
 }

@@ -210,8 +210,12 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
       _addLog('BLE', 'Statut connexion : ${status.name}');
       if (status == BleConnectionStatus.disconnected) {
         _studioSavedSub?.cancel();
-        _coordinator?.stopRouting();
-        _coordinator = null;
+        if (_coordinator != null) {
+          _coordinator?.stopRouting();
+          _coordinator = null;
+        } else {
+          _mqttService?.publishGatewayStatus(online: false);
+        }
         _bleClient?.dispose();
         _bleClient = null;
       } else if (status == BleConnectionStatus.ready && _bleManager?.connectedDevice != null) {
@@ -297,8 +301,11 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         },
       );
 
+      final currentUserId = widget.authService?.currentUser?.id.toString();
+
       _mqttService = MqttGatewayService(
         deviceId: _deviceId,
+        userId: currentUserId,
         credentialsRepository: _credentialsRepo!,
         onLog: (msg, {bool isError = false}) {
           _addLog('MQTT', msg, color: isError ? Colors.red : Colors.teal);

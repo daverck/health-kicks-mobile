@@ -15,6 +15,7 @@ typedef MqttLogCallback = void Function(String message, {bool isError});
 /// Référence contractuelle : contracts/README.md (Section 3 : Contrats MQTT IoT)
 class MqttGatewayService {
   final String deviceId;
+  final String? userId;
   final String clientId;
   final IotCredentialsRepository credentialsRepository;
   final MqttLogCallback? onLog;
@@ -31,6 +32,7 @@ class MqttGatewayService {
 
   MqttGatewayService({
     required this.deviceId,
+    this.userId,
     required this.credentialsRepository,
     String? clientId,
     this.onLog,
@@ -93,18 +95,19 @@ class MqttGatewayService {
         log?.call('[MQTT] Reconnexion automatique MQTT réussie.', isError: false);
       };
 
-      // Configuration Last Will & Testament (LWT)
+      // Configuration Last Will & Testament (LWT) basée sur user_id (rupture passerelle)
+      final effectiveUserId = userId ?? 'unknown';
+      final lwtTopic = 'healthkicks/v1/users/$effectiveUserId/gateway-status';
       final lwtPayload = jsonEncode({
-        'device_id': deviceId,
+        'user_id': effectiveUserId,
         'state': 'offline',
         'gateway': 'mobile',
-        'timestamp': DateTime.now().toUtc().toIso8601String(),
       });
 
       final connMessage = MqttConnectMessage()
           .withClientIdentifier(effectiveClientId)
           .startClean()
-          .withWillTopic('healthkicks/v1/$deviceId/status')
+          .withWillTopic(lwtTopic)
           .withWillMessage(lwtPayload)
           .withWillQos(MqttQos.atLeastOnce);
 
@@ -116,7 +119,6 @@ class MqttGatewayService {
       if (_isConnected) {
         log?.call('[MQTT] Connecté avec succès à AWS IoT Core en WebSockets SigV4.', isError: false);
         _subscribeToCommands();
-        await publishGatewayStatus(online: true);
       } else {
         log?.call(
           '[MQTT] Échec connexion AWS IoT Core WSS : statut ${status?.state}.',
@@ -256,13 +258,14 @@ class MqttGatewayService {
     }
   }
 
-  /// Publie le statut en ligne de la passerelle.
-  Future<void> publishGatewayStatus({required bool online}) async {
+  /// Publie le statut unitaire de présence d'un équipement BLE sur AWS IoT Core.
+  Future<void> publishDeviceStatus({required bool online, String? targetDeviceId}) async {
+    final effectiveDeviceId = targetDeviceId ?? deviceId;
     if (!_isConnected || _client == null) return;
 
-    final topic = 'healthkicks/v1/$deviceId/status';
+    final topic = 'healthkicks/v1/$effectiveDeviceId/status';
     final payload = jsonEncode({
-      'device_id': deviceId,
+      'device_id': effectiveDeviceId,
       'state': online ? 'online' : 'offline',
       'gateway': 'mobile',
       'timestamp': DateTime.now().toUtc().toIso8601String(),
@@ -273,6 +276,10 @@ class MqttGatewayService {
 
     _client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
   }
+
+  /// Publie le statut en ligne de la passerelle / équipement (alias).
+  Future<void> publishGatewayStatus({required bool online}) =>
+      publishDeviceStatus(online: online);
 
   void disconnect() {
     publishGatewayStatus(online: false);
