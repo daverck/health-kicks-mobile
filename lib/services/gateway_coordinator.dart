@@ -205,9 +205,11 @@ class GatewayCoordinator {
     );
   }
 
-  /// Interrompt le routage et notifie le statut "offline" de l'équipement BLE sur AWS IoT Core.
-  void stopRouting() {
-    unawaited(publishBleStatus(online: false));
+  /// Interrompt le routage et notifie optionnellement le statut "offline" de l'équipement BLE sur AWS IoT Core.
+  void stopRouting({bool notifyOffline = true}) {
+    if (notifyOffline) {
+      unawaited(publishBleStatus(online: false));
+    }
     _activitySub?.cancel();
     _activitySub = null;
     _hapticSub?.cancel();

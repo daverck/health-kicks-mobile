@@ -224,8 +224,11 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
     });
   }
 
+  bool _isDisposed = false;
+
   @override
   void dispose() {
+    _isDisposed = true;
     _studioSavedSub?.cancel();
     _coordinator?.stopRouting();
     _bleClient?.dispose();
@@ -236,7 +239,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
   }
 
   void _addLog(String tag, String message, {Color? color}) {
-    if (!mounted) return;
+    if (!mounted || _isDisposed) return;
     setState(() {
       _logs.add(LogEntry(
         timestamp: DateTime.now(),
@@ -288,10 +291,6 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
 
   Future<void> _connectMqtt() async {
     try {
-      _coordinator?.stopRouting();
-      _coordinator = null;
-      _mqttService?.disconnect();
-
       _credentialsRepo ??= IotCredentialsRepository(
         backendBaseUrl: AppConfig.backendBaseUrl,
         tokenStorage: TokenStorageService(),
@@ -303,12 +302,25 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
 
       final currentUserId = widget.authService?.currentUser?.id.toString();
 
-      _mqttService = MqttGatewayService(
+      // Recréer le service MQTT si l'utilisateur a changé
+      if (_mqttService != null && _mqttService!.userId != currentUserId) {
+        _mqttService?.disconnect();
+        _mqttService = null;
+      }
+
+      _mqttService ??= MqttGatewayService(
         deviceId: _deviceId,
         userId: currentUserId,
         credentialsRepository: _credentialsRepo!,
         onLog: (msg, {bool isError = false}) {
           _addLog('MQTT', msg, color: isError ? Colors.red : Colors.teal);
+        },
+        onConnectionRestored: () {
+          if (_bleClient != null &&
+              (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected)) {
+            _addLog('GATEWAY', 'Reconnexion MQTT : re-synchronisation du statut BLE online...', color: Colors.green);
+            _coordinator?.publishBleStatus(online: true);
+          }
         },
       );
 
@@ -317,8 +329,18 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         setState(() => _mqttConnected = connected);
       }
 
-      if (connected && _bleClient != null) {
-        _setupCoordinator();
+      if (connected) {
+        final isBleReady = _bleClient != null &&
+            (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected);
+
+        if (isBleReady) {
+          if (_coordinator == null) {
+            _setupCoordinator();
+          } else {
+            _addLog('GATEWAY', 'MQTT connecté : synchronisation immédiate de la présence BLE online...', color: Colors.green);
+            await _coordinator!.publishBleStatus(online: true);
+          }
+        }
       }
     } catch (e) {
       _addLog('MQTT', 'Erreur MQTT inattendue : $e', color: Colors.red);
@@ -331,7 +353,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
   void _setupCoordinator() {
     if (_bleClient == null || _mqttService == null) return;
 
-    _coordinator?.stopRouting();
+    _coordinator?.stopRouting(notifyOffline: false);
     _studioSavedSub?.cancel();
 
     _studioApiService ??= StudioApiService(
@@ -839,14 +861,39 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
               ],
             ),
             const SizedBox(height: 6),
-            SizedBox(
-              width: double.infinity,
-              height: 28,
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(padding: EdgeInsets.zero),
-                onPressed: () => _startBleScan(fromButton: true),
-                child: const Text('Re-scanner', style: TextStyle(fontSize: 11)),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 28,
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(padding: EdgeInsets.zero),
+                      onPressed: () => _startBleScan(fromButton: true),
+                      child: const Text('Re-scanner', style: TextStyle(fontSize: 11)),
+                    ),
+                  ),
+                ),
+                if (isReady) ...[
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: SizedBox(
+                      height: 28,
+                      child: FilledButton.tonal(
+                        style: FilledButton.styleFrom(padding: EdgeInsets.zero),
+                        onPressed: () async {
+                          if (_coordinator != null) {
+                            _addLog('GATEWAY', 'Synchronisation présence : publication statut online...', color: Colors.green);
+                            await _coordinator!.publishBleStatus(online: true);
+                          } else if (_mqttService != null && _mqttService!.isConnected) {
+                            await _mqttService!.publishDeviceStatus(online: true);
+                          }
+                        },
+                        child: const Text('Sync statut', style: TextStyle(fontSize: 11)),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ],
         ),

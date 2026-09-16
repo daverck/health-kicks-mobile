@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 import '../../core/aws/sigv4_signer.dart';
@@ -19,6 +20,7 @@ class MqttGatewayService {
   final String clientId;
   final IotCredentialsRepository credentialsRepository;
   final MqttLogCallback? onLog;
+  final VoidCallback? onConnectionRestored;
 
   MqttServerClient? _client;
   bool _isConnected = false;
@@ -36,6 +38,7 @@ class MqttGatewayService {
     required this.credentialsRepository,
     String? clientId,
     this.onLog,
+    this.onConnectionRestored,
   }) : clientId = clientId ?? 'healthkicks-session-$deviceId';
 
   /// Établit la liaison MQTT sécurisée vers AWS IoT Core via WebSockets SigV4 sur le port 443.
@@ -99,6 +102,7 @@ class MqttGatewayService {
       _client!.onAutoReconnected = () {
         _isConnected = true;
         log?.call('[MQTT] Reconnexion automatique MQTT réussie.', isError: false);
+        onConnectionRestored?.call();
       };
 
       // Configuration Last Will & Testament (LWT) basée strictement sur user_id (rupture passerelle)
@@ -259,7 +263,14 @@ class MqttGatewayService {
   /// Publie le statut unitaire de présence d'un équipement BLE sur AWS IoT Core.
   Future<void> publishDeviceStatus({required bool online, String? targetDeviceId}) async {
     final effectiveDeviceId = targetDeviceId ?? deviceId;
-    if (!_isConnected || _client == null) return;
+    final log = onLog;
+    if (!_isConnected || _client == null) {
+      log?.call(
+        '[MQTT] Statut présence équipement ($effectiveDeviceId -> ${online ? "online" : "offline"}) ignoré : MQTT non connecté.',
+        isError: true,
+      );
+      return;
+    }
 
     final topic = 'healthkicks/v1/$effectiveDeviceId/status';
     final payload = jsonEncode({
@@ -273,6 +284,10 @@ class MqttGatewayService {
     builder.addString(payload);
 
     _client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
+    log?.call(
+      '[MQTT] Statut présence équipement ($effectiveDeviceId -> ${online ? "online" : "offline"}) publié avec succès sur $topic',
+      isError: false,
+    );
   }
 
   /// Publie le statut en ligne de la passerelle / équipement (alias).

@@ -421,6 +421,12 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 15));
       expect(localMqtt.publishedGatewayStatuses.last, equals(false));
 
+      // 3. Reconfiguration (notifyOffline: false) n'émet pas offline
+      localMqtt.publishedGatewayStatuses.clear();
+      localCoordinator.stopRouting(notifyOffline: false);
+      await Future<void>.delayed(const Duration(milliseconds: 15));
+      expect(localMqtt.publishedGatewayStatuses.contains(false), isFalse);
+
       localBle.dispose();
       localMqtt.disconnect();
     });
