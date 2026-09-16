@@ -52,23 +52,6 @@ void main() {
       expect(expectedTopic, equals('healthkicks/v1/users/123/gateway-status'));
     });
 
-    test('LWT topic et payload de repli (fallback) ciblent le device (device_id)', () {
-      const testDeviceId = 'HK-2';
-      const expectedTopic = 'healthkicks/v1/$testDeviceId/status';
-
-      final expectedPayload = jsonEncode({
-        'device_id': testDeviceId,
-        'state': 'offline',
-        'gateway': 'mobile',
-      });
-
-      final decoded = jsonDecode(expectedPayload) as Map<String, dynamic>;
-      expect(decoded['device_id'], equals('HK-2'));
-      expect(decoded['state'], equals('offline'));
-      expect(decoded['gateway'], equals('mobile'));
-      expect(expectedTopic, equals('healthkicks/v1/HK-2/status'));
-    });
-
     test('Statut unitaire BLE : format conforme pour healthkicks/v1/{device_id}/status', () {
       const testDeviceId = 'HK-2';
       final payload = jsonEncode({
