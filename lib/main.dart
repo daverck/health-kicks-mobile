@@ -208,7 +208,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
       });
 
       _addLog('BLE', 'Statut connexion : ${status.name}');
-      if (status == BleConnectionStatus.disconnected) {
+      if (status == BleConnectionStatus.disconnected || status == BleConnectionStatus.scanning) {
         _studioSavedSub?.cancel();
         if (_coordinator != null) {
           _coordinator?.stopRouting();
@@ -340,6 +340,9 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
             _addLog('GATEWAY', 'MQTT connecté : synchronisation immédiate de la présence BLE online...', color: Colors.green);
             await _coordinator!.publishBleStatus(online: true);
           }
+        } else if (_bleStatus == BleConnectionStatus.scanning || _bleStatus == BleConnectionStatus.disconnected) {
+          _addLog('GATEWAY', 'MQTT connecté et BLE en mode scan/déconnecté : notification statut offline...', color: Colors.grey);
+          await _mqttService!.publishDeviceStatus(online: false);
         }
       }
     } catch (e) {
@@ -442,6 +445,16 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
     }
 
     _ensureBleManager();
+
+    // Lors du lancement du scan, l'équipement n'est plus actif : publication offline
+    if (_coordinator != null) {
+      _coordinator?.stopRouting(notifyOffline: true);
+      _coordinator = null;
+    } else {
+      _mqttService?.publishDeviceStatus(online: false);
+    }
+    _bleClient?.dispose();
+    _bleClient = null;
 
     // Annuler tout scan en cours avant de relancer
     try {
