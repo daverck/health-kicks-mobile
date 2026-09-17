@@ -46,6 +46,13 @@ void main() {
         region: 'eu-north-1',
       );
       expect(soonExpiringCreds.isExpired, isTrue);
+
+      final credsWithUser = IoTCredentials.fromJson({
+        ...validJson,
+        'user_id': '42',
+      });
+      expect(credsWithUser.userId, equals('42'));
+      expect(credsWithUser.toJson()['user_id'], equals('42'));
     });
 
     test('fetchCredentials - Récupère les credentials via HTTP POST et les met en cache', () async {

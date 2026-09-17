@@ -129,5 +129,26 @@ void main() {
       expect(await service.getAccessToken(), isNull);
       expect(await service.getRefreshToken(), isNull);
     });
+
+    test('parseUserId extrait correctement le claim sub d\'un JWT', () {
+      // {"sub":"42","email":"test@example.com"}
+      const mockJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MiIsImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSJ9.mockSignature';
+      final userId = TokenStorageService.parseUserId(mockJwt);
+      expect(userId, equals('42'));
+    });
+
+    test('parseUserId renvoie null pour un token invalide ou corrompu', () {
+      expect(TokenStorageService.parseUserId('invalid_token'), isNull);
+      expect(TokenStorageService.parseUserId('header.invalid-base64.sig'), isNull);
+      expect(TokenStorageService.parseUserId(''), isNull);
+    });
+
+    test('getUserIdFromToken lit le token persistant et renvoie le userId', () async {
+      const mockJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMDgiLCJyb2xlIjoidXNlciJ9.mockSignature';
+      await service.saveTokens(accessToken: mockJwt);
+
+      final userId = await service.getUserIdFromToken();
+      expect(userId, equals('108'));
+    });
   });
 }

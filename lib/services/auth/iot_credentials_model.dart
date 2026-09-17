@@ -9,6 +9,7 @@ class IoTCredentials {
   final DateTime expiration;
   final String iotEndpoint;
   final String region;
+  final String? userId;
 
   const IoTCredentials({
     required this.accessKeyId,
@@ -17,6 +18,7 @@ class IoTCredentials {
     required this.expiration,
     required this.iotEndpoint,
     required this.region,
+    this.userId,
   });
 
   /// Indique si les identifiants sont expirés ou sur le point de l'être.
@@ -32,6 +34,7 @@ class IoTCredentials {
   factory IoTCredentials.fromJson(Map<String, dynamic> json) {
     final rawEndpoint = (json['iot_endpoint'] as String?)?.trim() ?? '';
     final rawRegion = (json['region'] as String?)?.trim() ?? '';
+    final rawUserId = (json['user_id'] != null) ? json['user_id'].toString() : null;
 
     return IoTCredentials(
       accessKeyId: json['access_key_id'] as String,
@@ -40,6 +43,7 @@ class IoTCredentials {
       expiration: DateTime.parse(json['expiration'] as String),
       iotEndpoint: rawEndpoint.isNotEmpty ? rawEndpoint : AppConfig.awsIotEndpoint,
       region: rawRegion.isNotEmpty ? rawRegion : AppConfig.awsRegion,
+      userId: rawUserId,
     );
   }
 
@@ -52,11 +56,12 @@ class IoTCredentials {
       'expiration': expiration.toUtc().toIso8601String(),
       'iot_endpoint': iotEndpoint,
       'region': region,
+      if (userId != null) 'user_id': userId,
     };
   }
 
   @override
   String toString() {
-    return 'IoTCredentials(accessKeyId: $accessKeyId, endpoint: $iotEndpoint, region: $region, expiration: $expiration, isExpired: $isExpired)';
+    return 'IoTCredentials(accessKeyId: $accessKeyId, endpoint: $iotEndpoint, region: $region, expiration: $expiration, isExpired: $isExpired, userId: $userId)';
   }
 }

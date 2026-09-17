@@ -84,3 +84,4 @@ class LogExportService {
     await Clipboard.setData(ClipboardData(text: text));
   }
 }
+

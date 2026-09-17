@@ -28,3 +28,4 @@ class LogEntry {
     return '[$formattedTimestamp] [$tag] $message';
   }
 }
+

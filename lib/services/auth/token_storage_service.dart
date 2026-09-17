@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Service gérant la persistance chiffrée et sécurisée des jetons JWT d'authentification
@@ -50,5 +51,27 @@ class TokenStorageService {
   Future<bool> hasValidToken() async {
     final token = await getAccessToken();
     return token != null && token.trim().isNotEmpty;
+  }
+
+  /// Extrait l'ID utilisateur ('sub') directement depuis le payload JWT de l'access token stocké.
+  Future<String?> getUserIdFromToken() async {
+    final token = await getAccessToken();
+    if (token == null || token.trim().isEmpty) return null;
+    return parseUserId(token);
+  }
+
+  /// Décode le payload d'un jeton JWT sans validation cryptographique pour en extraire le claim 'sub'.
+  static String? parseUserId(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length < 2) return null;
+      final normalized = base64.normalize(parts[1]);
+      final payloadBytes = base64Url.decode(normalized);
+      final jsonMap = jsonDecode(utf8.decode(payloadBytes)) as Map<String, dynamic>;
+      final sub = jsonMap['sub'];
+      return sub?.toString();
+    } catch (_) {
+      return null;
+    }
   }
 }

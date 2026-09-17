@@ -291,7 +291,10 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         },
       );
 
-      final currentUserId = widget.authService?.currentUser?.id.toString();
+      var currentUserId = widget.authService?.currentUserId;
+      if (currentUserId == null || currentUserId.isEmpty) {
+        currentUserId = await TokenStorageService().getUserIdFromToken();
+      }
 
       // Recréer le service MQTT si l'utilisateur a changé
       if (_mqttService != null && _mqttService!.userId != currentUserId) {

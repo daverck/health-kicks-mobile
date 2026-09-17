@@ -9,6 +9,7 @@ import '../../models/haptic_command_model.dart';
 import '../../models/studio_command_model.dart';
 import '../../models/studio_session_model.dart';
 import '../auth/iot_credentials_repository.dart';
+import '../auth/token_storage_service.dart';
 
 typedef MqttLogCallback = void Function(String message, {bool isError});
 
@@ -64,7 +65,20 @@ class MqttGatewayService {
       );
 
       final effectiveClientId = clientId.isNotEmpty ? clientId : 'healthkicks-session-$deviceId';
-      final effectiveUserId = (userId != null && userId!.isNotEmpty) ? userId! : 'unknown';
+      var effectiveUserId = (userId != null && userId!.isNotEmpty) ? userId! : '';
+      if (effectiveUserId.isEmpty && creds.userId != null && creds.userId!.isNotEmpty) {
+        effectiveUserId = creds.userId!;
+      }
+      if (effectiveUserId.isEmpty) {
+        final tokenStorage = credentialsRepository.tokenStorage ?? TokenStorageService();
+        final tokenUserId = await tokenStorage.getUserIdFromToken();
+        if (tokenUserId != null && tokenUserId.isNotEmpty) {
+          effectiveUserId = tokenUserId;
+        }
+      }
+      if (effectiveUserId.isEmpty) {
+        effectiveUserId = 'unknown';
+      }
       final lwtTopic = 'healthkicks/v1/users/$effectiveUserId/gateway-status';
       final lwtPayload = jsonEncode({
         'user_id': effectiveUserId,

@@ -63,6 +63,9 @@ class AuthService extends ChangeNotifier {
   AuthUser? _currentUser;
   AuthUser? get currentUser => _currentUser;
 
+  String? _tokenUserId;
+  String? get currentUserId => _currentUser?.id.toString() ?? _tokenUserId;
+
   String? _lastError;
   String? get lastError => _lastError;
 
@@ -121,10 +124,12 @@ class AuthService extends ChangeNotifier {
       // Valider le token auprès du backend (/me)
       final token = await _tokenStorage.getAccessToken();
       if (token == null) {
+        _tokenUserId = null;
         _state = AuthState.unauthenticated;
         notifyListeners();
         return false;
       }
+      _tokenUserId = TokenStorageService.parseUserId(token);
 
       final uri = Uri.parse('$_sanitizedBaseUrl/api/v1/auth/me');
       final response = await _httpClient.get(
@@ -255,6 +260,7 @@ class AuthService extends ChangeNotifier {
       accessToken: accessToken,
       refreshToken: refreshToken,
     );
+    _tokenUserId = TokenStorageService.parseUserId(accessToken);
 
     // Tenter de charger le profil utilisateur
     try {
@@ -305,6 +311,7 @@ class AuthService extends ChangeNotifier {
           accessToken: newAccessToken,
           refreshToken: newRefreshToken ?? rToken,
         );
+        _tokenUserId = TokenStorageService.parseUserId(newAccessToken);
         return true;
       }
       return false;
@@ -317,6 +324,7 @@ class AuthService extends ChangeNotifier {
   Future<void> logout() async {
     await _tokenStorage.clearTokens();
     _currentUser = null;
+    _tokenUserId = null;
     _state = AuthState.unauthenticated;
     notifyListeners();
   }
