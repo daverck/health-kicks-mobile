@@ -296,6 +296,31 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         currentUserId = await TokenStorageService().getUserIdFromToken();
       }
 
+      // Si le userId n'est pas encore résolu (ex: initialisation asynchrone du token en cours),
+      // différer la connexion en attendant activement jusqu'à 3 secondes.
+      if (currentUserId == null || currentUserId.isEmpty) {
+        for (int i = 0; i < 6 && (currentUserId == null || currentUserId.isEmpty); i++) {
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (!mounted || _isDisposed) return;
+          currentUserId = widget.authService?.currentUserId;
+          if (currentUserId == null || currentUserId.isEmpty) {
+            currentUserId = await TokenStorageService().getUserIdFromToken();
+          }
+        }
+      }
+
+      if (currentUserId == null || currentUserId.isEmpty || currentUserId == 'unknown') {
+        _addLog(
+          'MQTT',
+          'Connexion MQTT différée : utilisateur non authentifié ou userId introuvable.',
+          color: Colors.amber,
+        );
+        if (mounted) {
+          setState(() => _mqttConnected = false);
+        }
+        return;
+      }
+
       // Recréer le service MQTT si l'utilisateur a changé
       if (_mqttService != null && _mqttService!.userId != currentUserId) {
         _mqttService?.disconnect();

@@ -2,9 +2,15 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/services/auth/iot_credentials_model.dart';
 import 'package:healthkicks_mobile/services/auth/iot_credentials_repository.dart';
+import 'package:healthkicks_mobile/services/auth/token_storage_service.dart';
 import 'package:healthkicks_mobile/services/mqtt/mqtt_gateway_service.dart';
 
 class FakeCredentialsRepository implements IotCredentialsRepository {
+  @override
+  final TokenStorageService? tokenStorage;
+
+  FakeCredentialsRepository({this.tokenStorage});
+
   @override
   Future<IoTCredentials> fetchCredentials({String? deviceId, bool forceRefresh = false}) async {
     return IoTCredentials(
@@ -67,6 +73,44 @@ void main() {
       expect(decoded['gateway'], equals('mobile'));
       expect(decoded['timestamp'], isNotNull);
       expect(DateTime.tryParse(decoded['timestamp'] as String), isNotNull);
+    });
+
+    test('connect() refuse immédiatement la connexion si userId est null et aucun token disponible', () async {
+      final fakeRepo = FakeCredentialsRepository();
+      bool logReceived = false;
+      final service = MqttGatewayService(
+        deviceId: 'HK-2',
+        userId: null,
+        credentialsRepository: fakeRepo,
+        onLog: (msg, {bool isError = false}) {
+          if (isError && msg.contains('Connexion refusée')) {
+            logReceived = true;
+          }
+        },
+      );
+
+      final result = await service.connect();
+      expect(result, isFalse);
+      expect(logReceived, isTrue);
+    });
+
+    test('connect() refuse immédiatement la connexion si userId vaut unknown', () async {
+      final fakeRepo = FakeCredentialsRepository();
+      bool logReceived = false;
+      final service = MqttGatewayService(
+        deviceId: 'HK-2',
+        userId: 'unknown',
+        credentialsRepository: fakeRepo,
+        onLog: (msg, {bool isError = false}) {
+          if (isError && msg.contains('Connexion refusée')) {
+            logReceived = true;
+          }
+        },
+      );
+
+      final result = await service.connect();
+      expect(result, isFalse);
+      expect(logReceived, isTrue);
     });
   });
 }

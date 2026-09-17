@@ -70,14 +70,20 @@ class MqttGatewayService {
         effectiveUserId = creds.userId!;
       }
       if (effectiveUserId.isEmpty) {
-        final tokenStorage = credentialsRepository.tokenStorage ?? TokenStorageService();
-        final tokenUserId = await tokenStorage.getUserIdFromToken();
-        if (tokenUserId != null && tokenUserId.isNotEmpty) {
-          effectiveUserId = tokenUserId;
-        }
+        try {
+          final tokenStorage = credentialsRepository.tokenStorage ?? TokenStorageService();
+          final tokenUserId = await tokenStorage.getUserIdFromToken();
+          if (tokenUserId != null && tokenUserId.isNotEmpty) {
+            effectiveUserId = tokenUserId;
+          }
+        } catch (_) {}
       }
-      if (effectiveUserId.isEmpty) {
-        effectiveUserId = 'unknown';
+      if (effectiveUserId.isEmpty || effectiveUserId == 'unknown') {
+        log?.call(
+          '[MQTT] Connexion refusée : aucun identifiant utilisateur (userId) valide ou session non résolue. Annulation pour préserver l\'isolation multi-tenant.',
+          isError: true,
+        );
+        return false;
       }
       final lwtTopic = 'healthkicks/v1/users/$effectiveUserId/gateway-status';
       final lwtPayload = jsonEncode({
