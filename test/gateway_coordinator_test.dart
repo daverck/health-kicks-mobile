@@ -468,7 +468,48 @@ void main() {
 
       // Vérification que le client BLE n'a pas reçu un deuxième appel START
       expect(testBle.startStudioSessionCallCount, equals(1));
-      expect(logs.any((l) => l.contains('déjà en cours localement : écho distant ignoré')), isTrue);
+      expect(logs.any((l) => l.contains('session déjà amorcée localement')), isTrue);
+
+      loggedCoordinator.stopRouting();
+      testBle.dispose();
+      testMqtt.disconnect();
+    });
+
+    test('Déduplication Studio : Ignore toute commande distante MQTT reçue dans la fenêtre temporelle de 5s', () async {
+      final List<String> logs = [];
+      final testBle = FakeBleFootwearClient();
+      final testMqtt = FakeMqttGatewayService();
+      final testStudioApi = FakeStudioApiService();
+      testStudioApi.nextSessionId = 'sess-local-init';
+
+      final loggedCoordinator = GatewayCoordinator(
+        bleClient: testBle,
+        mqttService: testMqtt,
+        studioApiService: testStudioApi,
+        deviceId: 'HK-SHOE-TEST-001',
+        onLog: (msg, {bool isError = false}) => logs.add(msg),
+      );
+      loggedCoordinator.startRouting();
+
+      // 1. Déclenchement local
+      await loggedCoordinator.triggerStudioSession(
+        label: 'course_test',
+        durationSec: 5.0,
+      );
+
+      expect(testBle.startStudioSessionCallCount, equals(1));
+
+      // 2. Réception d'une commande distante avec un sessionId différent à 50ms d'intervalle
+      testMqtt.emitStudioCommand(const StudioCommandModel(
+        sessionId: 'sess-remote-echo-diff-uuid',
+        label: 'course_test',
+        durationSec: 5.0,
+      ));
+      await Future<void>.delayed(const Duration(milliseconds: 15));
+
+      // Vérification que le deuxième appel BLE est bloqué par la fenêtre de 5 secondes
+      expect(testBle.startStudioSessionCallCount, equals(1));
+      expect(logs.any((l) => l.contains('session déjà amorcée localement')), isTrue);
 
       loggedCoordinator.stopRouting();
       testBle.dispose();

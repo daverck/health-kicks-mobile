@@ -35,6 +35,8 @@ class GatewayCoordinator {
       _studioSessionSavedController.stream;
 
   String? _currentStudioSessionId;
+  String? _activeLocalSessionId;
+  DateTime? _lastLocalTriggerTime;
   String? _currentStudioLabel;
   double _currentStudioStartTimestamp = 0;
   double _currentStudioDurationSec = 5.0;
@@ -126,6 +128,7 @@ class GatewayCoordinator {
         );
       } finally {
         _currentStudioSessionId = null;
+        _activeLocalSessionId = null;
       }
     });
   }
@@ -174,6 +177,8 @@ class GatewayCoordinator {
       effectiveSessionId = _uuid.v4();
     }
 
+    _activeLocalSessionId = effectiveSessionId;
+    _lastLocalTriggerTime = DateTime.now();
     _currentStudioSessionId = effectiveSessionId;
     _currentStudioLabel = label;
     _currentStudioDurationSec = durationSec;
@@ -191,9 +196,13 @@ class GatewayCoordinator {
   /// Réutilise strictement le [session_id] déjà alloué et persisté par le backend dans PostgreSQL,
   /// sans ré-effectuer d'appel REST de réservation redondant.
   Future<void> handleRemoteStudioCommand(StudioCommandModel command) async {
-    if (_currentStudioSessionId == command.sessionId) {
+    // Si cette commande distante correspond à la session que le mobile vient de déclencher localement (< 5 secondes), l'ignorer
+    if (_activeLocalSessionId == command.sessionId ||
+        _currentStudioSessionId == command.sessionId ||
+        (_lastLocalTriggerTime != null &&
+            DateTime.now().difference(_lastLocalTriggerTime!).inSeconds < 5)) {
       onLog?.call(
-        '[GATEWAY] Commande Studio ${command.sessionId} déjà en cours localement : écho distant ignoré.',
+        '[GATEWAY] Écho de commande Studio distante ignoré (session déjà amorcée localement : ${command.sessionId})',
         isError: false,
       );
       return;
