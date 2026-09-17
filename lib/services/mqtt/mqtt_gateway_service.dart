@@ -24,7 +24,10 @@ class MqttGatewayService {
 
   MqttServerClient? _client;
   bool _isConnected = false;
-  bool get isConnected => _isConnected;
+  bool get isConnected =>
+      _isConnected &&
+      _client != null &&
+      _client!.connectionStatus?.state == MqttConnectionState.connected;
 
   final _hapticCommandsController = StreamController<HapticCommandModel>.broadcast();
   Stream<HapticCommandModel> get hapticCommandStream => _hapticCommandsController.stream;
@@ -69,21 +72,16 @@ class MqttGatewayService {
         'gateway': 'mobile',
       });
 
-      // Dans mqtt_client 10.11.11 :
-      // MqttServerWsConnection.connect(server, port) valide que server débute impérativement par 'ws://' ou 'wss://'.
-      // L'URL WSS pré-signée SigV4 complète (sans fragment #) est transmise comme paramètre 'server'.
       _client = MqttServerClient.withPort(
         signedWssUrl,
         effectiveClientId,
         443,
       );
 
-      // AWS IoT Core exige strictement le sous-protocole WebSocket unique 'mqtt'.
-      // Le défaut multi-protocoles de mqtt_client ('mqtt', 'mqttv3.1', 'mqttv3.11') provoque une erreur HTTP 403.
       _client!.websocketProtocols = MqttClientConstants.protocolsSingleDefault;
       _client!.setProtocolV311();
       _client!.useWebSocket = true;
-      _client!.secure = false; // Le chiffrement TLS est géré au niveau du protocole wss://
+      _client!.secure = false;
       _client!.keepAlivePeriod = 30;
       _client!.autoReconnect = true;
       _client!.logging(on: false);
@@ -91,12 +89,14 @@ class MqttGatewayService {
       _client!.onConnected = () {
         _isConnected = true;
         log?.call('[MQTT] WebSocket connecté à AWS IoT Core.', isError: false);
+        onConnectionRestored?.call();
       };
       _client!.onDisconnected = () {
         _isConnected = false;
         log?.call('[MQTT] WebSocket déconnecté d\'AWS IoT Core.', isError: true);
       };
       _client!.onAutoReconnect = () {
+        _isConnected = false;
         log?.call('[MQTT] Reconnexion automatique MQTT en cours...', isError: false);
       };
       _client!.onAutoReconnected = () {
@@ -105,7 +105,6 @@ class MqttGatewayService {
         onConnectionRestored?.call();
       };
 
-      // Configuration Last Will & Testament (LWT) basée strictement sur user_id (rupture passerelle)
       final connMessage = MqttConnectMessage()
           .withClientIdentifier(effectiveClientId)
           .startClean()
@@ -180,22 +179,24 @@ class MqttGatewayService {
   /// Publie un événement de détection d'activité vers AWS IoT Core (QoS 1).
   Future<void> publishActivityDetection(ActivityDetectionModel detection) async {
     final log = onLog;
-    final isClientConnected = _client != null &&
-        _client!.connectionStatus?.state == MqttConnectionState.connected;
 
-    if (!_isConnected || !isClientConnected) {
-      log?.call('[MQTT] Impossible de publier la détection : MQTT non connecté.', isError: true);
+    if (!isConnected || _client == null) {
+      log?.call('[MQTT] Impossible de publier la détection : MQTT non connecté.', isError: false);
       return;
     }
 
-    final topic = 'healthkicks/v1/$deviceId/events/detection';
-    final payload = detection.toMqttPayload(deviceId);
-    final jsonString = jsonEncode(payload);
+    try {
+      final topic = 'healthkicks/v1/$deviceId/events/detection';
+      final payload = detection.toMqttPayload(deviceId);
+      final jsonString = jsonEncode(payload);
 
-    final builder = MqttClientPayloadBuilder();
-    builder.addString(jsonString);
+      final builder = MqttClientPayloadBuilder();
+      builder.addString(jsonString);
 
-    _client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
+      _client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
+    } catch (e) {
+      log?.call('[MQTT] Erreur lors de la publication détection : $e', isError: true);
+    }
   }
 
   /// Publie les sessions Studio réassemblées vers DynamoDB via AWS IoT Core (QoS 1).
@@ -204,10 +205,7 @@ class MqttGatewayService {
     final log = onLog;
 
     // 1. Vérifier la connexion et tenter une reconnexion automatique si besoin
-    final isClientConnected = _client != null &&
-        _client!.connectionStatus?.state == MqttConnectionState.connected;
-
-    if (!_isConnected || !isClientConnected) {
+    if (!isConnected || _client == null) {
       log?.call(
         '[MQTT] Client non connecté lors de la publication Studio. Reconnexion automatique...',
         isError: false,
@@ -264,30 +262,38 @@ class MqttGatewayService {
   Future<void> publishDeviceStatus({required bool online, String? targetDeviceId}) async {
     final effectiveDeviceId = targetDeviceId ?? deviceId;
     final log = onLog;
-    if (!_isConnected || _client == null) {
+
+    if (!isConnected || _client == null) {
       log?.call(
-        '[MQTT] Statut présence équipement ($effectiveDeviceId -> ${online ? "online" : "offline"}) ignoré : MQTT non connecté.',
-        isError: true,
+        '[MQTT] Statut présence équipement ($effectiveDeviceId -> ${online ? "online" : "offline"}) ignoré : client MQTT non connecté (état: ${_client?.connectionStatus?.state}).',
+        isError: false,
       );
       return;
     }
 
-    final topic = 'healthkicks/v1/$effectiveDeviceId/status';
-    final payload = jsonEncode({
-      'device_id': effectiveDeviceId,
-      'state': online ? 'online' : 'offline',
-      'gateway': 'mobile',
-      'timestamp': DateTime.now().toUtc().toIso8601String(),
-    });
+    try {
+      final topic = 'healthkicks/v1/$effectiveDeviceId/status';
+      final payload = jsonEncode({
+        'device_id': effectiveDeviceId,
+        'state': online ? 'online' : 'offline',
+        'gateway': 'mobile',
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+      });
 
-    final builder = MqttClientPayloadBuilder();
-    builder.addString(payload);
+      final builder = MqttClientPayloadBuilder();
+      builder.addString(payload);
 
-    _client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
-    log?.call(
-      '[MQTT] Statut présence équipement ($effectiveDeviceId -> ${online ? "online" : "offline"}) publié avec succès sur $topic',
-      isError: false,
-    );
+      _client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
+      log?.call(
+        '[MQTT] Statut présence équipement ($effectiveDeviceId -> ${online ? "online" : "offline"}) publié avec succès sur $topic',
+        isError: false,
+      );
+    } catch (e) {
+      log?.call(
+        '[MQTT] Erreur publication présence équipement ($effectiveDeviceId) : $e',
+        isError: false,
+      );
+    }
   }
 
   /// Publie le statut en ligne de la passerelle / équipement (alias).

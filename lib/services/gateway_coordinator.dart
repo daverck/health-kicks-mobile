@@ -48,9 +48,11 @@ class GatewayCoordinator {
   });
 
   /// Démarre le routage bidirectionnel entre le BLE et le MQTT
-  /// et notifie le statut "online" de l'équipement BLE sur AWS IoT Core.
+  /// et notifie le statut "online" de l'équipement BLE sur AWS IoT Core si connecté.
   void startRouting() {
-    unawaited(publishBleStatus(online: true));
+    if (mqttService.isConnected) {
+      unawaited(publishBleStatus(online: true));
+    }
 
     // 1. Relais montant : BLE Activity Detection -> Cloud MQTT
     _activitySub = bleClient.activityStream.listen((detection) async {
@@ -222,6 +224,14 @@ class GatewayCoordinator {
 
   /// Publie le statut de présence de la chaussure BLE sur le topic de statut de l'équipement.
   Future<void> publishBleStatus({required bool online}) async {
+    if (!mqttService.isConnected) {
+      onLog?.call(
+        '[GATEWAY] Publication présence ($deviceId -> ${online ? "online" : "offline"}) différée : MQTT non connecté.',
+        isError: false,
+      );
+      return;
+    }
+
     try {
       await mqttService.publishGatewayStatus(online: online);
       onLog?.call(
@@ -231,7 +241,7 @@ class GatewayCoordinator {
     } catch (e) {
       onLog?.call(
         '[GATEWAY] Erreur publication présence équipement ($deviceId) : $e',
-        isError: true,
+        isError: false,
       );
     }
   }
