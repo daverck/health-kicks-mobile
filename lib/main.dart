@@ -7,6 +7,7 @@ import 'core/config/app_config.dart';
 import 'core/constants/ble_constants.dart';
 import 'core/permissions/permission_service.dart';
 import 'models/haptic_command_model.dart';
+import 'models/log_entry_model.dart';
 import 'models/studio_session_model.dart';
 import 'services/auth/auth_service.dart';
 import 'services/auth/iot_credentials_repository.dart';
@@ -14,6 +15,7 @@ import 'services/auth/token_storage_service.dart';
 import 'services/ble/ble_connection_manager.dart';
 import 'services/ble/ble_footwear_client.dart';
 import 'services/gateway_coordinator.dart';
+import 'services/log_export_service.dart';
 import 'services/mqtt/mqtt_gateway_service.dart';
 import 'services/studio/studio_api_service.dart';
 import 'ui/screens/login_screen.dart';
@@ -129,19 +131,7 @@ class _AuthGateState extends State<AuthGate> {
 }
 
 
-class LogEntry {
-  final DateTime timestamp;
-  final String tag;
-  final String message;
-  final Color color;
 
-  const LogEntry({
-    required this.timestamp,
-    required this.tag,
-    required this.message,
-    required this.color,
-  });
-}
 
 class GatewayDashboardScreen extends StatefulWidget {
   final AuthService? authService;
@@ -634,6 +624,127 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
     }
   }
 
+  void _openEmailExportDialog() {
+    if (_logs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Le journal d\'événements est vide.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final recipientController = TextEditingController();
+    final logText = LogExportService.formatLogs(
+      logs: _logs,
+      deviceId: _deviceId,
+      deviceName: _connectedDevice?.platformName.isNotEmpty == true
+          ? _connectedDevice!.platformName
+          : _targetDeviceId,
+      bleStatus: _bleStatus.name,
+      mtu: _mtu,
+      mqttConnected: _mqttConnected,
+    );
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.email_outlined),
+            SizedBox(width: 8),
+            Text('Export du Journal'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Envoyer les ${_logs.length} événements par email.',
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: recipientController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Destinataire (optionnel)',
+                  hintText: 'ex: support@healthkicks.fr',
+                  prefixIcon: Icon(Icons.alternate_email, size: 20),
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                constraints: const BoxConstraints(maxHeight: 120),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: SingleChildScrollView(
+                  child: Text(
+                    logText,
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 10),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.copy, size: 16),
+            label: const Text('Copier'),
+            onPressed: () async {
+              await LogExportService.copyToClipboard(logText);
+              if (ctx.mounted) Navigator.of(ctx).pop();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Logs copiés dans le presse-papier !'),
+                    backgroundColor: Colors.teal,
+                  ),
+                );
+              }
+            },
+          ),
+          FilledButton.icon(
+            icon: const Icon(Icons.send, size: 16),
+            label: const Text('Envoyer'),
+            onPressed: () async {
+              final recipient = recipientController.text.trim();
+              Navigator.of(ctx).pop();
+
+              final subject = 'Journal d\'événements HealthKicks - $_deviceId - ${DateTime.now().toIso8601String().substring(0, 10)}';
+              final success = await LogExportService.sendEmail(
+                recipient: recipient,
+                subject: subject,
+                body: logText,
+              );
+
+              if (!success) {
+                await LogExportService.copyToClipboard(logText);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Impossible d\'ouvrir l\'application email. Les logs ont été copiés dans le presse-papier.'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -737,10 +848,20 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
                     'Journal d\'événements en direct (${_logs.length})',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                   ),
-                  TextButton.icon(
-                    icon: const Icon(Icons.clear_all, size: 18),
-                    label: const Text('Effacer'),
-                    onPressed: () => setState(() => _logs.clear()),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton.icon(
+                        icon: const Icon(Icons.email_outlined, size: 18),
+                        label: const Text('Email'),
+                        onPressed: _openEmailExportDialog,
+                      ),
+                      TextButton.icon(
+                        icon: const Icon(Icons.clear_all, size: 18),
+                        label: const Text('Effacer'),
+                        onPressed: () => setState(() => _logs.clear()),
+                      ),
+                    ],
                   ),
                 ],
               ),
