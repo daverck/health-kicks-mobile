@@ -124,6 +124,8 @@ class GatewayCoordinator {
           '[GATEWAY] Erreur lors de la publication MQTT : $e',
           isError: true,
         );
+      } finally {
+        _currentStudioSessionId = null;
       }
     });
   }
@@ -189,6 +191,14 @@ class GatewayCoordinator {
   /// Réutilise strictement le [session_id] déjà alloué et persisté par le backend dans PostgreSQL,
   /// sans ré-effectuer d'appel REST de réservation redondant.
   Future<void> handleRemoteStudioCommand(StudioCommandModel command) async {
+    if (_currentStudioSessionId == command.sessionId) {
+      onLog?.call(
+        '[GATEWAY] Commande Studio ${command.sessionId} déjà en cours localement : écho distant ignoré.',
+        isError: false,
+      );
+      return;
+    }
+
     _currentStudioSessionId = command.sessionId;
     _currentStudioLabel = command.label;
     _currentStudioDurationSec = command.durationSec;

@@ -18,6 +18,7 @@ class FakeBleFootwearClient implements BleFootwearClient {
 
   final List<HapticCommandModel> sentHapticCommands = [];
   String? lastStartedStudioSessionId;
+  int startStudioSessionCallCount = 0;
 
   @override
   Stream<ActivityDetectionModel> get activityStream => _activityCtrl.stream;
@@ -43,6 +44,7 @@ class FakeBleFootwearClient implements BleFootwearClient {
     required String sessionId,
   }) async {
     lastStartedStudioSessionId = sessionId;
+    startStudioSessionCallCount++;
   }
 
   @override
@@ -429,6 +431,48 @@ void main() {
 
       localBle.dispose();
       localMqtt.disconnect();
+    });
+
+    test('Déduplication Studio : Ignore l\'écho distant MQTT si la session est déjà en cours localement', () async {
+      final List<String> logs = [];
+      final testBle = FakeBleFootwearClient();
+      final testMqtt = FakeMqttGatewayService();
+      final testStudioApi = FakeStudioApiService();
+      testStudioApi.nextSessionId = 'sess-dedup-1234';
+
+      final loggedCoordinator = GatewayCoordinator(
+        bleClient: testBle,
+        mqttService: testMqtt,
+        studioApiService: testStudioApi,
+        deviceId: 'HK-SHOE-TEST-001',
+        onLog: (msg, {bool isError = false}) => logs.add(msg),
+      );
+      loggedCoordinator.startRouting();
+
+      // 1. Déclenchement local d'une session Studio
+      await loggedCoordinator.triggerStudioSession(
+        label: 'course_test',
+        durationSec: 10.0,
+      );
+
+      expect(testBle.startStudioSessionCallCount, equals(1));
+      expect(testBle.lastStartedStudioSessionId, equals('sess-dedup-1234'));
+
+      // 2. Réception de l'écho MQTT avec le même sessionId
+      testMqtt.emitStudioCommand(const StudioCommandModel(
+        sessionId: 'sess-dedup-1234',
+        label: 'course_test',
+        durationSec: 10.0,
+      ));
+      await Future<void>.delayed(const Duration(milliseconds: 15));
+
+      // Vérification que le client BLE n'a pas reçu un deuxième appel START
+      expect(testBle.startStudioSessionCallCount, equals(1));
+      expect(logs.any((l) => l.contains('déjà en cours localement : écho distant ignoré')), isTrue);
+
+      loggedCoordinator.stopRouting();
+      testBle.dispose();
+      testMqtt.disconnect();
     });
   });
 }
