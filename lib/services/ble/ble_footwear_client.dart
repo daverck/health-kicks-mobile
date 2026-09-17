@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../core/constants/ble_constants.dart';
 import '../../models/activity_detection_model.dart';
@@ -118,9 +119,13 @@ class BleFootwearClient {
     if (_hapticChar == null) {
       throw StateError('Caractéristique Haptic Command non initialisée.');
     }
-    final bytes = command.toBleBytes();
-    final withoutResponse = !_hapticChar!.properties.write && _hapticChar!.properties.writeWithoutResponse;
-    await _hapticChar!.write(bytes, withoutResponse: withoutResponse);
+    final bytes = Uint8List(4);
+    bytes[0] = command.patternId;
+    bytes[1] = command.intensity;
+    bytes[2] = (command.durationMs >> 8) & 0xFF;
+    bytes[3] = command.durationMs & 0xFF;
+    await _hapticChar!.write(bytes, withoutResponse: false);
+    onLog?.call('[BLE] Commande haptique émise: int=${command.intensity}, dur=${command.durationMs}ms', isError: false);
   }
 
   /// Déclenche une session d'enregistrement Studio (START <label> <sec> <id>).
