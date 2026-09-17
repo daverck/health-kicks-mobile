@@ -468,14 +468,14 @@ void main() {
 
       // Vérification que le client BLE n'a pas reçu un deuxième appel START
       expect(testBle.startStudioSessionCallCount, equals(1));
-      expect(logs.any((l) => l.contains('session déjà amorcée localement')), isTrue);
+      expect(logs.any((l) => l.contains('Écho de session Studio ignoré')), isTrue);
 
       loggedCoordinator.stopRouting();
       testBle.dispose();
       testMqtt.disconnect();
     });
 
-    test('Déduplication Studio : Ignore toute commande distante MQTT reçue dans la fenêtre temporelle de 5s', () async {
+    test('Déduplication Studio : Ignore toute commande distante MQTT lorsqu\'une capture est active', () async {
       final List<String> logs = [];
       final testBle = FakeBleFootwearClient();
       final testMqtt = FakeMqttGatewayService();
@@ -499,7 +499,7 @@ void main() {
 
       expect(testBle.startStudioSessionCallCount, equals(1));
 
-      // 2. Réception d'une commande distante avec un sessionId différent à 50ms d'intervalle
+      // 2. Réception d'une commande distante concurrente pendant que la capture est active
       testMqtt.emitStudioCommand(const StudioCommandModel(
         sessionId: 'sess-remote-echo-diff-uuid',
         label: 'course_test',
@@ -507,9 +507,9 @@ void main() {
       ));
       await Future<void>.delayed(const Duration(milliseconds: 15));
 
-      // Vérification que le deuxième appel BLE est bloqué par la fenêtre de 5 secondes
+      // Vérification que le deuxième appel BLE est bloqué par _isStudioRecordingActive
       expect(testBle.startStudioSessionCallCount, equals(1));
-      expect(logs.any((l) => l.contains('session déjà amorcée localement')), isTrue);
+      expect(logs.any((l) => l.contains('Écho de session Studio ignoré')), isTrue);
 
       loggedCoordinator.stopRouting();
       testBle.dispose();

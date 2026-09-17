@@ -36,6 +36,8 @@ class MqttGatewayService {
   final _studioCommandsController = StreamController<StudioCommandModel>.broadcast();
   Stream<StudioCommandModel> get studioCommandStream => _studioCommandsController.stream;
 
+  StreamSubscription? _updatesSub;
+
   MqttGatewayService({
     required this.deviceId,
     this.userId,
@@ -45,12 +47,24 @@ class MqttGatewayService {
     this.onConnectionRestored,
   }) : clientId = clientId ??
             (userId != null && userId.isNotEmpty
-                ? 'healthkicks-mobile-$userId-${DateTime.now().millisecondsSinceEpoch}'
+                ? 'healthkicks-mobile-$userId'
                 : '');
 
   /// Établit la liaison MQTT sécurisée vers AWS IoT Core via WebSockets SigV4 sur le port 443.
   Future<bool> connect({MqttLogCallback? onLog}) async {
     final log = onLog ?? this.onLog;
+
+    // 1. Nettoyage préventif propre avant tout nouvel appel connect()
+    if (_client != null) {
+      try {
+        _client!.onDisconnected = null;
+        _client!.onAutoReconnect = null;
+        _client!.onAutoReconnected = null;
+        _client!.disconnect();
+      } catch (_) {}
+      _client = null;
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
 
     log?.call('[MQTT] Récupération des identifiants STS backend...', isError: false);
 
@@ -89,10 +103,10 @@ class MqttGatewayService {
       }
 
       final effectiveClientId = (clientId.isNotEmpty &&
-              (clientId.startsWith('healthkicks-mobile-$effectiveUserId-') ||
-                  clientId.startsWith('healthkicks-session-$effectiveUserId-')))
+              (clientId.startsWith('healthkicks-mobile-$effectiveUserId') ||
+                  clientId.startsWith('healthkicks-session-$effectiveUserId')))
           ? clientId
-          : 'healthkicks-mobile-$effectiveUserId-${DateTime.now().millisecondsSinceEpoch}';
+          : 'healthkicks-mobile-$effectiveUserId';
 
       final lwtTopic = 'healthkicks/v1/users/$effectiveUserId/gateway-status';
       final lwtPayload = jsonEncode({
@@ -131,6 +145,7 @@ class MqttGatewayService {
       _client!.onAutoReconnected = () {
         _isConnected = true;
         log?.call('[MQTT] Reconnexion automatique MQTT réussie.', isError: false);
+        _resubscribeTopics();
         onConnectionRestored?.call();
       };
 
@@ -163,6 +178,17 @@ class MqttGatewayService {
     }
   }
 
+  void _resubscribeTopics() {
+    final log = onLog;
+    final hapticTopic = 'healthkicks/v1/$deviceId/commands/haptic';
+    final studioStartTopic = 'healthkicks/v1/$deviceId/commands/studio/start';
+
+    _client?.subscribe(hapticTopic, MqttQos.atLeastOnce);
+    _client?.subscribe(studioStartTopic, MqttQos.atLeastOnce);
+
+    log?.call('[MQTT] Souscriptions renouvelées après reconnexion automatique : $hapticTopic & $studioStartTopic', isError: false);
+  }
+
   void _subscribeToCommands() {
     final log = onLog;
     final hapticTopic = 'healthkicks/v1/$deviceId/commands/haptic';
@@ -173,7 +199,8 @@ class MqttGatewayService {
 
     log?.call('[MQTT] Souscriptions actives : $hapticTopic & $studioStartTopic', isError: false);
 
-    _client?.updates?.listen((List<MqttReceivedMessage<MqttMessage>> messages) {
+    _updatesSub?.cancel();
+    _updatesSub = _client?.updates?.listen((List<MqttReceivedMessage<MqttMessage>> messages) {
       for (final msg in messages) {
         final recMessage = msg.payload as MqttPublishMessage;
         final payloadStr = MqttPublishPayload.bytesToStringAsString(
@@ -331,7 +358,17 @@ class MqttGatewayService {
 
   void disconnect() {
     publishGatewayStatus(online: false);
-    _client?.disconnect();
+    _updatesSub?.cancel();
+    _updatesSub = null;
+    if (_client != null) {
+      try {
+        _client!.onDisconnected = null;
+        _client!.onAutoReconnect = null;
+        _client!.onAutoReconnected = null;
+        _client!.disconnect();
+      } catch (_) {}
+      _client = null;
+    }
     _isConnected = false;
     _hapticCommandsController.close();
     _studioCommandsController.close();

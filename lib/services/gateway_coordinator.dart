@@ -36,10 +36,12 @@ class GatewayCoordinator {
 
   String? _currentStudioSessionId;
   String? _activeLocalSessionId;
-  DateTime? _lastLocalTriggerTime;
+  bool _isStudioRecordingActive = false;
   String? _currentStudioLabel;
   double _currentStudioStartTimestamp = 0;
   double _currentStudioDurationSec = 5.0;
+
+  bool get isStudioRecordingActive => _isStudioRecordingActive;
 
   GatewayCoordinator({
     required this.bleClient,
@@ -129,6 +131,7 @@ class GatewayCoordinator {
       } finally {
         _currentStudioSessionId = null;
         _activeLocalSessionId = null;
+        _isStudioRecordingActive = false;
       }
     });
   }
@@ -140,22 +143,15 @@ class GatewayCoordinator {
     required double durationSec,
     String? sessionId,
   }) async {
-    // 1. Sécuriser la connexion MQTT avant de lancer la session d'enregistrement
-    if (!mqttService.isConnected) {
+    if (_isStudioRecordingActive) {
       onLog?.call(
-        '[GATEWAY] MQTT non connecté. Connexion préventive avant de déclencher la capture Studio...',
+        '[GATEWAY] Session Studio déjà en cours d\'enregistrement. Déclenchement local ignoré.',
         isError: false,
       );
-      try {
-        await mqttService.connect();
-      } catch (e) {
-        onLog?.call(
-          '[GATEWAY] Avertissement : échec connexion MQTT préalable ($e). Poursuite du flux.',
-          isError: true,
-        );
-      }
+      return;
     }
 
+    _isStudioRecordingActive = true;
     String effectiveSessionId;
 
     if (studioApiService != null) {
@@ -178,7 +174,6 @@ class GatewayCoordinator {
     }
 
     _activeLocalSessionId = effectiveSessionId;
-    _lastLocalTriggerTime = DateTime.now();
     _currentStudioSessionId = effectiveSessionId;
     _currentStudioLabel = label;
     _currentStudioDurationSec = durationSec;
@@ -196,18 +191,16 @@ class GatewayCoordinator {
   /// Réutilise strictement le [session_id] déjà alloué et persisté par le backend dans PostgreSQL,
   /// sans ré-effectuer d'appel REST de réservation redondant.
   Future<void> handleRemoteStudioCommand(StudioCommandModel command) async {
-    // Si cette commande distante correspond à la session que le mobile vient de déclencher localement (< 5 secondes), l'ignorer
-    if (_activeLocalSessionId == command.sessionId ||
-        _currentStudioSessionId == command.sessionId ||
-        (_lastLocalTriggerTime != null &&
-            DateTime.now().difference(_lastLocalTriggerTime!).inSeconds < 5)) {
+    // Vérifier si une capture est déjà active ou si l'ID de session correspond à la session locale amorcée
+    if (_activeLocalSessionId == command.sessionId || _isStudioRecordingActive) {
       onLog?.call(
-        '[GATEWAY] Écho de commande Studio distante ignoré (session déjà amorcée localement : ${command.sessionId})',
+        '[GATEWAY] Écho de session Studio ignoré (session active: ${command.sessionId})',
         isError: false,
       );
       return;
     }
 
+    _isStudioRecordingActive = true;
     _currentStudioSessionId = command.sessionId;
     _currentStudioLabel = command.label;
     _currentStudioDurationSec = command.durationSec;
@@ -228,6 +221,7 @@ class GatewayCoordinator {
 
   /// Interrompt le routage et notifie optionnellement le statut "offline" de l'équipement BLE sur AWS IoT Core.
   void stopRouting({bool notifyOffline = true}) {
+    _isStudioRecordingActive = false;
     if (notifyOffline) {
       unawaited(publishBleStatus(online: false));
     }
