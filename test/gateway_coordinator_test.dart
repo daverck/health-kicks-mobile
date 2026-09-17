@@ -515,5 +515,37 @@ void main() {
       testBle.dispose();
       testMqtt.disconnect();
     });
+
+    test('Statut Studio BLE : Libère l\'état de capture si le firmware notifie ERROR ou CANCELLED', () async {
+      final List<String> logs = [];
+      final testBle = FakeBleFootwearClient();
+      final testMqtt = FakeMqttGatewayService();
+      final loggedCoordinator = GatewayCoordinator(
+        bleClient: testBle,
+        mqttService: testMqtt,
+        deviceId: 'HK-SHOE-TEST-001',
+        onLog: (msg, {bool isError = false}) => logs.add(msg),
+      );
+      loggedCoordinator.startRouting();
+
+      // 1. Déclenchement local d'une session Studio
+      await loggedCoordinator.triggerStudioSession(
+        label: 'test_error_recovery',
+        durationSec: 5.0,
+      );
+      expect(loggedCoordinator.isStudioRecordingActive, isTrue);
+
+      // 2. Réception d'une notification d'erreur du firmware BLE ("ERROR busy")
+      testBle._statusCtrl.add('ERROR busy');
+      await Future<void>.delayed(const Duration(milliseconds: 15));
+
+      // Vérification que l'état interne est bien réinitialisé
+      expect(loggedCoordinator.isStudioRecordingActive, isFalse);
+      expect(logs.any((l) => l.contains('Libération de l\'état de capture')), isTrue);
+
+      loggedCoordinator.stopRouting();
+      testBle.dispose();
+      testMqtt.disconnect();
+    });
   });
 }

@@ -26,6 +26,7 @@ class GatewayCoordinator {
   StreamSubscription<HapticCommandModel>? _hapticSub;
   StreamSubscription<BurstReassemblyResult>? _burstSub;
   StreamSubscription<StudioCommandModel>? _studioCommandSub;
+  StreamSubscription<String>? _studioStatusSub;
 
   final _studioSessionSavedController =
       StreamController<StudioSessionModel>.broadcast();
@@ -77,7 +78,20 @@ class GatewayCoordinator {
       await handleRemoteStudioCommand(command);
     });
 
-    // 4. Relais batch : BLE Studio Data Burst reassemblé -> Cloud MQTT DynamoDB
+    // 4. Écoute du statut Studio BLE (pour libérer l'état en cas d'annulation ou erreur)
+    _studioStatusSub = bleClient.studioStatusStream.listen((status) {
+      if (status.startsWith('ERROR') || status == 'CANCELLED') {
+        onLog?.call(
+          '[GATEWAY] Statut Studio BLE reçu : $status -> Libération de l\'état de capture.',
+          isError: status.startsWith('ERROR'),
+        );
+        _isStudioRecordingActive = false;
+        _activeLocalSessionId = null;
+        _currentStudioSessionId = null;
+      }
+    });
+
+    // 5. Relais batch : BLE Studio Data Burst reassemblé -> Cloud MQTT DynamoDB
     _burstSub = bleClient.burstResultStream.listen((result) async {
       onLog?.call(
         '[GATEWAY] Paquet fin de burst reçu : complété=${result.isCompleted}, '
@@ -231,6 +245,8 @@ class GatewayCoordinator {
     _hapticSub = null;
     _studioCommandSub?.cancel();
     _studioCommandSub = null;
+    _studioStatusSub?.cancel();
+    _studioStatusSub = null;
     _burstSub?.cancel();
     _burstSub = null;
   }
