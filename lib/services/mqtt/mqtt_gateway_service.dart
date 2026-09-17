@@ -103,8 +103,8 @@ class MqttGatewayService {
       }
 
       final effectiveClientId = (clientId.isNotEmpty &&
-              (clientId.startsWith('healthkicks-mobile-$effectiveUserId') ||
-                  clientId.startsWith('healthkicks-session-$effectiveUserId')))
+              (clientId == 'healthkicks-mobile-$effectiveUserId' ||
+                  clientId == 'healthkicks-session-$effectiveUserId'))
           ? clientId
           : 'healthkicks-mobile-$effectiveUserId';
 
