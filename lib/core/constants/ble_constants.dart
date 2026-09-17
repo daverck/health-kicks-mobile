@@ -26,4 +26,7 @@ class BleConstants {
   // Fréquence nominale IMU
   static const int sampleRateHz = 50;
   static const int bytesPerFrame = 14;
+
+  /// Durée maximale de scan avant arrêt automatique si aucun équipement n'est trouvé
+  static const Duration defaultScanTimeout = Duration(minutes: 3);
 }

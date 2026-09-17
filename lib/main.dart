@@ -4,6 +4,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:uuid/uuid.dart';
 
 import 'core/config/app_config.dart';
+import 'core/constants/ble_constants.dart';
 import 'core/permissions/permission_service.dart';
 import 'models/haptic_command_model.dart';
 import 'models/studio_session_model.dart';
@@ -465,7 +466,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
     try {
       await _bleManager!.startAutoConnect(
         targetDeviceId: _targetDeviceId,
-        timeout: const Duration(seconds: 10),
+        timeout: BleConstants.defaultScanTimeout,
         onLog: (msg) {
           final isError = msg.contains('Erreur') || msg.contains('refusé') || msg.contains('Échec');
           _addLog(

@@ -30,6 +30,7 @@ class BleConnectionManager {
 
   StreamSubscription<List<ScanResult>>? _scanSubscription;
   StreamSubscription<BluetoothConnectionState>? _deviceStateSubscription;
+  Timer? _scanTimeoutTimer;
 
   int _negotiatedMtu = 23;
   int get negotiatedMtu => _negotiatedMtu;
@@ -47,9 +48,10 @@ class BleConnectionManager {
   }
 
   /// Démarre le scan et se connecte automatiquement au premier périphérique HealthKicks détecté.
+  /// Si aucun équipement n'est trouvé après [timeout] (par défaut 4 minutes), le scan s'arrête automatiquement.
   Future<void> startAutoConnect({
     String? targetDeviceId,
-    Duration timeout = const Duration(seconds: 10),
+    Duration timeout = BleConstants.defaultScanTimeout,
     BleLogCallback? onLog,
   }) async {
     final log = onLog ?? this.onLog;
@@ -68,7 +70,9 @@ class BleConnectionManager {
       throw Exception(reason);
     }
 
-    // Arrêter tout scan antérieur avant de relancer
+    // Arrêter tout scan et timer antérieurs avant de relancer
+    _scanTimeoutTimer?.cancel();
+    _scanTimeoutTimer = null;
     try {
       await FlutterBluePlus.stopScan();
     } catch (_) {}
@@ -89,7 +93,23 @@ class BleConnectionManager {
     }
 
     _updateStatus(BleConnectionStatus.scanning);
-    log?.call('[BLE] Démarrage du scan (timeout: ${timeout.inSeconds}s)...');
+    final timeoutLabel = timeout.inMinutes > 0
+        ? '${timeout.inMinutes} minute(s)'
+        : '${timeout.inSeconds} seconde(s)';
+    log?.call('[BLE] Démarrage du scan (timeout: $timeoutLabel)...');
+
+    // Déclencheur d'expiration du scan si aucun équipement n'est détecté
+    _scanTimeoutTimer = Timer(timeout, () async {
+      if (_status == BleConnectionStatus.scanning) {
+        log?.call('[BLE] Aucun équipement détecté après $timeoutLabel. Arrêt du scan.');
+        try {
+          await FlutterBluePlus.stopScan();
+        } catch (_) {}
+        await _scanSubscription?.cancel();
+        _scanSubscription = null;
+        _updateStatus(BleConnectionStatus.disconnected);
+      }
+    });
 
     final seenDevices = <String>{};
 
@@ -99,6 +119,8 @@ class BleConnectionManager {
         androidUsesFineLocation: false,
       );
     } catch (e) {
+      _scanTimeoutTimer?.cancel();
+      _scanTimeoutTimer = null;
       _updateStatus(BleConnectionStatus.disconnected);
       log?.call('[BLE] Erreur démarrage scan : $e');
       rethrow;
@@ -130,6 +152,8 @@ class BleConnectionManager {
 
         if (hasServiceUuid || matchesTargetName || matchesTargetMac) {
           log?.call('[BLE] Cible trouvée ($name / $deviceId), tentative de connexion...');
+          _scanTimeoutTimer?.cancel();
+          _scanTimeoutTimer = null;
           try {
             await FlutterBluePlus.stopScan();
           } catch (_) {}
@@ -195,6 +219,8 @@ class BleConnectionManager {
 
   /// Déconnecte proprement le périphérique actif.
   Future<void> disconnect() async {
+    _scanTimeoutTimer?.cancel();
+    _scanTimeoutTimer = null;
     await _scanSubscription?.cancel();
     _scanSubscription = null;
     await _deviceStateSubscription?.cancel();
@@ -208,6 +234,8 @@ class BleConnectionManager {
   }
 
   void dispose() {
+    _scanTimeoutTimer?.cancel();
+    _scanTimeoutTimer = null;
     disconnect();
     _statusController.close();
   }
