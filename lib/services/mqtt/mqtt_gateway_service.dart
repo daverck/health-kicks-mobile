@@ -43,7 +43,10 @@ class MqttGatewayService {
     String? clientId,
     this.onLog,
     this.onConnectionRestored,
-  }) : clientId = clientId ?? 'healthkicks-session-$deviceId';
+  }) : clientId = clientId ??
+            (userId != null && userId.isNotEmpty
+                ? 'healthkicks-mobile-$userId-${DateTime.now().millisecondsSinceEpoch}'
+                : '');
 
   /// Établit la liaison MQTT sécurisée vers AWS IoT Core via WebSockets SigV4 sur le port 443.
   Future<bool> connect({MqttLogCallback? onLog}) async {
@@ -64,7 +67,6 @@ class MqttGatewayService {
         isError: false,
       );
 
-      final effectiveClientId = clientId.isNotEmpty ? clientId : 'healthkicks-session-$deviceId';
       var effectiveUserId = (userId != null && userId!.isNotEmpty) ? userId! : '';
       if (effectiveUserId.isEmpty && creds.userId != null && creds.userId!.isNotEmpty) {
         effectiveUserId = creds.userId!;
@@ -85,6 +87,13 @@ class MqttGatewayService {
         );
         return false;
       }
+
+      final effectiveClientId = (clientId.isNotEmpty &&
+              (clientId.startsWith('healthkicks-mobile-$effectiveUserId-') ||
+                  clientId.startsWith('healthkicks-session-$effectiveUserId-')))
+          ? clientId
+          : 'healthkicks-mobile-$effectiveUserId-${DateTime.now().millisecondsSinceEpoch}';
+
       final lwtTopic = 'healthkicks/v1/users/$effectiveUserId/gateway-status';
       final lwtPayload = jsonEncode({
         'user_id': effectiveUserId,

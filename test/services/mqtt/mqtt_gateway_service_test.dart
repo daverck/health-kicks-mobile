@@ -39,6 +39,7 @@ void main() {
 
       expect(service.deviceId, equals('HK-2'));
       expect(service.userId, equals('42'));
+      expect(service.clientId.startsWith('healthkicks-mobile-42-'), isTrue);
     });
 
     test('LWT topic et payload ciblent la passerelle utilisateur (user_id)', () {
