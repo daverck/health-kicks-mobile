@@ -18,4 +18,7 @@ class AppConfig {
     'AWS_REGION',
     defaultValue: 'eu-north-1',
   );
+
+  /// Inactivity timeout before automatically shutting down the background surveillance service (5 minutes).
+  static const Duration bleDisconnectTimeout = Duration(minutes: 5);
 }

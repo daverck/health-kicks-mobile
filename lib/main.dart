@@ -12,6 +12,7 @@ import 'models/studio_session_model.dart';
 import 'services/auth/auth_service.dart';
 import 'services/auth/iot_credentials_repository.dart';
 import 'services/auth/token_storage_service.dart';
+import 'services/background_surveillance_service.dart';
 import 'services/ble/ble_connection_manager.dart';
 import 'services/ble/ble_footwear_client.dart';
 import 'services/gateway_coordinator.dart';
@@ -19,6 +20,7 @@ import 'services/log_export_service.dart';
 import 'services/mqtt/mqtt_gateway_service.dart';
 import 'services/studio/studio_api_service.dart';
 import 'ui/screens/login_screen.dart';
+import 'ui/screens/settings_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -153,6 +155,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
   IotCredentialsRepository? _credentialsRepo;
 
   final PermissionService _permissionService = PermissionService();
+  late final BackgroundSurveillanceService _surveillanceService;
   BleConnectionManager? _bleManager;
   BleFootwearClient? _bleClient;
   MqttGatewayService? _mqttService;
@@ -171,6 +174,12 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _surveillanceService = BackgroundSurveillanceService(
+      onLog: (tag, msg, {bool isError = false}) {
+        _addLog(tag, msg, color: isError ? Colors.red : Colors.cyan);
+      },
+    );
+    _surveillanceService.initialize();
     _ensureBleManager();
     _initGateway();
   }
@@ -198,6 +207,11 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         _mtu = _bleManager?.negotiatedMtu ?? 23;
       });
 
+      _surveillanceService.onBleStatusChanged(
+        status,
+        deviceName: _bleManager?.connectedDevice?.platformName ?? _targetDeviceId,
+      );
+
       _addLog('BLE', 'Statut connexion : ${status.name}');
       if (status == BleConnectionStatus.disconnected || status == BleConnectionStatus.scanning) {
         _studioSavedSub?.cancel();
@@ -224,6 +238,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
     _coordinator?.stopRouting();
     _bleClient?.dispose();
     _bleManager?.dispose();
+    _surveillanceService.dispose();
     _mqttService?.disconnect();
     _scrollController.dispose();
     super.dispose();
@@ -802,6 +817,19 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
                 ),
               ],
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Paramètres',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => SettingsScreen(
+                    surveillanceService: _surveillanceService,
+                  ),
+                ),
+              );
+            },
           ),
           if (widget.onLogout != null)
             IconButton(
