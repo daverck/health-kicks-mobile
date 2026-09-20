@@ -84,7 +84,7 @@ void main() {
         userId: null,
         credentialsRepository: fakeRepo,
         onLog: (msg, {bool isError = false}) {
-          if (isError && msg.contains('Connexion refusée')) {
+          if (isError && msg.contains('Connection rejected')) {
             logReceived = true;
           }
         },
@@ -103,7 +103,7 @@ void main() {
         userId: 'unknown',
         credentialsRepository: fakeRepo,
         onLog: (msg, {bool isError = false}) {
-          if (isError && msg.contains('Connexion refusée')) {
+          if (isError && msg.contains('Connection rejected')) {
             logReceived = true;
           }
         },

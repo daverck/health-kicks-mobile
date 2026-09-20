@@ -6,15 +6,15 @@ import 'package:healthkicks_mobile/models/imu_reading_model.dart';
 import 'package:healthkicks_mobile/services/ble/burst_reassembler.dart';
 
 void main() {
-  group('BurstReassembler & Crc32 - Intégrité et Réassemblage Studio', () {
-    test('Calcul CRC32 conforme au vecteur IEEE 802.3 standard ("123456789")', () {
+  group('BurstReassembler & Crc32 - Studio Integrity and Reassembly', () {
+    test('CRC32 calculation compliant with standard IEEE 802.3 test vector ("123456789")', () {
       final asciiBytes = utf8.encode('123456789');
       final crc = Crc32.compute(asciiBytes);
       // 0xCBF43926 = 3421780262
       expect(crc, equals(0xCBF43926));
     });
 
-    test('Décodage fidèle d\'une trame IMU de 14 octets avec facteurs d\'échelle', () {
+    test('Accurate decoding of a 14-byte IMU frame with scaling factors', () {
       // delta: 1500 ms, ax: 0.050 g (50), ay: 0.980 g (980), az: -0.120 g (-120)
       // gx: 12.5 deg/s (125), gy: -4.0 deg/s (-40), gz: 0.8 deg/s (8)
       final byteData = ByteData(14);
@@ -37,7 +37,7 @@ void main() {
       expect(frame.gz, closeTo(0.8, 0.001));
     });
 
-    test('Réassemble un flux de 50 trames réparties sur plusieurs paquets avec validation CRC32', () {
+    test('Reassembles a stream of 50 frames distributed over multiple packets with CRC32 validation', () {
       final reassembler = BurstReassembler();
       const totalFrames = 50;
 
@@ -100,7 +100,7 @@ void main() {
       expect(finalResult.errorMessage, isNull);
     });
 
-    test('Rejette le flux lorsque la somme CRC32 reçue est altérée', () {
+    test('Rejects stream when received CRC32 checksum is corrupted', () {
       final reassembler = BurstReassembler();
 
       // START
@@ -127,7 +127,7 @@ void main() {
       expect(result!.isCompleted, isTrue);
       expect(result.isCrcValid, isFalse);
       expect(result.isSuccess, isFalse);
-      expect(result.errorMessage, contains('Erreur intégrité CRC32'));
+      expect(result.errorMessage, contains('CRC32 integrity error'));
     });
   });
 }
