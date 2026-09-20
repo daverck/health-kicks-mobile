@@ -127,7 +127,7 @@ void main() {
       expect(result!.isCompleted, isTrue);
       expect(result.isCrcValid, isFalse);
       expect(result.isSuccess, isFalse);
-      expect(result.errorMessage, contains('CRC32 integrity error'));
+      expect(result.errorMessage, contains('CRC32 integrity check failed'));
     });
   });
 }
