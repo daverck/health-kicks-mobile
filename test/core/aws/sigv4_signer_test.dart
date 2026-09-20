@@ -64,14 +64,14 @@ void main() {
     });
 
     test('Encode strictement selon RFC 3986 les jetons STS complexes et sanitise l\'endpoint', () {
-      // Jeton STS réel avec caractères spéciaux : +, /, =, *, ~
+      // Real STS token with special characters: +, /, =, *, ~
       const complexToken = 'IQoJb3JpZ2luX2VjEJr+test/value==*tilde~end';
       final creds = IoTCredentials(
         accessKeyId: 'ASIAIOSFODNN7EXAMPLE',
         secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
         sessionToken: complexToken,
         expiration: DateTime.parse('2026-09-14T22:00:00Z'),
-        // Endpoint avec majuscules, schéma https:// et trailing slash pour tester la sanitisation
+        // Endpoint with uppercase, https:// scheme and trailing slash to test sanitization
         iotEndpoint: 'HTTPS://A2K10W7EBF2TX9-ATS.IOT.EU-NORTH-1.AMAZONAWS.COM/',
         region: 'eu-north-1',
       );
@@ -82,18 +82,18 @@ void main() {
         requestDateTime: fixedDate,
       );
 
-      // Vérifie l'absence de tout fragment '#'
+      // Verify absence of any '#' fragment
       expect(url.contains('#'), isFalse);
 
-      // Vérifie que le schéma est wss et l'endpoint en minuscules
+      // Verify schema is wss and endpoint is lowercase
       expect(url.startsWith('wss://a2k10w7ebf2tx9-ats.iot.eu-north-1.amazonaws.com/mqtt?'), isTrue);
 
-      // Vérifie l'encodage RFC 3986 strict dans l'URL brute
+      // Verify strict RFC 3986 encoding in raw URL
       expect(url, contains('%2B')); // '+' -> '%2B'
       expect(url, contains('%2F')); // '/' -> '%2F'
       expect(url, contains('%3D')); // '=' -> '%3D'
       expect(url, contains('%2A')); // '*' -> '%2A'
-      expect(url, contains('~end')); // '~' n'est pas encodé
+      expect(url, contains('~end')); // '~' is not encoded
 
       final uri = Uri.parse(url);
       expect(uri.scheme, equals('wss'));
@@ -101,7 +101,7 @@ void main() {
       expect(uri.fragment, isEmpty);
       expect(uri.queryParameters['X-Amz-Security-Token'], equals(complexToken));
 
-      // Vérifie que Uri.replace(port: 443) comme le fait mqtt_client préserve une URL propre sans '#'
+      // Verify that Uri.replace(port: 443) preserves a clean URL without '#'
       final wsUri = uri.replace(port: 443);
       expect(wsUri.toString().contains('#'), isFalse);
     });
@@ -133,10 +133,10 @@ void main() {
       final uri1 = Uri.parse(url1);
       final uri2 = Uri.parse(url2);
 
-      // La signature est calculée sans X-Amz-Security-Token selon la spécification AWS IoT Core WebSocket
+      // Signature is calculated without X-Amz-Security-Token per AWS IoT Core WebSocket specification
       expect(uri1.queryParameters['X-Amz-Signature'], equals(uri2.queryParameters['X-Amz-Signature']));
 
-      // Mais chaque URL contient son propre X-Amz-Security-Token
+      // But each URL contains its own X-Amz-Security-Token
       expect(uri1.queryParameters['X-Amz-Security-Token'], equals('TOKEN_ALPHA'));
       expect(uri2.queryParameters['X-Amz-Security-Token'], equals('TOKEN_BETA'));
     });

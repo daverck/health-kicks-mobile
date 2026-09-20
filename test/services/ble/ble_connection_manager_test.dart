@@ -24,13 +24,13 @@ class FakePermissionService extends PermissionService {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('BleConnectionManager - Gestion du timeout de scan', () {
-    test('BleConstants.defaultScanTimeout vaut 3 minutes', () {
+  group('BleConnectionManager - Scan timeout management', () {
+    test('BleConstants.defaultScanTimeout is 3 minutes', () {
       expect(BleConstants.defaultScanTimeout, equals(const Duration(minutes: 3)));
       expect(BleConstants.defaultScanTimeout.inSeconds, equals(180));
     });
 
-    test('BleConnectionManager initialise son statut à disconnected', () {
+    test('BleConnectionManager initializes status to disconnected', () {
       final manager = BleConnectionManager(
         permissionService: FakePermissionService(granted: true),
       );
@@ -39,7 +39,7 @@ void main() {
       expect(manager.connectedDevice, isNull);
     });
 
-    test('disconnect() et dispose() nettoient proprement les ressources et restent disconnected', () async {
+    test('disconnect() and dispose() cleanly release resources and remain disconnected', () async {
       final manager = BleConnectionManager(
         permissionService: FakePermissionService(granted: true),
       );
@@ -51,7 +51,7 @@ void main() {
       expect(manager.status, equals(BleConnectionStatus.disconnected));
     });
 
-    test('startAutoConnect refuse si les permissions ne sont pas accordées', () async {
+    test('startAutoConnect rejects if permissions are not granted', () async {
       final manager = BleConnectionManager(
         permissionService: FakePermissionService(granted: false),
       );

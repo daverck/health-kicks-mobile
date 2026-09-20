@@ -3,8 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/models/activity_detection_model.dart';
 
 void main() {
-  group('ActivityDetectionModel - Décodage Binaire 7 octets & Mapping MQTT', () {
-    test('Décode correctement un événement walk sans chute', () {
+  group('ActivityDetectionModel - 7-byte Binary Decoding & MQTT Mapping', () {
+    test('Correctly decodes a walk event without fall', () {
       // Offset 0: state_code = 0x01 (walk)
       // Offset 1: confidence = 85%
       // Offset 2..5: timestamp = 1726224000 (0x66E41C80)
@@ -31,7 +31,7 @@ void main() {
       expect(mqtt['is_fall'], isFalse);
     });
 
-    test('Décode correctement une alerte de chute avec flags activés', () {
+    test('Correctly decodes a fall alert with flags enabled', () {
       // Offset 0: state_code = 0x10 (fall_forward)
       // Offset 1: confidence = 92%
       // Offset 2..5: timestamp = 1726224050
@@ -58,7 +58,7 @@ void main() {
       expect(mqtt['haptic_triggered'], isTrue);
     });
 
-    test('Lève une FormatException si le payload contient moins de 7 octets', () {
+    test('Throws a FormatException if payload contains less than 7 bytes', () {
       expect(
         () => ActivityDetectionModel.fromBytes([0x01, 0x50, 0x00]),
         throwsFormatException,

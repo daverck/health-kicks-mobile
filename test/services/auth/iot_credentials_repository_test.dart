@@ -17,7 +17,7 @@ void main() {
       'region': 'eu-north-1',
     };
 
-    test('IoTCredentials - Désérialisation et évaluation isExpired', () {
+    test('IoTCredentials - Deserialization and isExpired evaluation', () {
       final creds = IoTCredentials.fromJson(validJson);
       expect(creds.accessKeyId, equals('ASIA_TEST_ACCESS_KEY'));
       expect(creds.secretAccessKey, equals('test_secret_key_123'));
@@ -36,7 +36,7 @@ void main() {
       );
       expect(expiredCreds.isExpired, isTrue);
 
-      // Vérifie la marge de 5 minutes : si expiration dans 3 minutes, isExpired doit être true
+      // Verify 5-minute margin: if expiring in 3 minutes, isExpired must be true
       final soonExpiringCreds = IoTCredentials(
         accessKeyId: 'K',
         secretAccessKey: 'S',
@@ -55,7 +55,7 @@ void main() {
       expect(credsWithUser.toJson()['user_id'], equals('42'));
     });
 
-    test('fetchCredentials - Récupère les credentials via HTTP POST et les met en cache', () async {
+    test('fetchCredentials - Fetches credentials via HTTP POST and caches them', () async {
       int requestCount = 0;
 
       final mockClient = MockClient((request) async {
@@ -80,26 +80,26 @@ void main() {
         authTokenProvider: () => 'mock_jwt_token',
       );
 
-      // Premier appel : doit émettre une requête HTTP
+      // First call: must send an HTTP request
       final creds1 = await repo.fetchCredentials(deviceId: 'HK-1');
       expect(creds1.accessKeyId, equals('ASIA_TEST_ACCESS_KEY'));
       expect(requestCount, equals(1));
 
-      // Second appel immédiat avec même deviceId : doit utiliser le cache
+      // Second immediate call with same deviceId: must use cache
       final creds2 = await repo.fetchCredentials(deviceId: 'HK-1');
       expect(creds2.accessKeyId, equals('ASIA_TEST_ACCESS_KEY'));
-      expect(requestCount, equals(1)); // Pas de nouvelle requête HTTP
+      expect(requestCount, equals(1)); // No new HTTP request
 
-      // Troisième appel avec forceRefresh = true : doit réémettre la requête HTTP
+      // Third call with forceRefresh = true: must resend HTTP request
       await repo.fetchCredentials(deviceId: 'HK-1', forceRefresh: true);
       expect(requestCount, equals(2));
 
-      // Quatrième appel avec changement de deviceId : doit rafraîchir le cache
+      // Fourth call with changed deviceId: must refresh cache
       await repo.fetchCredentials(deviceId: 'HK-2');
       expect(requestCount, equals(3));
     });
 
-    test('fetchCredentials - Lève une exception si l\'API backend répond en erreur 401', () async {
+    test('fetchCredentials - Throws an exception if backend API returns 401 error', () async {
       final mockClient = MockClient((request) async {
         return http.Response(jsonEncode({'detail': 'Unauthorized'}), 401);
       });
@@ -116,7 +116,7 @@ void main() {
       );
     });
 
-    test('fetchCredentials - Lève une exception claire si aucun token n\'est disponible', () async {
+    test('fetchCredentials - Throws clear exception if no token is available', () async {
       final repo = IotCredentialsRepository(
         backendBaseUrl: 'http://192.168.1.100:8000',
       );
@@ -127,7 +127,7 @@ void main() {
       );
     });
 
-    test('fetchCredentials - En cas de 401, tente refreshToken puis rejoue avec succès', () async {
+    test('fetchCredentials - On 401, attempts refreshToken then replays successfully', () async {
       int requestCount = 0;
       final mockClient = MockClient((request) async {
         requestCount++;
@@ -163,7 +163,7 @@ void main() {
       expect(requestCount, equals(2));
     });
 
-    test('fetchCredentials - En cas de 401 avec échec de refreshToken, appelle authService.logout() pour retour SSO', () async {
+    test('fetchCredentials - On 401 with failed refreshToken, calls authService.logout() for SSO return', () async {
       final mockClient = MockClient((request) async {
         return http.Response(jsonEncode({'detail': 'token expired'}), 401);
       });
@@ -182,7 +182,7 @@ void main() {
         throwsA(isA<Exception>()),
       );
 
-      // Laisser le cycle async se terminer
+      // Let async cycle complete
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
       expect(fakeAuth.refreshTokenCalled, isTrue);

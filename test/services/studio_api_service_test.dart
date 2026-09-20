@@ -73,7 +73,7 @@ class FakeFlutterSecureStorage implements FlutterSecureStorage {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('StudioApiService - Déclenchement & Réservation REST Studio (/commands/studio/start)', () {
+  group('StudioApiService - Studio REST Trigger & Reservation (/commands/studio/start)', () {
     late TokenStorageService tokenStorage;
     const testUuid = '11111111-2222-3333-4444-555555555555';
 
@@ -85,7 +85,7 @@ void main() {
       );
     });
 
-    test('startStudioSession émet un POST vers /api/v1/devices/{device_id}/commands/studio/start et extrait session_id', () async {
+    test('startStudioSession sends POST to /api/v1/devices/{device_id}/commands/studio/start and extracts session_id', () async {
       late http.Request capturedRequest;
       final mockClient = MockClient((request) async {
         capturedRequest = request;
@@ -134,7 +134,7 @@ void main() {
       expect(payload.containsKey('id'), isFalse); // StrictModel extra=forbid
     });
 
-    test('Lève une exception immédiate si aucun jeton d\'accès n\'est présent', () async {
+    test('Throws immediate exception if no access token is present', () async {
       await tokenStorage.clearTokens();
 
       final service = StudioApiService(
@@ -152,7 +152,7 @@ void main() {
       );
     });
 
-    test('En cas de 401, rafraîchit le token et rejoue la requête avec succès', () async {
+    test('On 401, refreshes token and replays request successfully', () async {
       int requestCount = 0;
       final tokensUsed = <String>[];
 
@@ -161,10 +161,10 @@ void main() {
         tokensUsed.add(request.headers['Authorization'] ?? '');
 
         if (requestCount == 1) {
-          // Premier appel : token expiré
+          // First call: expired token
           return http.Response(jsonEncode({'detail': 'Token expired'}), 401);
         } else {
-          // Deuxième appel : token rafraîchi
+          // Second call: refreshed token
           return http.Response(
             jsonEncode({
               'status': 'command_dispatched',
@@ -207,7 +207,7 @@ void main() {
       expect(tokensUsed[1], equals('Bearer refreshed-jwt-token'));
     });
 
-    test('En cas d\'échec de rafraîchissement après un 401, lève une HttpException', () async {
+    test('On refresh failure after 401, throws HttpException', () async {
       final mockClient = MockClient((request) async {
         return http.Response(jsonEncode({'detail': 'Token expired'}), 401);
       });
@@ -216,7 +216,7 @@ void main() {
         backendBaseUrl: 'https://healthkicks.duckdns.org:8443',
         httpClient: mockClient,
         tokenStorage: tokenStorage,
-        refreshTokenFunction: () async => false, // Refresh échoue
+        refreshTokenFunction: () async => false, // Refresh fails
       );
 
       expect(
@@ -229,7 +229,7 @@ void main() {
       );
     });
 
-    test('Lève une HttpException en cas de réponse HTTP 500 du serveur', () async {
+    test('Throws HttpException on HTTP 500 server response', () async {
       final mockClient = MockClient((request) async {
         return http.Response('Internal Server Error', 500);
       });

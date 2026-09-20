@@ -2,8 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/models/studio_command_model.dart';
 
 void main() {
-  group('StudioCommandModel - Parsing et Sérialisation JSON', () {
-    test('Désérialise correctement un payload JSON complet de commande studio/start', () {
+  group('StudioCommandModel - JSON Parsing and Serialization', () {
+    test('Correctly deserializes a complete studio/start command JSON payload', () {
       final json = {
         'session_id': '11112222-3333-4444-5555-666677778888',
         'label': 'course_fractionne',
@@ -25,7 +25,7 @@ void main() {
       expect(model.pulseIntensity, equals(220));
     });
 
-    test('Applique les valeurs par défaut si les champs optionnels sont absents', () {
+    test('Applies default values if optional fields are missing', () {
       final json = {
         'session_id': '22223333-4444-5555-6666-777788889999',
       };
@@ -38,7 +38,7 @@ void main() {
       expect(model.pulseCount, isNull);
     });
 
-    test('Sérialise fidèlement en JSON', () {
+    test('Accurately serializes to JSON', () {
       const model = StudioCommandModel(
         sessionId: '33334444-5555-6666-7777-888899990000',
         label: 'test_gait',

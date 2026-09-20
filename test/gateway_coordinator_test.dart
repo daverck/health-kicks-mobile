@@ -215,22 +215,22 @@ void main() {
 
       fakeStudioApi.nextSessionId = '88888888-9999-aaaa-bbbb-cccccccccccc';
 
-      // 1. Déclenchement : appel REST backend automatique pour réserver la session
+      // 1. Trigger: automatic backend REST call to reserve session
       await coordinator.triggerStudioSession(
         label: 'course_fractionne',
         durationSec: 30.0,
       );
 
-      // Validation que le backend a été sollicité dès l'ordre START
+      // Verify backend was called upon START command
       expect(fakeStudioApi.startedSessions.length, equals(1));
       expect(fakeStudioApi.startedSessions.first['device_id'], equals('HK-SHOE-TEST-001'));
       expect(fakeStudioApi.startedSessions.first['label'], equals('course_fractionne'));
       expect(fakeStudioApi.startedSessions.first['duration_sec'], equals(30.0));
 
-      // Validation que le sessionId retourné par l'API REST a été envoyé à la chaussure
+      // Verify sessionId returned by REST API was sent to footwear
       expect(fakeBle.lastStartedStudioSessionId, equals('88888888-9999-aaaa-bbbb-cccccccccccc'));
 
-      // 2. Réception du flux Burst BLE
+      // 2. Receive BLE Burst stream
       final frames = [
         const ImuReadingModel(deltaMs: 0, ax: 0.1, ay: 0.9, az: -0.2, gx: 10, gy: -5, gz: 0),
         const ImuReadingModel(deltaMs: 20, ax: 0.12, ay: 0.88, az: -0.19, gx: 12, gy: -4, gz: 1),
@@ -247,7 +247,7 @@ void main() {
       fakeBle.emitBurst(burstResult);
       await Future<void>.delayed(const Duration(milliseconds: 15));
 
-      // 3. Validation publication MQTT avec l'UUID officiel réservé
+      // 3. Verify MQTT publishing with reserved official UUID
       expect(fakeMqtt.publishedStudioSessions.length, equals(1));
       final publishedSession = fakeMqtt.publishedStudioSessions.first;
       expect(publishedSession.sessionId, equals('88888888-9999-aaaa-bbbb-cccccccccccc'));
@@ -255,7 +255,7 @@ void main() {
       expect(publishedSession.deviceId, equals('HK-SHOE-TEST-001'));
       expect(publishedSession.readings.length, equals(2));
 
-      // 4. Validation Stream UI Toast / SnackBar
+      // 4. Verify Stream UI Toast / SnackBar notification
       expect(savedNotifiedSession, isNotNull);
       expect(savedNotifiedSession!.sessionId, equals('88888888-9999-aaaa-bbbb-cccccccccccc'));
 
@@ -274,17 +274,17 @@ void main() {
         durationSec: 5.0,
       );
 
-      // 1. Réception de la commande Studio distante via MQTT (Web -> AWS IoT Core -> Mobile)
+      // 1. Receive remote Studio command via MQTT (Web -> AWS IoT Core -> Mobile)
       fakeMqtt.emitStudioCommand(remoteCmd);
       await Future<void>.delayed(const Duration(milliseconds: 15));
 
-      // Vérification qu'AUCUN appel REST n'a été fait (la session étant déjà persistée par le backend)
+      // Verify NO REST call was made (session already persisted by backend)
       expect(fakeStudioApi.startedSessions.isEmpty, isTrue);
 
-      // Vérification que l'ordre START BLE a été envoyé avec le sessionId officiel reçu du backend
+      // Verify BLE START command was sent with official sessionId received from backend
       expect(fakeBle.lastStartedStudioSessionId, equals('99999999-aaaa-bbbb-cccc-dddddddddddd'));
 
-      // 2. Réception du flux Burst BLE
+      // 2. Receive BLE Burst stream
       final frames = [
         const ImuReadingModel(deltaMs: 0, ax: 0.2, ay: 0.8, az: -0.1, gx: 5, gy: -2, gz: 3),
       ];
@@ -300,7 +300,7 @@ void main() {
       fakeBle.emitBurst(burstResult);
       await Future<void>.delayed(const Duration(milliseconds: 15));
 
-      // 3. Validation de la publication MQTT avec le même UUID reçu dans la commande
+      // 3. Verify MQTT publishing with same UUID received in command
       expect(fakeMqtt.publishedStudioSessions.length, equals(1));
       final published = fakeMqtt.publishedStudioSessions.first;
       expect(published.sessionId, equals('99999999-aaaa-bbbb-cccc-dddddddddddd'));
@@ -308,7 +308,7 @@ void main() {
       expect(published.deviceId, equals('HK-SHOE-TEST-001'));
       expect(published.readings.length, equals(1));
 
-      // 4. Notification UI
+      // 4. UI notification
       expect(savedNotifiedSession, isNotNull);
       expect(savedNotifiedSession!.sessionId, equals('99999999-aaaa-bbbb-cccc-dddddddddddd'));
 
@@ -353,7 +353,7 @@ void main() {
         const ImuReadingModel(deltaMs: 0, ax: 0.1, ay: 0.9, az: -0.2, gx: 10, gy: -5, gz: 0),
       ];
 
-      // Burst complété avec CRC invalide
+      // Burst completed with invalid CRC
       final burstResult = BurstReassemblyResult(
         isCompleted: true,
         isCrcValid: false,
@@ -366,7 +366,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 15));
 
       expect(testMqtt.publishedStudioSessions.length, equals(1));
-      expect(logs.any((l) => l.contains('CRC32 non concordant')), isTrue);
+      expect(logs.any((l) => l.contains('CRC32 mismatch')), isTrue);
 
       loggedCoordinator.stopRouting();
       testBle.dispose();
@@ -397,7 +397,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 15));
 
       expect(testMqtt.publishedStudioSessions.isEmpty, isTrue);
-      expect(logs.any((l) => l.contains('Aucun échantillon IMU')), isTrue);
+      expect(logs.any((l) => l.contains('No IMU samples')), isTrue);
 
       loggedCoordinator.stopRouting();
       testBle.dispose();
@@ -413,17 +413,17 @@ void main() {
         deviceId: 'HK-TEST-PRESENCE',
       );
 
-      // 1. Démarrage du routage -> présence "online"
+      // 1. Start routing -> "online" presence
       localCoordinator.startRouting();
       await Future<void>.delayed(const Duration(milliseconds: 15));
       expect(localMqtt.publishedGatewayStatuses, contains(true));
 
-      // 2. Arrêt du routage (déconnexion BLE) -> présence "offline"
+      // 2. Stop routing (BLE disconnection) -> "offline" presence
       localCoordinator.stopRouting();
       await Future<void>.delayed(const Duration(milliseconds: 15));
       expect(localMqtt.publishedGatewayStatuses.last, equals(false));
 
-      // 3. Reconfiguration (notifyOffline: false) n'émet pas offline
+      // 3. Reconfiguration (notifyOffline: false) does not emit offline
       localMqtt.publishedGatewayStatuses.clear();
       localCoordinator.stopRouting(notifyOffline: false);
       await Future<void>.delayed(const Duration(milliseconds: 15));
@@ -449,7 +449,7 @@ void main() {
       );
       loggedCoordinator.startRouting();
 
-      // 1. Déclenchement local d'une session Studio
+      // 1. Local Studio session trigger
       await loggedCoordinator.triggerStudioSession(
         label: 'course_test',
         durationSec: 10.0,
@@ -458,7 +458,7 @@ void main() {
       expect(testBle.startStudioSessionCallCount, equals(1));
       expect(testBle.lastStartedStudioSessionId, equals('sess-dedup-1234'));
 
-      // 2. Réception de l'écho MQTT avec le même sessionId
+      // 2. Receive MQTT echo with same sessionId
       testMqtt.emitStudioCommand(const StudioCommandModel(
         sessionId: 'sess-dedup-1234',
         label: 'course_test',
@@ -466,9 +466,9 @@ void main() {
       ));
       await Future<void>.delayed(const Duration(milliseconds: 15));
 
-      // Vérification que le client BLE n'a pas reçu un deuxième appel START
+      // Verify BLE client did not receive a second START call
       expect(testBle.startStudioSessionCallCount, equals(1));
-      expect(logs.any((l) => l.contains('Écho de session Studio ignoré')), isTrue);
+      expect(logs.any((l) => l.contains('Studio session echo ignored')), isTrue);
 
       loggedCoordinator.stopRouting();
       testBle.dispose();
@@ -491,7 +491,7 @@ void main() {
       );
       loggedCoordinator.startRouting();
 
-      // 1. Déclenchement local
+      // 1. Local trigger
       await loggedCoordinator.triggerStudioSession(
         label: 'course_test',
         durationSec: 5.0,
@@ -499,7 +499,7 @@ void main() {
 
       expect(testBle.startStudioSessionCallCount, equals(1));
 
-      // 2. Réception d'une commande distante concurrente pendant que la capture est active
+      // 2. Receive concurrent remote command while capture is active
       testMqtt.emitStudioCommand(const StudioCommandModel(
         sessionId: 'sess-remote-echo-diff-uuid',
         label: 'course_test',
@@ -507,9 +507,9 @@ void main() {
       ));
       await Future<void>.delayed(const Duration(milliseconds: 15));
 
-      // Vérification que le deuxième appel BLE est bloqué par _isStudioRecordingActive
+      // Verify second BLE call is blocked by _isStudioRecordingActive
       expect(testBle.startStudioSessionCallCount, equals(1));
-      expect(logs.any((l) => l.contains('Écho de session Studio ignoré')), isTrue);
+      expect(logs.any((l) => l.contains('Studio session echo ignored')), isTrue);
 
       loggedCoordinator.stopRouting();
       testBle.dispose();
@@ -528,20 +528,20 @@ void main() {
       );
       loggedCoordinator.startRouting();
 
-      // 1. Déclenchement local d'une session Studio
+      // 1. Local Studio session trigger
       await loggedCoordinator.triggerStudioSession(
         label: 'test_error_recovery',
         durationSec: 5.0,
       );
       expect(loggedCoordinator.isStudioRecordingActive, isTrue);
 
-      // 2. Réception d'une notification d'erreur du firmware BLE ("ERROR busy")
+      // 2. Receive BLE firmware error notification ("ERROR busy")
       testBle._statusCtrl.add('ERROR busy');
       await Future<void>.delayed(const Duration(milliseconds: 15));
 
-      // Vérification que l'état interne est bien réinitialisé
+      // Verify internal state is properly reset
       expect(loggedCoordinator.isStudioRecordingActive, isFalse);
-      expect(logs.any((l) => l.contains('Libération de l\'état de capture')), isTrue);
+      expect(logs.any((l) => l.contains('Releasing capture state')), isTrue);
 
       loggedCoordinator.stopRouting();
       testBle.dispose();

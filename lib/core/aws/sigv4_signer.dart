@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import '../../services/auth/iot_credentials_model.dart';
 
-/// Signataire AWS Signature Version 4 (SigV4) spécialisé pour l'URL de connexion
-/// WebSocket à AWS IoT Core sur le port 443.
+/// AWS Signature Version 4 (SigV4) signer specialized for WebSocket connection URLs
+/// to AWS IoT Core on port 443.
 ///
-/// Spécification officielle AWS IoT Core MQTT over WebSockets :
+/// AWS IoT Core MQTT over WebSockets official specification:
 /// https://docs.aws.amazon.com/iot/latest/developerguide/protocols.html
 class SigV4Signer {
   static const String _service = 'iotdevicegateway';
@@ -13,7 +13,7 @@ class SigV4Signer {
   static const String _emptyPayloadHash =
       'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 
-  /// Forge l'URL WebSocket complète pré-signée (WSS) à partir des identifiants temporaires STS.
+  /// Forges the complete pre-signed WebSocket (WSS) URL from STS temporary credentials.
   static String buildSignedWebSocketUrl({
     required IoTCredentials credentials,
     DateTime? requestDateTime,
@@ -35,10 +35,10 @@ class SigV4Signer {
       endpoint = endpoint.substring(0, endpoint.length - 1);
     }
 
-    // 1. Paramètres de requête canoniques (triés par nom en ordre alphabétique strict)
-    // Règle spécifique AWS IoT Core MQTT over WebSockets (omitSessionToken: true) :
-    // Le paramètre X-Amz-Security-Token NE DOIT PAS être inclus dans la requête canonique
-    // signée, mais est joint directement à l'URL finale.
+    // 1. Canonical query parameters (sorted by parameter name in strict alphabetical order)
+    // AWS IoT Core MQTT over WebSockets specific rule (omitSessionToken: true):
+    // The X-Amz-Security-Token parameter MUST NOT be included in the signed canonical request,
+    // but is appended directly to the final URL.
     final canonicalQueryParams = <String, String>{
       'X-Amz-Algorithm': _algorithm,
       'X-Amz-Credential':
@@ -53,7 +53,7 @@ class SigV4Signer {
             '${_uriEncodeStrict(k)}=${_uriEncodeStrict(canonicalQueryParams[k]!)}')
         .join('&');
 
-    // 2. Requête canonique : GET /mqtt
+    // 2. Canonical request: GET /mqtt
     final canonicalHeaders = 'host:$endpoint\n';
     const signedHeaders = 'host';
 
@@ -69,7 +69,7 @@ class SigV4Signer {
     final canonicalRequestHash =
         sha256.convert(utf8.encode(canonicalRequest)).toString();
 
-    // 3. Chaîne à signer (String to Sign)
+    // 3. String to Sign
     final stringToSign = [
       _algorithm,
       amzDate,
@@ -77,7 +77,7 @@ class SigV4Signer {
       canonicalRequestHash,
     ].join('\n');
 
-    // 4. Dérivation de la clé de signature
+    // 4. Signing key derivation
     final signingKey = _getSignatureKey(
       key: credentials.secretAccessKey,
       dateStamp: dateStamp,
@@ -85,13 +85,13 @@ class SigV4Signer {
       serviceName: _service,
     );
 
-    // 5. Calcul de la signature HMAC-SHA256
+    // 5. Compute HMAC-SHA256 signature
     final signature = Hmac(sha256, signingKey)
         .convert(utf8.encode(stringToSign))
         .toString();
 
-    // 6. URL finale WSS (strictement sans fragment ni trailing #)
-    // On assemble l'URL avec les paramètres canoniques, la signature et le session token (si présent)
+    // 6. Final WSS URL (strictly without fragment or trailing #)
+    // Assemble URL with canonical query params, signature, and session token (if present)
     var finalQueryString = '$canonicalQueryString&X-Amz-Signature=$signature';
     if (credentials.sessionToken.isNotEmpty) {
       finalQueryString +=
@@ -101,7 +101,7 @@ class SigV4Signer {
     return 'wss://$endpoint/mqtt?$finalQueryString';
   }
 
-  /// Dérivation cryptographique de la clé de signature AWS SigV4 :
+  /// Cryptographic derivation of AWS SigV4 signing key:
   /// kSecret -> kDate -> kRegion -> kService -> kSigning
   static List<int> _getSignatureKey({
     required String key,
@@ -119,7 +119,7 @@ class SigV4Signer {
     return kSigning;
   }
 
-  /// Format date simple : YYYYMMDD (ex: 20260914)
+  /// Simple date format: YYYYMMDD (e.g. 20260914)
   static String _formatDateStamp(DateTime dt) {
     final y = dt.year.toString().padLeft(4, '0');
     final m = dt.month.toString().padLeft(2, '0');
@@ -127,7 +127,7 @@ class SigV4Signer {
     return '$y$m$d';
   }
 
-  /// Format horodatage basique ISO 8601 : YYYYMMDDTHHMMSSZ (ex: 20260914T193000Z)
+  /// ISO 8601 basic timestamp format: YYYYMMDDTHHMMSSZ (e.g. 20260914T193000Z)
   static String _formatAmzDate(DateTime dt) {
     final y = dt.year.toString().padLeft(4, '0');
     final m = dt.month.toString().padLeft(2, '0');
@@ -138,9 +138,9 @@ class SigV4Signer {
     return '$y$m${d}T$h$min${s}Z';
   }
 
-  /// Encodage conforme URI selon AWS SigV4 RFC 3986.
-  /// Caractères non-réservés RFC 3986 : [A-Z], [a-z], [0-9], '-', '_', '.', '~'.
-  /// Tous les autres caractères doivent être encodés en hexadécimal majuscule (%XY).
+  /// RFC 3986 strict URI encoder as required by AWS SigV4.
+  /// Unreserved characters RFC 3986: [A-Z], [a-z], [0-9], '-', '_', '.', '~'.
+  /// All other characters must be percent-encoded with uppercase hex (%XY).
   static String _uriEncodeStrict(String input) {
     return Uri.encodeComponent(input)
         .replaceAll('*', '%2A')

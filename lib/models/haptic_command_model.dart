@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
-/// Modèle représentant un ordre de stimulation tactile haptique reçu du Cloud MQTT
-/// et sérialisé vers la caractéristique BLE 7a5a0003.
-/// Référence contractuelle : contracts/ble_gatt_specs.md (Caractéristique 2)
+/// Model representing a tactile haptic stimulation command received from Cloud MQTT
+/// and serialized to BLE characteristic 7a5a0003.
+/// Contract reference: contracts/ble_gatt_specs.md (Characteristic 2)
 class HapticCommandModel {
   final String commandId;
   final int patternId;
@@ -16,7 +16,7 @@ class HapticCommandModel {
     required this.durationMs,
   });
 
-  /// Parse un message JSON reçu d'AWS IoT Core sur healthkicks/v1/{device_id}/commands/haptic.
+  /// Parses a JSON message received from AWS IoT Core on healthkicks/v1/{device_id}/commands/haptic.
   factory HapticCommandModel.fromJson(Map<String, dynamic> json) {
     final rawIntensity = json['intensity'] as int? ?? 180;
     final rawDuration = json['duration_ms'] as int? ?? 500;
@@ -29,7 +29,7 @@ class HapticCommandModel {
       patternCode = 2;
     }
 
-    // Validation des bornes contractuelles
+    // Validate contract bounds
     final clampedIntensity = rawIntensity.clamp(0, 255);
     final clampedDuration = rawDuration.clamp(50, 10000);
 
@@ -41,7 +41,7 @@ class HapticCommandModel {
     );
   }
 
-  /// Sérialise la commande en 4 octets Big-Endian :
+  /// Serializes the command to 4 Big-Endian bytes:
   /// [pattern_id (uint8), intensity (uint8), duration_ms (uint16 big-endian)]
   Uint8List toBleBytes() {
     final byteData = ByteData(4);

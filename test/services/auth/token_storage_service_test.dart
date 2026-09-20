@@ -91,7 +91,7 @@ class FakeFlutterSecureStorage implements FlutterSecureStorage {
 }
 
 void main() {
-  group('TokenStorageService - Stockage chiffré des jetons', () {
+  group('TokenStorageService - Encrypted token storage', () {
     late FakeFlutterSecureStorage fakeStorage;
     late TokenStorageService service;
 
@@ -100,13 +100,13 @@ void main() {
       service = TokenStorageService(storage: fakeStorage);
     });
 
-    test('hasValidToken renvoie false initialement', () async {
+    test('hasValidToken returns false initially', () async {
       expect(await service.hasValidToken(), isFalse);
       expect(await service.getAccessToken(), isNull);
       expect(await service.getRefreshToken(), isNull);
     });
 
-    test('saveTokens persiste les jetons et hasValidToken devient true', () async {
+    test('saveTokens persists tokens and hasValidToken becomes true', () async {
       await service.saveTokens(
         accessToken: 'access_123',
         refreshToken: 'refresh_456',
@@ -117,7 +117,7 @@ void main() {
       expect(await service.getRefreshToken(), equals('refresh_456'));
     });
 
-    test('clearTokens supprime les jetons stockés', () async {
+    test('clearTokens deletes stored tokens', () async {
       await service.saveTokens(
         accessToken: 'access_123',
         refreshToken: 'refresh_456',
@@ -130,20 +130,20 @@ void main() {
       expect(await service.getRefreshToken(), isNull);
     });
 
-    test('parseUserId extrait correctement le claim sub d\'un JWT', () {
+    test('parseUserId correctly extracts sub claim from JWT', () {
       // {"sub":"42","email":"test@example.com"}
       const mockJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MiIsImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSJ9.mockSignature';
       final userId = TokenStorageService.parseUserId(mockJwt);
       expect(userId, equals('42'));
     });
 
-    test('parseUserId renvoie null pour un token invalide ou corrompu', () {
+    test('parseUserId returns null for invalid or corrupted token', () {
       expect(TokenStorageService.parseUserId('invalid_token'), isNull);
       expect(TokenStorageService.parseUserId('header.invalid-base64.sig'), isNull);
       expect(TokenStorageService.parseUserId(''), isNull);
     });
 
-    test('getUserIdFromToken lit le token persistant et renvoie le userId', () async {
+    test('getUserIdFromToken reads persistent token and returns userId', () async {
       const mockJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMDgiLCJyb2xlIjoidXNlciJ9.mockSignature';
       await service.saveTokens(accessToken: mockJwt);
 

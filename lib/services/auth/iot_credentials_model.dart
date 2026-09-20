@@ -1,7 +1,7 @@
 import '../../core/config/app_config.dart';
 
-/// Modèle de données représentant les identifiants temporaires AWS STS
-/// obtenus auprès du backend HealthKicks (`POST /api/v1/auth/iot-credentials`).
+/// Data model representing temporary AWS STS credentials
+/// obtained from the HealthKicks backend (`POST /api/v1/auth/iot-credentials`).
 class IoTCredentials {
   final String accessKeyId;
   final String secretAccessKey;
@@ -21,16 +21,16 @@ class IoTCredentials {
     this.userId,
   });
 
-  /// Indique si les identifiants sont expirés ou sur le point de l'être.
-  /// Une marge de sécurité de 5 minutes (300 secondes) est appliquée pour anticiper
-  /// le renouvellement avant coupure du socket WebSocket.
+  /// Indicates whether credentials are expired or about to expire.
+  /// A 5-minute (300 seconds) safety margin is applied to anticipate
+  /// renewal before WebSocket disconnect.
   bool get isExpired {
     final threshold = DateTime.now().toUtc().add(const Duration(minutes: 5));
     return expiration.toUtc().isBefore(threshold);
   }
 
-  /// Instancie les identifiants depuis la réponse JSON du backend.
-  /// Si le backend omet l'endpoint ou la région, les constantes de production AppConfig sont appliquées.
+  /// Instantiates credentials from backend JSON response.
+  /// If the backend omits endpoint or region, production AppConfig defaults are applied.
   factory IoTCredentials.fromJson(Map<String, dynamic> json) {
     final rawEndpoint = (json['iot_endpoint'] as String?)?.trim() ?? '';
     final rawRegion = (json['region'] as String?)?.trim() ?? '';
@@ -47,7 +47,7 @@ class IoTCredentials {
     );
   }
 
-  /// Sérialise le modèle en JSON (utile pour les tests et la sérialisation).
+  /// Serializes model to JSON (useful for testing and serialization).
   Map<String, dynamic> toJson() {
     return {
       'access_key_id': accessKeyId,

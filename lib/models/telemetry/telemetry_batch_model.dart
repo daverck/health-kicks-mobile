@@ -3,8 +3,8 @@ import '../studio_session_model.dart';
 
 const _uuid = Uuid();
 
-/// En-tête standard conforme au schéma Pydantic Header de l'écosystème.
-/// Référence contractuelle : health-kicks-edge-script/src/healthkicks_edge/schemas.py (Header)
+/// Standard header conforming to ecosystem Pydantic Header schema.
+/// Contract reference: health-kicks-edge-script/src/healthkicks_edge/schemas.py (Header)
 class TelemetryHeader {
   final String deviceId;
   final String schemaVersion;
@@ -38,7 +38,7 @@ class TelemetryHeader {
   }
 }
 
-/// Charge utile inertielle 6-axes conforme à ImuPayload.
+/// 6-axis IMU inertial payload conforming to ImuPayload.
 class ImuPayload {
   final double ax;
   final double ay;
@@ -79,7 +79,7 @@ class ImuPayload {
   }
 }
 
-/// Mesure unitaire IMU conforme à Telemetry (StrictModel).
+/// Single IMU reading conforming to Telemetry (StrictModel).
 class TelemetryItem {
   final TelemetryHeader header;
   final ImuPayload payload;
@@ -104,7 +104,7 @@ class TelemetryItem {
   }
 }
 
-/// Métadonnées d'un lot de télémétrie conforme à BatchMetadata.
+/// Metadata of a telemetry batch conforming to BatchMetadata.
 class BatchMetadata {
   final int sampleCount;
   final String windowStart;
@@ -145,8 +145,8 @@ class BatchMetadata {
   }
 }
 
-/// Lot de télémétrie complet conforme à TelemetryBatch.
-/// Référence contractuelle : health-kicks-edge-script/src/healthkicks_edge/schemas.py (TelemetryBatch)
+/// Complete telemetry batch conforming to TelemetryBatch.
+/// Contract reference: health-kicks-edge-script/src/healthkicks_edge/schemas.py (TelemetryBatch)
 class TelemetryBatch {
   final TelemetryHeader header;
   final BatchMetadata metadata;
@@ -176,8 +176,8 @@ class TelemetryBatch {
     };
   }
 
-  /// Découpe une [StudioSessionModel] en une liste de [TelemetryBatch] conformes Pydantic.
-  /// Chaque lot reste sous la limite AWS IoT Core (128 Ko par message).
+  /// Splits a [StudioSessionModel] into a list of Pydantic-conforming [TelemetryBatch] instances.
+  /// Each batch stays under the AWS IoT Core limit (128 KB per message).
   static List<TelemetryBatch> fromStudioSession(
     StudioSessionModel session, {
     int maxReadingsPerChunk = 500,

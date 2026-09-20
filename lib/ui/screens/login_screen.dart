@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/auth/auth_service.dart';
 
-/// Écran d'authentification utilisateur HealthKicks via SSO (Google / Microsoft Azure).
+/// HealthKicks user authentication screen via SSO (Google / Microsoft Azure).
 class LoginScreen extends StatefulWidget {
   final AuthService authService;
   final VoidCallback onLoginSuccess;
@@ -62,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // 1. Logo & Titre
+                  // 1. Logo & Title
                   Icon(
                     Icons.monitor_heart,
                     size: 72,
@@ -87,7 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 40),
 
-                  // Message d'erreur éventuel
+                  // Potential error message
                   if (errorMessage != null) ...[
                     Container(
                       padding: const EdgeInsets.all(12),
@@ -112,7 +112,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 24),
                   ],
 
-                  // Indicateur de chargement actif
+                  // Active loading indicator
                   if (isServiceLoading) ...[
                     const Center(
                       child: Column(
@@ -129,7 +129,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 24),
                   ],
 
-                  // Boutons d'authentification SSO
+                  // SSO Authentication buttons
                   OutlinedButton.icon(
                     icon: const Icon(Icons.g_mobiledata, size: 28),
                     label: const Text(

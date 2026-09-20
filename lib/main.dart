@@ -54,7 +54,7 @@ class HealthKicksApp extends StatelessWidget {
   }
 }
 
-/// Garde de routage : vérifie la présence d'une session JWT valide au démarrage.
+/// Route guard: checks for presence of a valid JWT session at startup.
 class AuthGate extends StatefulWidget {
   final AuthService? authService;
 
@@ -122,7 +122,7 @@ class _AuthGateState extends State<AuthGate> {
         return LoginScreen(
           authService: _authService,
           onLoginSuccess: () {
-            // Le changement d'état via notifyListeners() bascule automatiquement l'écran
+            // State change via notifyListeners() automatically switches screen
           },
         );
       },
@@ -296,8 +296,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         currentUserId = await TokenStorageService().getUserIdFromToken();
       }
 
-      // Si le userId n'est pas encore résolu (ex: initialisation asynchrone du token en cours),
-      // différer la connexion en attendant activement jusqu'à 3 secondes.
+      // If userId is not yet resolved (e.g. async token initialization in progress),
+      // defer connection by actively waiting up to 3 seconds.
       if (currentUserId == null || currentUserId.isEmpty) {
         for (int i = 0; i < 6 && (currentUserId == null || currentUserId.isEmpty); i++) {
           await Future.delayed(const Duration(milliseconds: 500));
@@ -321,7 +321,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         return;
       }
 
-      // Recréer le service MQTT si l'utilisateur a changé
+      // Recreate MQTT service if user has changed
       if (_mqttService != null && _mqttService!.userId != currentUserId) {
         _mqttService?.disconnect();
         _mqttService = null;
@@ -422,10 +422,10 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
     _addLog('INIT', 'Démarrage de la passerelle HealthKicks...');
     _ensureBleManager();
 
-    // 1. Initialiser le broker MQTT en arrière-plan sans bloquer l'initialisation BLE
+    // 1. Initialize MQTT broker in background without blocking BLE initialization
     unawaited(_connectMqtt());
 
-    // 2. Solliciter les permissions requises et démarrer le scan BLE immédiatement dès accord
+    // 2. Request required permissions and start BLE scan immediately upon grant
     try {
       final perms = await _permissionService.requestDetailedBlePermissions(
         onLog: (msg) => _addLog('PERM', msg),
@@ -465,7 +465,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
 
     _ensureBleManager();
 
-    // Lors du lancement du scan, l'équipement n'est plus actif : publication offline
+    // When starting scan, device is no longer active: publish offline
     if (_coordinator != null) {
       _coordinator?.stopRouting(notifyOffline: true);
       _coordinator = null;
@@ -475,7 +475,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
     _bleClient?.dispose();
     _bleClient = null;
 
-    // Annuler tout scan en cours avant de relancer
+    // Cancel any active scan before restarting
     try {
       await FlutterBluePlus.stopScan();
     } catch (_) {}
@@ -488,9 +488,11 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         onLog: (msg) {
           final isError = msg.contains('Erreur') || msg.contains('refusé') || msg.contains('Échec');
           _addLog(
-            msg.startsWith('[PERM]') ? 'PERM' : 'BLE',
-            msg.replaceFirst(RegExp(r'^\[(BLE|PERM)\]\s*'), ''),
-            color: isError ? Colors.red : null,
+            'BLE',
+            msg,
+            color: isError
+                ? Colors.red
+                : (msg.contains('Connecté') ? Colors.green : Colors.blueGrey),
           );
         },
       );
@@ -520,7 +522,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
       _bleClient = BleFootwearClient(
         device: device,
         onLog: (msg, {bool isError = false}) {
-          _addLog('BLE', msg, color: isError ? Colors.red : Colors.blue);
+          _addLog('BLE', msg, color: isError ? Colors.red : Colors.blueGrey);
         },
       );
       _addLog('BLE', 'Découverte des services GATT en cours...');
@@ -530,7 +532,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         'Souscription active : Activity (0002), Studio Control (0004), Burst (0005) | Haptique (0003) ${_bleClient!.hasHaptic ? "prêt" : "non trouvé"}',
       );
 
-      // Écoute des flux BLE pour le journal en direct
+      // Listen to BLE streams for live event logging
       _bleClient!.activityStream.listen((detection) {
         _addLog(
           'ACTIVITY',
@@ -550,7 +552,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         );
       });
 
-      // Brancher le coordinateur de routage bidirectionnel
+      // Attach bidirectional routing coordinator
       if (_mqttService != null) {
         _setupCoordinator();
       }
@@ -598,7 +600,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
     _addLog('STUDIO', 'Démarrage session Studio (5.0s, label: test_gait)...');
 
     try {
-      // 1. S'assurer que le service MQTT est initialisé et connecté
+      // 1. Ensure MQTT service is initialized and connected
       if (_mqttService == null) {
         _addLog('STUDIO', 'Initialisation et connexion au service MQTT AWS IoT...', color: Colors.indigo);
         await _connectMqtt();

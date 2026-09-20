@@ -8,8 +8,8 @@ import 'token_storage_service.dart';
 
 typedef AuthLogCallback = void Function(String message, {bool isError});
 
-/// Repository assurant la récupération et la mise en cache en mémoire des identifiants
-/// AWS STS temporaires depuis l'API backend FastAPI HealthKicks.
+/// Repository ensuring retrieval and in-memory caching of temporary
+/// AWS STS credentials from the HealthKicks FastAPI backend API.
 class IotCredentialsRepository {
   final String backendBaseUrl;
   final http.Client _httpClient;
@@ -30,13 +30,13 @@ class IotCredentialsRepository {
     this.onLog,
   }) : _httpClient = httpClient ?? http.Client();
 
-  /// Identifiants actuellement en mémoire (si valides).
+  /// Currently cached in-memory credentials (if valid).
   IoTCredentials? get currentCredentials =>
       (_cachedCredentials != null && !_cachedCredentials!.isExpired)
           ? _cachedCredentials
           : null;
 
-  /// Résout le jeton d'authentification Bearer actuel.
+  /// Resolves the current Bearer access token.
   Future<String?> _resolveAccessToken() async {
     if (authTokenProvider != null) {
       return await authTokenProvider!();
@@ -47,9 +47,9 @@ class IotCredentialsRepository {
     return null;
   }
 
-  /// Récupère des identifiants AWS STS valides.
-  /// Réutilise le cache en mémoire si disponible et non expiré (marge de 5 min).
-  /// En cas de changement de `deviceId`, le cache est invalidé pour obtenir un scope adapté.
+  /// Retrieves valid AWS STS credentials.
+  /// Reuses in-memory cache if available and not expired (5 min margin).
+  /// If `deviceId` changes, cache is invalidated to obtain an appropriately scoped token.
   Future<IoTCredentials> fetchCredentials({
     String? deviceId,
     bool forceRefresh = false,
@@ -59,26 +59,26 @@ class IotCredentialsRepository {
         !_cachedCredentials!.isExpired &&
         _lastCachedDeviceId == deviceId) {
       onLog?.call(
-        '[STS] Réutilisation des identifiants STS en cache (expire à ${_cachedCredentials!.expiration.toIso8601String()}).',
+        '[STS] Reusing cached STS credentials (expires at ${_cachedCredentials!.expiration.toIso8601String()}).',
         isError: false,
       );
       return _cachedCredentials!;
     }
 
-    // Récupération automatique du token d'accès chiffré
+    // Automatic retrieval of encrypted access token
     final token = await _resolveAccessToken();
     if (token == null || token.trim().isEmpty) {
-      const errMsg = 'Session expirée ou utilisateur non connecté : impossible d\'obtenir les identifiants STS IoT.';
+      const errMsg = 'Session expired or user not logged in: unable to obtain IoT STS credentials.';
       onLog?.call('[STS] $errMsg', isError: true);
       throw const HttpException(errMsg);
     }
 
     onLog?.call(
-      '[STS] Requête au backend pour obtenir des identifiants STS temporaires (deviceId: ${deviceId ?? "auto"})...',
+      '[STS] Requesting temporary STS credentials from backend (deviceId: ${deviceId ?? "auto"})...',
       isError: false,
     );
 
-    // Normalisation de l'URL du backend
+    // Backend URL normalization
     final sanitizedBase = backendBaseUrl.endsWith('/')
         ? backendBaseUrl.substring(0, backendBaseUrl.length - 1)
         : backendBaseUrl;
@@ -101,10 +101,10 @@ class IotCredentialsRepository {
         body: body,
       );
 
-      // Gestion du jeton expiré (HTTP 401)
+      // Handle expired token (HTTP 401)
       if (response.statusCode == 401) {
         onLog?.call(
-          '[STS] Jeton d\'accès expiré (HTTP 401), tentative de rafraîchissement...',
+          '[STS] Access token expired (HTTP 401), attempting refresh...',
           isError: false,
         );
 
@@ -129,16 +129,16 @@ class IotCredentialsRepository {
           }
         }
 
-        // Si le rafraîchissement a échoué ou que le serveur renvoie toujours 401
+        // If refresh failed or server still returns 401
         if (response.statusCode == 401) {
           onLog?.call(
-            '[STS] Session définitivement expirée (HTTP 401) : déconnexion automatique de l\'utilisateur vers le login SSO.',
+            '[STS] Session permanently expired (HTTP 401): logging out user to SSO login.',
             isError: true,
           );
           await authService?.logout();
           await tokenStorage?.clearTokens();
           const errorMsg =
-              '[STS] Échec HTTP 401 (token expired) : utilisateur déconnecté pour ré-authentification SSO.';
+              '[STS] HTTP 401 failure (token expired): user logged out for SSO re-authentication.';
           throw HttpException(errorMsg, uri: uri);
         }
       }
@@ -150,25 +150,25 @@ class IotCredentialsRepository {
         _lastCachedDeviceId = deviceId;
 
         onLog?.call(
-          '[STS] Nouveaux identifiants STS obtenus avec succès (Expire à : ${credentials.expiration.toIso8601String()}, Région : ${credentials.region}).',
+          '[STS] New STS credentials obtained successfully (Expires at: ${credentials.expiration.toIso8601String()}, Region: ${credentials.region}).',
           isError: false,
         );
         return credentials;
       } else {
         final errorMsg =
-            '[STS] Échec HTTP ${response.statusCode} lors de l\'échange de jeton : ${response.body}';
+            '[STS] HTTP ${response.statusCode} failure during token exchange: ${response.body}';
         onLog?.call(errorMsg, isError: true);
         throw HttpException(errorMsg, uri: uri);
       }
     } catch (e) {
       if (e is! HttpException) {
-        onLog?.call('[STS] Erreur réseau lors de l\'appel backend : $e', isError: true);
+        onLog?.call('[STS] Network error during backend request: $e', isError: true);
       }
       rethrow;
     }
   }
 
-  /// Invalide manuellement le cache.
+  /// Manually clears the cache.
   void clearCache() {
     _cachedCredentials = null;
     _lastCachedDeviceId = null;

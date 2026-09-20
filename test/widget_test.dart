@@ -9,7 +9,7 @@ import 'package:healthkicks_mobile/services/auth/token_storage_service.dart';
 import 'services/auth/token_storage_service_test.dart';
 
 void main() {
-  testWidgets('HealthKicksApp affiche LoginScreen si aucun token en local sans champ d\'URL backend', (WidgetTester tester) async {
+  testWidgets('HealthKicksApp displays LoginScreen if no local token without backend URL field', (WidgetTester tester) async {
     final fakeStorage = FakeFlutterSecureStorage();
     final tokenStorage = TokenStorageService(storage: fakeStorage);
     final authService = AuthService(
@@ -28,7 +28,7 @@ void main() {
     expect(find.textContaining('Serveur Backend'), findsNothing);
   });
 
-  testWidgets('HealthKicksApp affiche GatewayDashboardScreen si token authentifié', (WidgetTester tester) async {
+  testWidgets('HealthKicksApp displays GatewayDashboardScreen if token is authenticated', (WidgetTester tester) async {
     final fakeStorage = FakeFlutterSecureStorage();
     await fakeStorage.write(key: 'hk_access_token', value: 'valid_mock_token');
     final tokenStorage = TokenStorageService(storage: fakeStorage);

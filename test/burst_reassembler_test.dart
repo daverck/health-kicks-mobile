@@ -41,7 +41,7 @@ void main() {
       final reassembler = BurstReassembler();
       const totalFrames = 50;
 
-      // 1. Paquet START_OF_BURST (type: 0x01, seq: 0, count: 50)
+      // 1. START_OF_BURST packet (type: 0x01, seq: 0, count: 50)
       final startData = ByteData(8);
       startData.setUint8(0, BleConstants.packetTypeStartOfBurst);
       startData.setUint16(1, 0, Endian.big);
@@ -51,7 +51,7 @@ void main() {
       expect(reassembler.processPacket(startData.buffer.asUint8List()), isNull);
       expect(reassembler.isCollecting, isTrue);
 
-      // Générer les 50 trames binaires (50 * 14 = 700 octets de payload)
+      // Generate 50 binary frames (50 * 14 = 700 bytes payload)
       final allPayloadBytes = <int>[];
       for (int i = 0; i < totalFrames; i++) {
         final bData = ByteData(14);
@@ -67,21 +67,21 @@ void main() {
 
       final expectedCrc = Crc32.compute(allPayloadBytes);
 
-      // 2. Découper en paquets DATA_CHUNK de 10 trames (140 octets de payload + 4 octets header)
+      // 2. Split into DATA_CHUNK packets of 10 frames (140 bytes payload + 4 bytes header)
       int seqNum = 1;
       for (int offset = 0; offset < allPayloadBytes.length; offset += 140) {
         final chunkSlice = allPayloadBytes.sublist(offset, offset + 140);
         final chunkHeader = ByteData(4);
         chunkHeader.setUint8(0, BleConstants.packetTypeDataChunk);
         chunkHeader.setUint16(1, seqNum++, Endian.big);
-        chunkHeader.setUint8(3, 10); // 10 trames
+        chunkHeader.setUint8(3, 10); // 10 frames
 
         final packetBytes = chunkHeader.buffer.asUint8List() + chunkSlice;
         final res = reassembler.processPacket(packetBytes);
         expect(res, isNull);
       }
 
-      // 3. Paquet END_OF_BURST (type: 0x03, seq: seqNum, total: 50, crc: expectedCrc)
+      // 3. END_OF_BURST packet (type: 0x03, seq: seqNum, total: 50, crc: expectedCrc)
       final endData = ByteData(12);
       endData.setUint8(0, BleConstants.packetTypeEndOfBurst);
       endData.setUint16(1, seqNum, Endian.big);
@@ -109,17 +109,17 @@ void main() {
       startData.setUint32(4, 1, Endian.big);
       reassembler.processPacket(startData.buffer.asUint8List());
 
-      // 1 CHUNK avec 14 octets
+      // 1 CHUNK with 14 bytes
       final chunkData = Uint8List(4 + 14);
       chunkData[0] = BleConstants.packetTypeDataChunk;
       chunkData[3] = 1;
       reassembler.processPacket(chunkData);
 
-      // END avec mauvais CRC
+      // END with invalid CRC
       final endData = ByteData(12);
       endData.setUint8(0, BleConstants.packetTypeEndOfBurst);
       endData.setUint32(4, 1, Endian.big);
-      endData.setUint32(8, 0x12345678, Endian.big); // CRC invalide
+      endData.setUint32(8, 0x12345678, Endian.big); // Invalid CRC
 
       final result = reassembler.processPacket(endData.buffer.asUint8List());
 

@@ -4,8 +4,8 @@ import 'telemetry/telemetry_batch_model.dart';
 
 const _uuid = Uuid();
 
-/// Modèle représentant une session d'enregistrement Studio complète réassemblée.
-/// Référence contractuelle : contracts/README.md (Topic telemetry/raw) & TelemetryBatch
+/// Model representing a complete reassembled Studio recording session.
+/// Contract reference: contracts/README.md (Topic telemetry/raw) & TelemetryBatch
 class StudioSessionModel {
   final String sessionId;
   final String label;
@@ -25,7 +25,7 @@ class StudioSessionModel {
     required this.readings,
   });
 
-  /// Fabrique assurant la génération d'un UUID v4 canonique pour [sessionId].
+  /// Factory ensuring canonical UUID v4 generation for [sessionId].
   factory StudioSessionModel.create({
     String? sessionId,
     required String label,
@@ -47,20 +47,20 @@ class StudioSessionModel {
     );
   }
 
-  /// Convertit la session Studio en lots de télémétrie conformes au contrat Pydantic TelemetryBatch.
+  /// Converts the Studio session into telemetry batches conforming to the Pydantic TelemetryBatch contract.
   List<TelemetryBatch> toTelemetryBatches({int maxReadingsPerChunk = 500}) {
     return TelemetryBatch.fromStudioSession(this, maxReadingsPerChunk: maxReadingsPerChunk);
   }
 
-  /// Découpe la session en lots (chunks) de dictionnaires JSON sérialisés selon TelemetryBatch,
-  /// garantissant de rester sous la limite AWS IoT Core (128 Ko par message).
+  /// Splits the session into chunks of JSON dictionaries serialized per TelemetryBatch,
+  /// guaranteeing to stay under the AWS IoT Core limit (128 KB per message).
   List<Map<String, dynamic>> toMqttBatchPayloads({int maxReadingsPerChunk = 500}) {
     return toTelemetryBatches(maxReadingsPerChunk: maxReadingsPerChunk)
         .map((batch) => batch.toJson())
         .toList();
   }
 
-  /// Sérialise le payload pour la déclaration REST auprès du backend FastAPI.
+  /// Serializes the payload for REST declaration with the FastAPI backend.
   Map<String, dynamic> toRestApiPayload() {
     return {
       'id': sessionId,

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Modèle représentant une entrée du journal d'événements de la passerelle mobile.
+/// Model representing a mobile gateway event log entry.
 class LogEntry {
   final DateTime timestamp;
   final String tag;
@@ -14,7 +14,7 @@ class LogEntry {
     this.color = Colors.grey,
   });
 
-  /// Timestamp formaté au format HH:mm:ss.SSS
+  /// Formatted timestamp in HH:mm:ss.SSS format
   String get formattedTimestamp {
     final h = timestamp.hour.toString().padLeft(2, '0');
     final m = timestamp.minute.toString().padLeft(2, '0');
@@ -23,7 +23,7 @@ class LogEntry {
     return '$h:$m:$s.$ms';
   }
 
-  /// Ligne de log textuelle pour export
+  /// Text log line for export
   String toFormattedLine() {
     return '[$formattedTimestamp] [$tag] $message';
   }

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// Service gérant la persistance chiffrée et sécurisée des jetons JWT d'authentification
+/// Service managing secure encrypted persistence of authentication JWT tokens
 /// via flutter_secure_storage (Android Keystore / iOS Keychain).
 class TokenStorageService {
   static const String _keyAccessToken = 'hk_access_token';
@@ -20,7 +20,7 @@ class TokenStorageService {
               ),
             );
 
-  /// Sauvegarde les jetons d'accès et de rafraîchissement de façon chiffrée.
+  /// Saves access and refresh tokens in encrypted storage.
   Future<void> saveTokens({
     required String accessToken,
     String? refreshToken,
@@ -31,36 +31,36 @@ class TokenStorageService {
     }
   }
 
-  /// Récupère le jeton d'accès actuel.
+  /// Retrieves the current access token.
   Future<String?> getAccessToken() async {
     return _storage.read(key: _keyAccessToken);
   }
 
-  /// Récupère le jeton de rafraîchissement actuel.
+  /// Retrieves the current refresh token.
   Future<String?> getRefreshToken() async {
     return _storage.read(key: _keyRefreshToken);
   }
 
-  /// Supprime tous les jetons stockés (déconnexion).
+  /// Clears all stored tokens (logout).
   Future<void> clearTokens() async {
     await _storage.delete(key: _keyAccessToken);
     await _storage.delete(key: _keyRefreshToken);
   }
 
-  /// Vérifie si un jeton d'accès est présent en mémoire chiffrée.
+  /// Checks if a valid access token is present in encrypted storage.
   Future<bool> hasValidToken() async {
     final token = await getAccessToken();
     return token != null && token.trim().isNotEmpty;
   }
 
-  /// Extrait l'ID utilisateur ('sub') directement depuis le payload JWT de l'access token stocké.
+  /// Extracts user ID ('sub') directly from the stored access token JWT payload.
   Future<String?> getUserIdFromToken() async {
     final token = await getAccessToken();
     if (token == null || token.trim().isEmpty) return null;
     return parseUserId(token);
   }
 
-  /// Décode le payload d'un jeton JWT sans validation cryptographique pour en extraire le claim 'sub'.
+  /// Decodes JWT payload without cryptographic validation to extract the 'sub' claim.
   static String? parseUserId(String token) {
     try {
       final parts = token.split('.');

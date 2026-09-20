@@ -5,12 +5,12 @@ import 'package:healthkicks_mobile/models/studio_session_model.dart';
 import 'package:healthkicks_mobile/models/telemetry/telemetry_batch_model.dart';
 
 void main() {
-  group('TelemetryBatch & Contrat Pydantic Edge', () {
+  group('TelemetryBatch & Edge Pydantic Contract', () {
     final uuidRegex = RegExp(
       r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
     );
 
-    test('Header génère les valeurs par défaut conformes (schema_version 1.0, UUIDv4, ISO UTC)', () {
+    test('Header generates compliant default values (schema_version 1.0, UUIDv4, ISO UTC)', () {
       final header = TelemetryHeader(deviceId: 'HK-DEV-001');
       final json = header.toJson();
 
@@ -20,7 +20,7 @@ void main() {
       expect(DateTime.parse(json['timestamp'] as String).isUtc, isTrue);
     });
 
-    test('Sérialise un TelemetryBatch complet avec arborescence strictement conforme', () {
+    test('Serializes a complete TelemetryBatch with strictly compliant tree', () {
       const session = StudioSessionModel(
         sessionId: 'session-test-uuid',
         label: 'sprint_400m',
@@ -54,7 +54,7 @@ void main() {
       final batch = batches.first;
       final json = batch.toJson();
 
-      // 1. Validation Header
+      // 1. Header validation
       expect(json.containsKey('header'), isTrue);
       final header = json['header'] as Map<String, dynamic>;
       expect(header['device_id'], equals('HK-SHOE-042'));
@@ -62,7 +62,7 @@ void main() {
       expect(uuidRegex.hasMatch(header['msg_id'] as String), isTrue);
       expect(DateTime.parse(header['timestamp'] as String).isUtc, isTrue);
 
-      // 2. Validation Metadata
+      // 2. Metadata validation
       expect(json.containsKey('metadata'), isTrue);
       final metadata = json['metadata'] as Map<String, dynamic>;
       expect(metadata['sample_count'], equals(2));
@@ -72,7 +72,7 @@ void main() {
       expect(DateTime.parse(metadata['window_start'] as String).isUtc, isTrue);
       expect(DateTime.parse(metadata['window_end'] as String).isUtc, isTrue);
 
-      // 3. Validation Readings
+      // 3. Readings validation
       expect(json.containsKey('readings'), isTrue);
       final readings = json['readings'] as List<dynamic>;
       expect(readings.length, equals(2));
@@ -96,7 +96,7 @@ void main() {
       expect(rPayload['gz'], closeTo(0.5, 0.001));
     });
 
-    test('toMqttBatchPayloads retourne des payloads sérialisables en JSON valides', () {
+    test('toMqttBatchPayloads returns valid JSON-serializable payloads', () {
       const session = StudioSessionModel(
         sessionId: 'sess-json-test',
         label: 'marche',
@@ -126,7 +126,7 @@ void main() {
       expect((decoded['readings'] as List).length, equals(1));
     });
 
-    test('Découpe par lots (chunking) respecte la taille maximale par lot', () {
+    test('Batch chunking respects maximum chunk size', () {
       final dummyReadings = List.generate(
         1250,
         (i) => ImuReadingModel(
@@ -158,7 +158,7 @@ void main() {
       expect(batches[2].metadata.sampleCount, equals(250));
       expect(batches[2].readings.length, equals(250));
 
-      // Vérification que chaque batch a des fenêtres temporelles cohérentes
+      // Verify that each batch has consistent time windows
       final start0 = DateTime.parse(batches[0].metadata.windowStart);
       final end0 = DateTime.parse(batches[0].metadata.windowEnd);
       expect(start0.isBefore(end0), isTrue);
@@ -167,7 +167,7 @@ void main() {
       expect(end0.isBefore(start1) || end0.isAtSameMomentAs(start1), isTrue);
     });
 
-    test('TelemetryBatch.fromJson reconstruit fidèlement un objet', () {
+    test('TelemetryBatch.fromJson accurately reconstructs an object', () {
       final original = TelemetryBatch(
         header: TelemetryHeader(deviceId: 'HK-999', schemaVersion: '1.0'),
         metadata: const BatchMetadata(
@@ -199,7 +199,7 @@ void main() {
       expect(parsed.readings.first.payload.gz, equals(6.0));
     });
 
-    test('StudioSessionModel.create génère automatiquement un UUID v4 canonique et toRestApiPayload est conforme', () {
+    test('StudioSessionModel.create automatically generates canonical UUIDv4 and toRestApiPayload is compliant', () {
       final session = StudioSessionModel.create(
         label: 'course_vitesse',
         deviceId: 'HK-SHOE-777',

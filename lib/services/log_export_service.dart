@@ -2,9 +2,9 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/log_entry_model.dart';
 
-/// Service d'exportation et d'envoi par email du journal d'événements mobile.
+/// Service for exporting and emailing the mobile event log.
 class LogExportService {
-  /// Formate une liste d'entrées de log en un rapport texte structuré.
+  /// Formats a list of log entries into a structured text report.
   static String formatLogs({
     required List<LogEntry> logs,
     required String deviceId,
@@ -36,7 +36,7 @@ class LogExportService {
     return buffer.toString();
   }
 
-  /// Construit une URI mailto: conforme avec encodage des paramètres d'interrogation.
+  /// Constructs a conforming mailto: URI with query parameter encoding.
   static Uri buildMailtoUri({
     String recipient = '',
     required String subject,
@@ -60,8 +60,8 @@ class LogExportService {
         .join('&');
   }
 
-  /// Ouvre l'application de messagerie par défaut avec le brouillon prérempli.
-  /// Un `launcher` alternatif peut être injecté pour les tests unitaires.
+  /// Opens the default email app with the prefilled draft.
+  /// An alternative `launcher` can be injected for unit tests.
   static Future<bool> sendEmail({
     String recipient = '',
     required String subject,
@@ -79,7 +79,7 @@ class LogExportService {
     }
   }
 
-  /// Copie la chaîne de texte dans le presse-papier du système.
+  /// Copies text string to system clipboard.
   static Future<void> copyToClipboard(String text) async {
     await Clipboard.setData(ClipboardData(text: text));
   }

@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
-/// Modèle d'une trame inertielle IMU découpée (14 octets) reçue lors d'un Burst Transfer.
-/// Référence contractuelle : contracts/ble_gatt_specs.md (Caractéristique 4)
+/// Model representing an unpacked 6-axis IMU inertial frame (14 bytes) received during Burst Transfer.
+/// Contract reference: contracts/ble_gatt_specs.md (Characteristic 4)
 class ImuReadingModel {
   final int deltaMs;
   final double ax;
@@ -21,12 +21,12 @@ class ImuReadingModel {
     required this.gz,
   });
 
-  /// Décode les 14 octets d'une trame IMU Big-Endian :
+  /// Decodes 14 bytes of a Big-Endian IMU frame:
   /// delta_ms: uint16, ax/ay/az: 3x int16 (milli-g / 1000.0), gx/gy/gz: 3x int16 (0.1 deg/s / 10.0)
   factory ImuReadingModel.fromBytes(Uint8List bytes, int offset) {
     if (bytes.length < offset + 14) {
       throw FormatException(
-        'Trame IMU tronquée : attendu 14 octets à l\'offset $offset, total disponible: ${bytes.length}',
+        'Truncated IMU frame: expected 14 bytes at offset $offset, total available: ${bytes.length}',
       );
     }
 
@@ -51,7 +51,7 @@ class ImuReadingModel {
     );
   }
 
-  /// Sérialise en dictionnaire JSON conforme aux attentes du Backend DynamoDB.
+  /// Serializes to JSON dictionary conforming to DynamoDB Backend requirements.
   Map<String, dynamic> toJson(double sessionStartTimestamp) {
     return {
       'timestamp': sessionStartTimestamp + (deltaMs / 1000.0),

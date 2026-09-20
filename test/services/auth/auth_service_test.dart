@@ -8,7 +8,7 @@ import 'package:healthkicks_mobile/services/auth/token_storage_service.dart';
 import 'token_storage_service_test.dart';
 
 void main() {
-  group('AuthService - Flux SSO OAuth2 et Deep Links', () {
+  group('AuthService - SSO OAuth2 Flow and Deep Links', () {
     late FakeFlutterSecureStorage fakeStorage;
     late TokenStorageService tokenStorage;
 
@@ -17,7 +17,7 @@ void main() {
       tokenStorage = TokenStorageService(storage: fakeStorage);
     });
 
-    test('signInWithGoogle - Lance l\'URL OAuth Google avec redirect=true', () async {
+    test('signInWithGoogle - Launches Google OAuth URL with redirect=true', () async {
       Uri? launchedUri;
       LaunchMode? launchedMode;
 
@@ -39,7 +39,7 @@ void main() {
       expect(launchedMode, equals(LaunchMode.externalApplication));
     });
 
-    test('signInWithGoogle - Gère proprement le slash final sur https://healthkicks.duckdns.org/', () async {
+    test('signInWithGoogle - Cleanly handles trailing slash on https://healthkicks.duckdns.org/', () async {
       Uri? launchedUri;
 
       final authService = AuthService(
@@ -61,7 +61,7 @@ void main() {
       );
     });
 
-    test('signInWithAzure - Lance l\'URL OAuth Azure avec redirect=true', () async {
+    test('signInWithAzure - Launches Azure OAuth URL with redirect=true', () async {
       Uri? launchedUri;
       LaunchMode? launchedMode;
 
@@ -83,7 +83,7 @@ void main() {
       expect(launchedMode, equals(LaunchMode.externalApplication));
     });
 
-    test('signInWithAzure - Gère proprement le slash final et backendUrl explicite', () async {
+    test('signInWithAzure - Cleanly handles trailing slash and explicit backendUrl', () async {
       Uri? launchedUri;
 
       final authService = AuthService(
@@ -105,7 +105,7 @@ void main() {
       );
     });
 
-    test('handleDeepLink - Succès : extrait les tokens, interroge /me et passe en authenticated', () async {
+    test('handleDeepLink - Success: extracts tokens, queries /me, and transitions to authenticated', () async {
       final mockClient = MockClient((request) async {
         if (request.url.path == '/api/v1/auth/me') {
           expect(request.headers['Authorization'], equals('Bearer jwt_access_abc'));
@@ -144,7 +144,7 @@ void main() {
       expect(await tokenStorage.getRefreshToken(), equals('jwt_refresh_xyz'));
     });
 
-    test('handleDeepLink - Erreur OAuth : capture le message d\'erreur et passe en unauthenticated', () async {
+    test('handleDeepLink - OAuth error: captures error message and transitions to unauthenticated', () async {
       final authService = AuthService(
         backendBaseUrl: 'http://127.0.0.1:8000',
         tokenStorage: tokenStorage,
@@ -162,7 +162,7 @@ void main() {
       expect(await tokenStorage.hasValidToken(), isFalse);
     });
 
-    test('handleDeepLink - Ignore les URIs non destinées à healthkicks://auth', () async {
+    test('handleDeepLink - Ignores URIs not intended for healthkicks://auth', () async {
       final authService = AuthService(
         backendBaseUrl: 'http://127.0.0.1:8000',
         tokenStorage: tokenStorage,
@@ -175,7 +175,7 @@ void main() {
       expect(authService.state, equals(AuthState.initial));
     });
 
-    test('AuthService - Utilise par défaut AppConfig.backendBaseUrl (port 8443)', () {
+    test('AuthService - Defaults to AppConfig.backendBaseUrl (port 8443)', () {
       final authService = AuthService(
         tokenStorage: tokenStorage,
       );
@@ -183,7 +183,7 @@ void main() {
       expect(authService.backendBaseUrl, equals('https://healthkicks.duckdns.org:8443'));
     });
 
-    test('logout - Supprime les jetons et réinitialise l\'état', () async {
+    test('logout - Deletes tokens and resets state', () async {
       await tokenStorage.saveTokens(accessToken: 'token_to_clear');
       final authService = AuthService(
         backendBaseUrl: 'http://127.0.0.1:8000',

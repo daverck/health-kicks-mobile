@@ -6,7 +6,7 @@ import 'package:healthkicks_mobile/services/log_export_service.dart';
 
 void main() {
   group('LogEntry Model', () {
-    test('formate correctement le timestamp avec zéros de tête', () {
+    test('correctly formats timestamp with leading zeros', () {
       final entry = LogEntry(
         timestamp: DateTime(2026, 9, 17, 9, 5, 3, 42),
         tag: 'BLE',
@@ -20,7 +20,7 @@ void main() {
   });
 
   group('LogExportService.formatLogs', () {
-    test('formate un rapport avec des entrées de logs et métadonnées complètes', () {
+    test('formats report with log entries and complete metadata', () {
       final exportDate = DateTime(2026, 9, 17, 14, 30, 0);
       final logs = [
         LogEntry(
@@ -56,7 +56,7 @@ void main() {
       expect(report, contains('========================================'));
     });
 
-    test('gère un journal vide avec mention explicite', () {
+    test('handles empty log with explicit mention', () {
       final report = LogExportService.formatLogs(
         logs: [],
         deviceId: 'HK-2',
@@ -72,7 +72,7 @@ void main() {
   });
 
   group('LogExportService.buildMailtoUri', () {
-    test('construit une URI mailto avec encodage RFC 3986 des paramètres', () {
+    test('builds mailto URI with RFC 3986 parameter encoding', () {
       final uri = LogExportService.buildMailtoUri(
         recipient: 'support@healthkicks.fr',
         subject: 'Journal HealthKicks & Diagnostic',
@@ -85,7 +85,7 @@ void main() {
       expect(uri.queryParameters['body'], 'Ligne 1\nLigne 2 avec caractères accentués : éàç');
     });
 
-    test('permet de laisser le destinataire vide pour choix dans le client mail', () {
+    test('allows leaving recipient empty for selection in mail client', () {
       final uri = LogExportService.buildMailtoUri(
         recipient: '  ',
         subject: 'Diagnostic HK',
@@ -99,7 +99,7 @@ void main() {
   });
 
   group('LogExportService.sendEmail', () {
-    test('invoque le launcher avec l\'URI construite et le mode externalApplication', () async {
+    test('invokes launcher with constructed URI and externalApplication mode', () async {
       Uri? capturedUri;
       LaunchMode? capturedMode;
 
@@ -120,7 +120,7 @@ void main() {
       expect(capturedMode, LaunchMode.externalApplication);
     });
 
-    test('capture les exceptions et retourne false en cas d\'échec de lancement', () async {
+    test('catches exceptions and returns false on launch failure', () async {
       final success = await LogExportService.sendEmail(
         recipient: 'test@example.com',
         subject: 'Test Subject',

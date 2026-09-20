@@ -13,8 +13,8 @@ const _uuid = Uuid();
 
 typedef CoordinatorLogCallback = void Function(String message, {bool isError});
 
-/// Coordinateur central assurant le routage transparent bidirectionnel BLE <-> MQTT
-/// et l'initiation des sessions Studio auprès du Backend FastAPI.
+/// Central coordinator ensuring transparent bidirectional routing BLE <-> MQTT
+/// and initiating Studio sessions with the FastAPI Backend.
 class GatewayCoordinator {
   final BleFootwearClient bleClient;
   final MqttGatewayService mqttService;
@@ -31,7 +31,7 @@ class GatewayCoordinator {
   final _studioSessionSavedController =
       StreamController<StudioSessionModel>.broadcast();
 
-  /// Flux notifiant la fin d'enregistrement et la synchronisation d'une session Studio.
+  /// Stream notifying the end of recording and synchronization of a Studio session.
   Stream<StudioSessionModel> get studioSessionSavedStream =>
       _studioSessionSavedController.stream;
 
@@ -52,37 +52,37 @@ class GatewayCoordinator {
     this.onLog,
   });
 
-  /// Démarre le routage bidirectionnel entre le BLE et le MQTT
-  /// et notifie le statut "online" de l'équipement BLE sur AWS IoT Core si connecté.
+  /// Starts bidirectional routing between BLE and MQTT
+  /// and notifies "online" presence status of the BLE device on AWS IoT Core if connected.
   void startRouting() {
     if (mqttService.isConnected) {
       unawaited(publishBleStatus(online: true));
     }
 
-    // 1. Relais montant : BLE Activity Detection -> Cloud MQTT
+    // 1. Upstream relay: BLE Activity Detection -> Cloud MQTT
     _activitySub = bleClient.activityStream.listen((detection) async {
       await mqttService.publishActivityDetection(detection);
     });
 
-    // 2. Relais descendant : Cloud MQTT Haptic Command -> BLE Footwear
+    // 2. Downstream relay: Cloud MQTT Haptic Command -> BLE Footwear
     _hapticSub = mqttService.hapticCommandStream.listen((command) async {
       await bleClient.sendHapticCommand(command);
     });
 
-    // 3. Relais descendant : Cloud MQTT Studio Start Command -> BLE Footwear
+    // 3. Downstream relay: Cloud MQTT Studio Start Command -> BLE Footwear
     _studioCommandSub = mqttService.studioCommandStream.listen((command) async {
       onLog?.call(
-        '[GATEWAY] Commande Studio distante reçue (session_id: ${command.sessionId}, label: ${command.label}, durée: ${command.durationSec}s)',
+        '[GATEWAY] Remote Studio command received (session_id: ${command.sessionId}, label: ${command.label}, duration: ${command.durationSec}s)',
         isError: false,
       );
       await handleRemoteStudioCommand(command);
     });
 
-    // 4. Écoute du statut Studio BLE (pour libérer l'état en cas d'annulation ou erreur)
+    // 4. Listen to BLE Studio status (to release state on cancellation or error)
     _studioStatusSub = bleClient.studioStatusStream.listen((status) {
       if (status.startsWith('ERROR') || status == 'CANCELLED') {
         onLog?.call(
-          '[GATEWAY] Statut Studio BLE reçu : $status -> Libération de l\'état de capture.',
+          '[GATEWAY] BLE Studio status received: $status -> Releasing capture state.',
           isError: status.startsWith('ERROR'),
         );
         _isStudioRecordingActive = false;
@@ -91,17 +91,17 @@ class GatewayCoordinator {
       }
     });
 
-    // 5. Relais batch : BLE Studio Data Burst reassemblé -> Cloud MQTT DynamoDB
+    // 5. Batch relay: Reassembled BLE Studio Data Burst -> Cloud MQTT DynamoDB
     _burstSub = bleClient.burstResultStream.listen((result) async {
       onLog?.call(
-        '[GATEWAY] Paquet fin de burst reçu : complété=${result.isCompleted}, '
-        'CRC valide=${result.isCrcValid}, trames=${result.framesRecovered}/${result.totalAnnounced}',
+        '[GATEWAY] End-of-burst packet received: completed=${result.isCompleted}, '
+        'CRC valid=${result.isCrcValid}, frames=${result.framesRecovered}/${result.totalAnnounced}',
         isError: !result.isSuccess,
       );
 
       if (result.readings.isEmpty) {
         onLog?.call(
-          '[GATEWAY] Aucun échantillon IMU contenu dans le burst reçu.',
+          '[GATEWAY] No IMU samples contained in received burst.',
           isError: true,
         );
         return;
@@ -109,7 +109,7 @@ class GatewayCoordinator {
 
       if (!result.isCrcValid) {
         onLog?.call(
-          '[GATEWAY] Avertissement CRC32 non concordant. Les ${result.readings.length} trames reçues sont tout de même transmises.',
+          '[GATEWAY] CRC32 mismatch warning. The ${result.readings.length} received frames are still forwarded.',
           isError: true,
         );
       }
@@ -125,21 +125,21 @@ class GatewayCoordinator {
         readings: result.readings,
       );
 
-      // Publication MQTT vers DynamoDB
+      // MQTT publish towards DynamoDB
       try {
         onLog?.call(
-          '[GATEWAY] Publication de la session ${session.sessionId} (${session.readings.length} trames) vers MQTT...',
+          '[GATEWAY] Publishing session ${session.sessionId} (${session.readings.length} frames) to MQTT...',
           isError: false,
         );
         await mqttService.publishStudioSession(session);
         _studioSessionSavedController.add(session);
         onLog?.call(
-          '[GATEWAY] Session ${session.sessionId} publiée avec succès via MQTT.',
+          '[GATEWAY] Session ${session.sessionId} published successfully via MQTT.',
           isError: false,
         );
       } catch (e) {
         onLog?.call(
-          '[GATEWAY] Erreur lors de la publication MQTT : $e',
+          '[GATEWAY] Error publishing to MQTT: $e',
           isError: true,
         );
       } finally {
@@ -150,8 +150,8 @@ class GatewayCoordinator {
     });
   }
 
-  /// Déclenche une session Studio, réserve la session dans PostgreSQL via l'API REST
-  /// du backend FastAPI pour obtenir l'UUID officiel [sessionId], puis commande la chaussure en BLE.
+  /// Triggers a Studio session, reserves the session in PostgreSQL via the FastAPI backend
+  /// REST API to obtain official UUID [sessionId], then commands footwear over BLE.
   Future<void> triggerStudioSession({
     required String label,
     required double durationSec,
@@ -159,7 +159,7 @@ class GatewayCoordinator {
   }) async {
     if (_isStudioRecordingActive) {
       onLog?.call(
-        '[GATEWAY] Session Studio déjà en cours d\'enregistrement. Déclenchement local ignoré.',
+        '[GATEWAY] Studio session already recording. Local trigger ignored.',
         isError: false,
       );
       return;
@@ -201,14 +201,14 @@ class GatewayCoordinator {
     );
   }
 
-  /// Traite une commande Studio déclenchée à distance depuis le Web / Backend via MQTT.
-  /// Réutilise strictement le [session_id] déjà alloué et persisté par le backend dans PostgreSQL,
-  /// sans ré-effectuer d'appel REST de réservation redondant.
+  /// Handles a Studio command triggered remotely from Web / Backend via MQTT.
+  /// Strictly reuses the [session_id] already allocated and persisted by the backend in PostgreSQL,
+  /// without issuing a redundant reservation REST call.
   Future<void> handleRemoteStudioCommand(StudioCommandModel command) async {
-    // Vérifier si une capture est déjà active ou si l'ID de session correspond à la session locale amorcée
+    // Check if capture is already active or if session ID matches locally started session
     if (_activeLocalSessionId == command.sessionId || _isStudioRecordingActive) {
       onLog?.call(
-        '[GATEWAY] Écho de session Studio ignoré (session active: ${command.sessionId})',
+        '[GATEWAY] Studio session echo ignored (active session: ${command.sessionId})',
         isError: false,
       );
       return;
@@ -222,7 +222,7 @@ class GatewayCoordinator {
         DateTime.now().millisecondsSinceEpoch / 1000.0;
 
     onLog?.call(
-      '[GATEWAY] Déclenchement de la capture BLE pour la commande distante (session: ${command.sessionId})...',
+      '[GATEWAY] Triggering BLE capture for remote command (session: ${command.sessionId})...',
       isError: false,
     );
 
@@ -233,7 +233,7 @@ class GatewayCoordinator {
     );
   }
 
-  /// Interrompt le routage et notifie optionnellement le statut "offline" de l'équipement BLE sur AWS IoT Core.
+  /// Stops routing and optionally notifies "offline" status of BLE device on AWS IoT Core.
   void stopRouting({bool notifyOffline = true}) {
     _isStudioRecordingActive = false;
     if (notifyOffline) {
@@ -251,11 +251,11 @@ class GatewayCoordinator {
     _burstSub = null;
   }
 
-  /// Publie le statut de présence de la chaussure BLE sur le topic de statut de l'équipement.
+  /// Publishes BLE footwear presence status to device status topic.
   Future<void> publishBleStatus({required bool online}) async {
     if (!mqttService.isConnected) {
       onLog?.call(
-        '[GATEWAY] Publication présence ($deviceId -> ${online ? "online" : "offline"}) différée : MQTT non connecté.',
+        '[GATEWAY] Presence publishing ($deviceId -> ${online ? "online" : "offline"}) deferred: MQTT not connected.',
         isError: false,
       );
       return;
@@ -264,12 +264,12 @@ class GatewayCoordinator {
     try {
       await mqttService.publishGatewayStatus(online: online);
       onLog?.call(
-        '[GATEWAY] Statut présence équipement ($deviceId) : ${online ? "online" : "offline"}',
+        '[GATEWAY] Device presence status ($deviceId): ${online ? "online" : "offline"}',
         isError: false,
       );
     } catch (e) {
       onLog?.call(
-        '[GATEWAY] Erreur publication présence équipement ($deviceId) : $e',
+        '[GATEWAY] Error publishing device presence ($deviceId): $e',
         isError: false,
       );
     }

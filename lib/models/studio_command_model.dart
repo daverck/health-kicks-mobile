@@ -1,5 +1,5 @@
-/// Modèle représentant une commande Studio descendante émise depuis le Web/Backend via AWS IoT Core.
-/// Référence contractuelle : healthkicks/v1/{device_id}/commands/studio/start
+/// Model representing an incoming Studio command issued from Web/Backend via AWS IoT Core.
+/// Contract reference: healthkicks/v1/{device_id}/commands/studio/start
 class StudioCommandModel {
   final String sessionId;
   final String label;

@@ -8,8 +8,8 @@ import '../auth/token_storage_service.dart';
 
 typedef StudioLogCallback = void Function(String message, {bool isError});
 
-/// Réponse retournée par l'API backend lors de l'initiation d'une commande Studio.
-/// Conforme au schéma Pydantic `StudioStartResponse`.
+/// Response returned by the backend API upon initiating a Studio command.
+/// Conforms to the Pydantic `StudioStartResponse` schema.
 class StudioStartResponse {
   final String status;
   final String deviceId;
@@ -50,8 +50,8 @@ class StudioStartResponse {
   }
 }
 
-/// Service client REST pour la gestion et la persistance des sessions Studio
-/// auprès de l'API backend FastAPI HealthKicks.
+/// REST client service for managing and persisting Studio sessions
+/// with the HealthKicks FastAPI backend API.
 class StudioApiService {
   final String _backendBaseUrl;
   final http.Client _httpClient;
@@ -75,10 +75,10 @@ class StudioApiService {
 
   String get backendBaseUrl => _backendBaseUrl;
 
-  /// Déclenche et réserve une session Studio dans la table PostgreSQL
-  /// `studio_sessions` via l'API REST du backend FastAPI :
+  /// Triggers and reserves a Studio session in the PostgreSQL `studio_sessions`
+  /// table via the FastAPI backend REST API:
   /// `POST /api/v1/devices/{device_id}/commands/studio/start`
-  /// Retourne un [StudioStartResponse] contenant l'UUID officiel [sessionId].
+  /// Returns a [StudioStartResponse] containing the official UUID [sessionId].
   Future<StudioStartResponse> startStudioSession({
     required String deviceId,
     required String label,
@@ -91,7 +91,7 @@ class StudioApiService {
     String? token = await _tokenStorage.getAccessToken();
 
     if (token == null || token.trim().isEmpty) {
-      const msg = '[Studio] Aucun jeton d\'accès disponible pour déclencher la session Studio.';
+      const msg = '[Studio] No access token available to trigger Studio session.';
       onLog?.call(msg, isError: true);
       throw const HttpException(msg);
     }
@@ -120,10 +120,10 @@ class StudioApiService {
         body: body,
       );
 
-      // Gestion du renouvellement de token en cas de 401
+      // Handle token renewal on 401
       if (response.statusCode == 401) {
         onLog?.call(
-          '[Studio] Jeton d\'accès expiré (HTTP 401), tentative de rafraîchissement...',
+          '[Studio] Access token expired (HTTP 401), attempting refresh...',
           isError: false,
         );
 
@@ -144,7 +144,7 @@ class StudioApiService {
             );
           }
         } else {
-          const msg = '[Studio] Échec du rafraîchissement du jeton d\'authentification : reconnexion requise.';
+          const msg = '[Studio] Failed to refresh authentication token: login required.';
           onLog?.call(msg, isError: true);
           await _authService?.logout();
           await _tokenStorage.clearTokens();
@@ -156,25 +156,25 @@ class StudioApiService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final startResponse = StudioStartResponse.fromJson(data);
         onLog?.call(
-          '[Studio] Session réservée avec succès dans le backend (id: ${startResponse.sessionId})',
+          '[Studio] Session reserved successfully in backend (id: ${startResponse.sessionId})',
           isError: false,
         );
         return startResponse;
       } else {
         final errorMsg =
-            '[Studio] Échec HTTP ${response.statusCode} lors de l\'initiation Studio : ${response.body}';
+            '[Studio] HTTP ${response.statusCode} failure during Studio initiation: ${response.body}';
         onLog?.call(errorMsg, isError: true);
         throw HttpException(errorMsg, uri: uri);
       }
     } catch (e) {
       if (e is! HttpException) {
-        onLog?.call('[Studio] Erreur réseau lors de l\'initiation Studio : $e', isError: true);
+        onLog?.call('[Studio] Network error during Studio initiation: $e', isError: true);
       }
       rethrow;
     }
   }
 
-  /// Alias de rétrocompatibilité créant et réservant la session auprès du backend.
+  /// Backward compatibility alias creating and reserving session with backend.
   Future<bool> createStudioSession({
     String? id,
     required String deviceId,

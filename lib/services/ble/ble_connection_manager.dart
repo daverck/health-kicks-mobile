@@ -14,7 +14,7 @@ enum BleConnectionStatus {
 
 typedef BleLogCallback = void Function(String message);
 
-/// Gestionnaire du cycle de vie de connexion Bluetooth Low Energy vers la chaussure HealthKicks.
+/// Bluetooth Low Energy connection lifecycle manager for the HealthKicks footwear device.
 class BleConnectionManager {
   final PermissionService _permissionService;
   final BleLogCallback? onLog;
@@ -47,15 +47,15 @@ class BleConnectionManager {
     }
   }
 
-  /// Démarre le scan et se connecte automatiquement au premier périphérique HealthKicks détecté.
-  /// Si aucun équipement n'est trouvé après [timeout] (par défaut 4 minutes), le scan s'arrête automatiquement.
+  /// Starts scanning and automatically connects to the first detected HealthKicks device.
+  /// If no device is found after [timeout] (default 3 minutes), scanning stops automatically.
   Future<void> startAutoConnect({
     String? targetDeviceId,
     Duration timeout = BleConstants.defaultScanTimeout,
     BleLogCallback? onLog,
   }) async {
     final log = onLog ?? this.onLog;
-    log?.call('[BLE] Vérification des permissions...');
+    log?.call('[BLE] Checking permissions...');
 
     final permsResult = await _permissionService.requestDetailedBlePermissions(
       onLog: (msg) => log?.call('[PERM] $msg'),
@@ -64,13 +64,13 @@ class BleConnectionManager {
     if (!permsResult.isGranted) {
       _updateStatus(BleConnectionStatus.disconnected);
       final reason = permsResult.isPermanentlyDenied
-          ? 'Permissions Bluetooth/Localisation définitivement refusées. Activez-les dans les Paramètres de l\'application.'
-          : 'Permissions Bluetooth ou Localisation non accordées (${permsResult.details}).';
+          ? 'Bluetooth/Location permissions permanently denied. Please enable them in app settings.'
+          : 'Bluetooth or Location permissions not granted (${permsResult.details}).';
       log?.call('[BLE] $reason');
       throw Exception(reason);
     }
 
-    // Arrêter tout scan et timer antérieurs avant de relancer
+    // Cancel any prior scan and timer before restarting
     _scanTimeoutTimer?.cancel();
     _scanTimeoutTimer = null;
     try {
@@ -79,29 +79,29 @@ class BleConnectionManager {
     await _scanSubscription?.cancel();
     _scanSubscription = null;
 
-    // Vérifier si le Bluetooth est allumé (avec timeout pour ne jamais bloquer)
+    // Check if Bluetooth is turned on (with timeout to never block)
     try {
       final state = await FlutterBluePlus.adapterState
           .first
           .timeout(const Duration(seconds: 2), onTimeout: () => BluetoothAdapterState.on);
       if (state != BluetoothAdapterState.on) {
-        log?.call('[BLE] Bluetooth inactif, tentative d\'activation...');
+        log?.call('[BLE] Bluetooth inactive, attempting activation...');
         await FlutterBluePlus.turnOn().timeout(const Duration(seconds: 4));
       }
     } catch (e) {
-      log?.call('[BLE] Avertissement adaptateur BT : $e');
+      log?.call('[BLE] BT adapter warning: $e');
     }
 
     _updateStatus(BleConnectionStatus.scanning);
     final timeoutLabel = timeout.inMinutes > 0
         ? '${timeout.inMinutes} minute(s)'
-        : '${timeout.inSeconds} seconde(s)';
-    log?.call('[BLE] Démarrage du scan (timeout: $timeoutLabel)...');
+        : '${timeout.inSeconds} second(s)';
+    log?.call('[BLE] Starting scan (timeout: $timeoutLabel)...');
 
-    // Déclencheur d'expiration du scan si aucun équipement n'est détecté
+    // Scan timeout trigger if no device is found
     _scanTimeoutTimer = Timer(timeout, () async {
       if (_status == BleConnectionStatus.scanning) {
-        log?.call('[BLE] Aucun équipement détecté après $timeoutLabel. Arrêt du scan.');
+        log?.call('[BLE] No device detected after $timeoutLabel. Stopping scan.');
         try {
           await FlutterBluePlus.stopScan();
         } catch (_) {}
@@ -122,7 +122,7 @@ class BleConnectionManager {
       _scanTimeoutTimer?.cancel();
       _scanTimeoutTimer = null;
       _updateStatus(BleConnectionStatus.disconnected);
-      log?.call('[BLE] Erreur démarrage scan : $e');
+      log?.call('[BLE] Error starting scan: $e');
       rethrow;
     }
 
@@ -135,8 +135,8 @@ class BleConnectionManager {
 
         if (!seenDevices.contains(deviceId)) {
           seenDevices.add(deviceId);
-          final displayName = name.isNotEmpty ? name : 'Inconnu';
-          log?.call('[BLE] Périphérique détecté : $displayName ($deviceId)');
+          final displayName = name.isNotEmpty ? name : 'Unknown';
+          log?.call('[BLE] Device detected: $displayName ($deviceId)');
         }
 
         final hasServiceUuid = r.advertisementData.serviceUuids.any(
@@ -151,7 +151,7 @@ class BleConnectionManager {
             deviceId.toLowerCase() == targetDeviceId.toLowerCase();
 
         if (hasServiceUuid || matchesTargetName || matchesTargetMac) {
-          log?.call('[BLE] Cible trouvée ($name / $deviceId), tentative de connexion...');
+          log?.call('[BLE] Target found ($name / $deviceId), attempting connection...');
           _scanTimeoutTimer?.cancel();
           _scanTimeoutTimer = null;
           try {
@@ -167,12 +167,12 @@ class BleConnectionManager {
     });
   }
 
-  /// Établit la connexion avec le périphérique et négocie le MTU maximal (>= 247).
+  /// Establishes connection with device and negotiates maximum MTU (>= 247).
   Future<void> connectToDevice(BluetoothDevice device, {BleLogCallback? onLog}) async {
     final log = onLog ?? this.onLog;
     _connectedDevice = device;
     _updateStatus(BleConnectionStatus.connecting);
-    log?.call('[BLE] Connexion en cours vers ${device.platformName} (${device.remoteId.str})...');
+    log?.call('[BLE] Connecting to ${device.platformName} (${device.remoteId.str})...');
 
     try {
       await device.connect(
@@ -180,44 +180,44 @@ class BleConnectionManager {
         timeout: const Duration(seconds: 15),
       );
       _updateStatus(BleConnectionStatus.connected);
-      log?.call('[BLE] Connecté à ${device.remoteId.str}. Négociation MTU...');
+      log?.call('[BLE] Connected to ${device.remoteId.str}. Negotiating MTU...');
 
-      // Négocier le MTU maximal (standard 247 sous Android)
+      // Negotiate maximum MTU (standard 247 on Android)
       if (Platform.isAndroid) {
         try {
           _negotiatedMtu = await device.requestMtu(247);
-          log?.call('[BLE] MTU négocié : $_negotiatedMtu octets.');
+          log?.call('[BLE] Negotiated MTU: $_negotiatedMtu bytes.');
         } catch (_) {
           _negotiatedMtu = 247;
-          log?.call('[BLE] Négociation MTU par défaut (247 octets).');
+          log?.call('[BLE] Default MTU negotiation (247 bytes).');
         }
       } else {
         _negotiatedMtu = 247;
       }
 
-      // Écouter l'état de connexion pour gérer la reconnexion automatique
+      // Listen to connection state to handle automatic reconnection
       _deviceStateSubscription = device.connectionState.listen((state) {
         if (state == BluetoothConnectionState.disconnected) {
-          log?.call('[BLE] Périphérique déconnecté.');
+          log?.call('[BLE] Device disconnected.');
           _updateStatus(BleConnectionStatus.disconnected);
         } else if (state == BluetoothConnectionState.connected) {
           if (_status != BleConnectionStatus.ready) {
-            log?.call('[BLE] Périphérique reconnecté.');
+            log?.call('[BLE] Device reconnected.');
             _updateStatus(BleConnectionStatus.connected);
           }
         }
       });
 
       _updateStatus(BleConnectionStatus.ready);
-      log?.call('[BLE] Périphérique prêt pour l\'initialisation des services.');
+      log?.call('[BLE] Device ready for services initialization.');
     } catch (e) {
       _updateStatus(BleConnectionStatus.disconnected);
-      log?.call('[BLE] Erreur connexion : $e');
+      log?.call('[BLE] Connection error: $e');
       rethrow;
     }
   }
 
-  /// Déconnecte proprement le périphérique actif.
+  /// Cleanly disconnects active device.
   Future<void> disconnect() async {
     _scanTimeoutTimer?.cancel();
     _scanTimeoutTimer = null;

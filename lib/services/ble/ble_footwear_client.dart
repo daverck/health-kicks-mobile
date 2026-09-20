@@ -9,8 +9,8 @@ import 'burst_reassembler.dart';
 
 typedef BleLogCallback = void Function(String message, {bool isError});
 
-/// Client GATT pour la chaussure connectée HealthKicks.
-/// Orchestre les souscriptions aux notifications et les écritures sur les 4 caractéristiques.
+/// GATT client for the HealthKicks smart footwear.
+/// Orchestrates notification subscriptions and writes across all 4 characteristics.
 class BleFootwearClient {
   final BluetoothDevice device;
   final BleLogCallback? onLog;
@@ -43,14 +43,14 @@ class BleFootwearClient {
 
   BleFootwearClient({required this.device, this.onLog});
 
-  /// Découvre les services et s'abonne aux notifications des caractéristiques 0002, 0004 et 0005.
+  /// Discovers services and subscribes to notifications for characteristics 0002, 0004, and 0005.
   Future<void> initializeServices() async {
     final services = await device.discoverServices();
     final serviceGuid = Guid(BleConstants.footwearServiceUuid);
 
     final targetService = services.firstWhere(
       (s) => s.uuid == serviceGuid,
-      orElse: () => throw StateError('Service HealthKicks Footwear ($serviceGuid) introuvable.'),
+      orElse: () => throw StateError('Service HealthKicks Footwear ($serviceGuid) not found.'),
     );
 
     for (final char in targetService.characteristics) {
@@ -88,7 +88,7 @@ class BleFootwearClient {
     final sub = char.onValueReceived.listen((bytes) {
       if (bytes.isNotEmpty) {
         final statusMsg = utf8.decode(bytes, allowMalformed: true).trim();
-        onLog?.call('[BLE] Notification Studio Control (0004) : "$statusMsg"', isError: false);
+        onLog?.call('[BLE] Studio Control notification (0004): "$statusMsg"', isError: false);
         _studioStatusController.add(statusMsg);
       }
     });
@@ -99,11 +99,11 @@ class BleFootwearClient {
   Future<void> _subscribeToStudioBurst(BluetoothCharacteristic char) async {
     final sub = char.onValueReceived.listen((bytes) {
       if (bytes.isNotEmpty) {
-        onLog?.call('[BLE] Paquet Burst reçu (taille=${bytes.length} octets)', isError: false);
+        onLog?.call('[BLE] Burst packet received (size=${bytes.length} bytes)', isError: false);
         final result = _burstReassembler.processPacket(bytes);
         if (result != null) {
           onLog?.call(
-            '[BLE] Fin du Burst détectée : ${result.framesRecovered}/${result.totalAnnounced} trames réassemblées (CRC32: ${result.isCrcValid ? "OK" : "Échec"})',
+            '[BLE] Burst completion detected: ${result.framesRecovered}/${result.totalAnnounced} frames reassembled (CRC32: ${result.isCrcValid ? "OK" : "Failed"})',
             isError: !result.isSuccess,
           );
           _burstResultController.add(result);
@@ -114,10 +114,10 @@ class BleFootwearClient {
     await char.setNotifyValue(true);
   }
 
-  /// Écrit une commande de vibration haptique (4 octets Big-Endian).
+  /// Writes a tactile haptic vibration command (4 bytes Big-Endian).
   Future<void> sendHapticCommand(HapticCommandModel command) async {
     if (_hapticChar == null) {
-      throw StateError('Caractéristique Haptic Command non initialisée.');
+      throw StateError('Haptic Command characteristic not initialized.');
     }
     final bytes = Uint8List(4);
     bytes[0] = command.patternId;
@@ -125,24 +125,24 @@ class BleFootwearClient {
     bytes[2] = (command.durationMs >> 8) & 0xFF;
     bytes[3] = command.durationMs & 0xFF;
     await _hapticChar!.write(bytes, withoutResponse: false);
-    onLog?.call('[BLE] Commande haptique émise: int=${command.intensity}, dur=${command.durationMs}ms', isError: false);
+    onLog?.call('[BLE] Haptic command sent: int=${command.intensity}, dur=${command.durationMs}ms', isError: false);
   }
 
-  /// Déclenche une session d'enregistrement Studio (START <label> <sec> <id>).
+  /// Triggers a Studio recording session (START <label> <sec> <id>).
   Future<void> startStudioSession({
     required String label,
     required double durationSec,
     required String sessionId,
   }) async {
     if (_studioControlChar == null) {
-      throw StateError('Caractéristique Studio Control non initialisée.');
+      throw StateError('Studio Control characteristic not initialized.');
     }
     _burstReassembler.reset();
     final cmd = 'START $label ${durationSec.toStringAsFixed(1)} $sessionId';
     await _studioControlChar!.write(utf8.encode(cmd), withoutResponse: false);
   }
 
-  /// Annule une session Studio en cours.
+  /// Cancels an ongoing Studio session.
   Future<void> cancelStudioSession() async {
     if (_studioControlChar == null) return;
     await _studioControlChar!.write(utf8.encode('CANCEL'), withoutResponse: false);

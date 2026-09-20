@@ -14,7 +14,7 @@ enum AuthState {
   unauthenticated,
 }
 
-/// Modèle utilisateur authentifié côté application mobile.
+/// Authenticated user model on the mobile application side.
 class AuthUser {
   final int id;
   final String email;
@@ -46,8 +46,8 @@ class AuthUser {
 
 typedef UrlLauncherFunction = Future<bool> Function(Uri url, {LaunchMode mode});
 
-/// Service d'authentification utilisateur via OAuth2/OIDC (Google, Azure SSO),
-/// deep linking et persistance chiffrée des jetons JWT.
+/// User authentication service via OAuth2/OIDC (Google, Azure SSO),
+/// deep linking and encrypted JWT token persistence.
 class AuthService extends ChangeNotifier {
   final TokenStorageService _tokenStorage;
   final http.Client _httpClient;
@@ -88,7 +88,7 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Initialisation de l'écoute des deep links pour le retour OAuth SSO.
+  /// Initializes listening for deep links for OAuth SSO return.
   void initDeepLinks() {
     _linkSubscription?.cancel();
     try {
@@ -105,8 +105,8 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  /// Initialisation silencieuse : vérifie si un token chiffré existe au démarrage
-  /// et initialise le listener des deep links.
+  /// Silent initialization: checks if an encrypted token exists at startup
+  /// and initializes the deep links listener.
   Future<bool> initialize() async {
     initDeepLinks();
 
@@ -121,7 +121,7 @@ class AuthService extends ChangeNotifier {
         return false;
       }
 
-      // Valider le token auprès du backend (/me)
+      // Validate token with backend (/me)
       final token = await _tokenStorage.getAccessToken();
       if (token == null) {
         _tokenUserId = null;
@@ -147,7 +147,7 @@ class AuthService extends ChangeNotifier {
         notifyListeners();
         return true;
       } else if (response.statusCode == 401) {
-        // Tenter un rafraîchissement si possible
+        // Attempt refresh if possible
         final refreshed = await refreshToken();
         if (refreshed) {
           _state = AuthState.authenticated;
@@ -161,7 +161,7 @@ class AuthService extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (_) {
-      // En mode hors-ligne : si un token existe, maintenir l'authentification locale
+      // In offline mode: if token exists, preserve local authentication
       final hasToken = await _tokenStorage.hasValidToken();
       if (hasToken) {
         _state = AuthState.authenticated;
@@ -177,8 +177,8 @@ class AuthService extends ChangeNotifier {
   static const String googleLoginPath = '/api/v1/auth/google/login?redirect=true';
   static const String azureLoginPath = '/api/v1/auth/azure/login?redirect=true';
 
-  /// Construit l'URL complète d'un endpoint backend en normalisant systématiquement
-  /// les slashs finaux de l'URL de base et le slash initial du chemin.
+  /// Constructs the full URL of a backend endpoint by systematically normalizing
+  /// trailing slashes on base URL and leading slash on path.
   String buildApiUrl(String endpointPath, {String? customBackendUrl}) {
     var base = (customBackendUrl ?? _backendBaseUrl).trim().replaceAll(RegExp(r'/+$'), '');
     var path = endpointPath.trim();
@@ -188,16 +188,16 @@ class AuthService extends ChangeNotifier {
     return '$base$path';
   }
 
-  /// Déclenche le flux SSO Google en ouvrant le navigateur externe
-  /// vers l'endpoint backend d'initiation OAuth :
+  /// Triggers Google SSO flow by opening the external browser
+  /// to the backend OAuth initiation endpoint:
   /// `<backendUrl>/api/v1/auth/google/login?redirect=true`.
   Future<bool> signInWithGoogle({String? backendUrl}) async {
     final fullUrl = buildApiUrl(googleLoginPath, customBackendUrl: backendUrl);
     return _openSsoBrowser(fullUrl);
   }
 
-  /// Déclenche le flux SSO Microsoft / Azure en ouvrant le navigateur externe
-  /// vers l'endpoint backend d'initiation OAuth :
+  /// Triggers Microsoft / Azure SSO flow by opening the external browser
+  /// to the backend OAuth initiation endpoint:
   /// `<backendUrl>/api/v1/auth/azure/login?redirect=true`.
   Future<bool> signInWithAzure({String? backendUrl}) async {
     final fullUrl = buildApiUrl(azureLoginPath, customBackendUrl: backendUrl);
@@ -213,21 +213,21 @@ class AuthService extends ChangeNotifier {
         mode: LaunchMode.externalApplication,
       );
       if (!launched) {
-        _lastError = 'Impossible d\'ouvrir le navigateur pour l\'authentification SSO';
+        _lastError = 'Unable to open browser for SSO authentication';
         notifyListeners();
         return false;
       }
       return true;
     } catch (e) {
-      _lastError = 'Erreur lors du lancement de l\'authentification SSO : $e';
+      _lastError = 'Error launching SSO authentication: $e';
       notifyListeners();
       return false;
     }
   }
 
-  /// Traite l'URI reçue en Deep Link (scheme: healthkicks, host: auth, path: /callback).
-  /// Extrait `access_token` et `refresh_token`, met à jour le stockage sécurisé
-  /// et charge le profil utilisateur `/api/v1/auth/me`.
+  /// Processes URI received via Deep Link (scheme: healthkicks, host: auth, path: /callback).
+  /// Extracts `access_token` and `refresh_token`, updates secure storage
+  /// and loads the user profile `/api/v1/auth/me`.
   Future<bool> handleDeepLink(Uri uri) async {
     if (uri.scheme != 'healthkicks' || uri.host != 'auth') {
       return false;
@@ -236,7 +236,7 @@ class AuthService extends ChangeNotifier {
     if (uri.queryParameters.containsKey('error')) {
       _lastError = uri.queryParameters['error_description'] ??
           uri.queryParameters['error'] ??
-          'Échec d\'authentification OAuth';
+          'OAuth authentication failed';
       _state = AuthState.unauthenticated;
       notifyListeners();
       return false;
@@ -246,7 +246,7 @@ class AuthService extends ChangeNotifier {
     final refreshToken = uri.queryParameters['refresh_token'];
 
     if (accessToken == null || accessToken.isEmpty) {
-      _lastError = 'Jeton d\'accès absent de la réponse SSO';
+      _lastError = 'Access token missing from SSO response';
       _state = AuthState.unauthenticated;
       notifyListeners();
       return false;
@@ -262,7 +262,7 @@ class AuthService extends ChangeNotifier {
     );
     _tokenUserId = TokenStorageService.parseUserId(accessToken);
 
-    // Tenter de charger le profil utilisateur
+    // Attempt to load user profile
     try {
       final meUri = Uri.parse('$_sanitizedBaseUrl/api/v1/auth/me');
       final res = await _httpClient.get(
@@ -277,7 +277,7 @@ class AuthService extends ChangeNotifier {
         _currentUser = AuthUser.fromJson(data);
       }
     } catch (_) {
-      // Ignorer l'erreur réseau ponctuelle pour la persistance du profil
+      // Ignore transient network errors for profile loading
     }
 
     _state = AuthState.authenticated;
@@ -285,7 +285,7 @@ class AuthService extends ChangeNotifier {
     return true;
   }
 
-  /// Rafraîchissement automatique de la session via `/api/v1/auth/refresh`.
+  /// Automatic session refresh via `/api/v1/auth/refresh`.
   Future<bool> refreshToken() async {
     final rToken = await _tokenStorage.getRefreshToken();
     if (rToken == null || rToken.isEmpty) return false;
@@ -320,7 +320,7 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  /// Déconnexion utilisateur.
+  /// User logout.
   Future<void> logout() async {
     await _tokenStorage.clearTokens();
     _currentUser = null;

@@ -3,8 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/models/haptic_command_model.dart';
 
 void main() {
-  group('HapticCommandModel - Parsing JSON & Sérialisation 4 octets Big-Endian', () {
-    test('Sérialise fidèlement une commande haptique standard', () {
+  group('HapticCommandModel - JSON Parsing & 4-byte Big-Endian Serialization', () {
+    test('Accurately serializes a standard haptic command', () {
       final json = {
         'command_id': 'cmd-uuid-999',
         'intensity': 200,
@@ -23,11 +23,11 @@ void main() {
       expect(byteData.getUint16(2, Endian.big), equals(500)); // duration 500ms
     });
 
-    test('Applique le bornage des valeurs limites (clamping)', () {
+    test('Applies clamping to boundary values', () {
       final json = {
         'command_id': 'cmd-overflow',
-        'intensity': 999, // Doit être borné à 255
-        'duration_ms': 50000, // Doit être borné à 10000
+        'intensity': 999, // Must be clamped to 255
+        'duration_ms': 50000, // Must be clamped to 10000
         'pattern': 'double_pulse',
       };
 
@@ -40,7 +40,7 @@ void main() {
       expect(byteData.getUint16(2, Endian.big), equals(10000));
     });
 
-    test('Sérialise fidèlement la commande de test UI (pattern 0, intensity 200, duration 400ms)', () {
+    test('Accurately serializes UI test command (pattern 0, intensity 200, duration 400ms)', () {
       const command = HapticCommandModel(
         commandId: 'manual-test-vib',
         patternId: 0,

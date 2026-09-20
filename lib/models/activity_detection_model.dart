@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
-/// Modèle représentant un événement de détection d'activité décodé depuis la caractéristique BLE 7a5a0002.
-/// Référence contractuelle : contracts/ble_gatt_specs.md (Caractéristique 1)
+/// Model representing an activity detection event decoded from BLE characteristic 7a5a0002.
+/// Contract reference: contracts/ble_gatt_specs.md (Characteristic 1)
 class ActivityDetectionModel {
   final int stateCode;
   final String eventType;
@@ -19,11 +19,11 @@ class ActivityDetectionModel {
     required this.isHapticTriggered,
   });
 
-  /// Décode les 7 octets du payload binaire Big-Endian selon la spécification GATT HealthKicks.
+  /// Decodes 7 bytes of Big-Endian binary payload per the HealthKicks GATT specification.
   factory ActivityDetectionModel.fromBytes(List<int> bytes) {
     if (bytes.length < 7) {
       throw FormatException(
-        'Payload Activity Detection invalide : attendu au moins 7 octets, reçu ${bytes.length}',
+        'Invalid Activity Detection payload: expected at least 7 bytes, got ${bytes.length}',
       );
     }
 
@@ -47,8 +47,8 @@ class ActivityDetectionModel {
     );
   }
 
-  /// Convertit la détection en message JSON normalisé pour publication MQTT AWS IoT Core.
-  /// Référence : contracts/README.md (Topic healthkicks/v1/{device_id}/events/detection)
+  /// Converts the detection event to normalized JSON message for AWS IoT Core MQTT publishing.
+  /// Reference: contracts/README.md (Topic healthkicks/v1/{device_id}/events/detection)
   Map<String, dynamic> toMqttPayload(String deviceId) {
     final utcDateTime = DateTime.fromMillisecondsSinceEpoch(
       timestampEpochSec * 1000,

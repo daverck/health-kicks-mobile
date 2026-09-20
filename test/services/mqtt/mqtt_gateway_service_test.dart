@@ -28,8 +28,8 @@ class FakeCredentialsRepository implements IotCredentialsRepository {
 }
 
 void main() {
-  group('MqttGatewayService - Mécanisme de Présence Hybride & LWT', () {
-    test('Constructeur stocke correctement le userId et le deviceId', () {
+  group('MqttGatewayService - Hybrid Presence Mechanism & LWT', () {
+    test('Constructor properly stores userId and deviceId', () {
       final fakeRepo = FakeCredentialsRepository();
       final service = MqttGatewayService(
         deviceId: 'HK-2',
@@ -42,7 +42,7 @@ void main() {
       expect(service.clientId, equals('healthkicks-mobile-42'));
     });
 
-    test('LWT topic et payload ciblent la passerelle utilisateur (user_id)', () {
+    test('LWT topic and payload target user gateway (user_id)', () {
       const testUserId = '123';
       const expectedTopic = 'healthkicks/v1/users/$testUserId/gateway-status';
 
@@ -59,7 +59,7 @@ void main() {
       expect(expectedTopic, equals('healthkicks/v1/users/123/gateway-status'));
     });
 
-    test('Statut unitaire BLE : format conforme pour healthkicks/v1/{device_id}/status', () {
+    test('Unitary BLE status: compliant format for healthkicks/v1/{device_id}/status', () {
       const testDeviceId = 'HK-2';
       final payload = jsonEncode({
         'device_id': testDeviceId,
@@ -76,7 +76,7 @@ void main() {
       expect(DateTime.tryParse(decoded['timestamp'] as String), isNotNull);
     });
 
-    test('connect() refuse immédiatement la connexion si userId est null et aucun token disponible', () async {
+    test('connect() rejects connection immediately if userId is null and no token is available', () async {
       final fakeRepo = FakeCredentialsRepository();
       bool logReceived = false;
       final service = MqttGatewayService(
@@ -95,7 +95,7 @@ void main() {
       expect(logReceived, isTrue);
     });
 
-    test('connect() refuse immédiatement la connexion si userId vaut unknown', () async {
+    test('connect() rejects connection immediately if userId is unknown', () async {
       final fakeRepo = FakeCredentialsRepository();
       bool logReceived = false;
       final service = MqttGatewayService(

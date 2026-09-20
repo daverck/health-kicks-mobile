@@ -3,7 +3,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 typedef PermissionLogCallback = void Function(String message);
 
-/// Résultat détaillé de la vérification des permissions BLE.
+/// Detailed result of BLE permission verification.
 class BlePermissionResult {
   final bool isGranted;
   final bool isPermanentlyDenied;
@@ -22,20 +22,20 @@ class BlePermissionResult {
   });
 }
 
-/// Service gérant la vérification et l'obtention proactive des permissions
-/// nécessaires au fonctionnement du Bluetooth Low Energy (Android 12+ et iOS).
+/// Service managing the verification and proactive acquisition of permissions
+/// required for Bluetooth Low Energy operation (Android 12+ and iOS).
 class PermissionService {
-  /// Vérifie et sollicite les autorisations Bluetooth et de localisation
-  /// nécessaires pour le scan et la connexion GATT.
+  /// Checks and requests Bluetooth and Location permissions
+  /// required for GATT scanning and connection.
   Future<bool> requestBlePermissions({PermissionLogCallback? onLog}) async {
     final result = await requestDetailedBlePermissions(onLog: onLog);
     return result.isGranted;
   }
 
-  /// Exécute une vérification verbeuse avec diagnostic complet.
+  /// Executes a verbose check with complete diagnostics.
   Future<BlePermissionResult> requestDetailedBlePermissions({PermissionLogCallback? onLog}) async {
     if (Platform.isAndroid) {
-      // Android 12+ (SDK 31+) requiert explicitement bluetoothScan et bluetoothConnect
+      // Android 12+ (SDK 31+) explicitly requires bluetoothScan and bluetoothConnect
       final scanStatus = await Permission.bluetoothScan.request();
       final connectStatus = await Permission.bluetoothConnect.request();
 
@@ -51,7 +51,7 @@ class PermissionService {
         );
       }
 
-      // Pour les appareils nécessitant la localisation (Android < 12 ou ROM constructeur spécifique)
+      // For devices requiring location (Android < 12 or vendor-specific ROMs)
       final locationStatus = await Permission.locationWhenInUse.request();
       onLog?.call('Fallback Location: ${locationStatus.name}');
 
@@ -91,12 +91,12 @@ class PermissionService {
     );
   }
 
-  /// Ouvre les paramètres système de l'application si les permissions sont définitivement refusées.
+  /// Opens the application system settings if permissions are permanently denied.
   Future<bool> openSettings() async {
     return await openAppSettings();
   }
 
-  /// Indique si les autorisations BLE actuelles sont suffisantes.
+  /// Indicates whether current BLE permissions are sufficient.
   Future<bool> hasBlePermissions() async {
     if (Platform.isAndroid) {
       final hasScan = await Permission.bluetoothScan.isGranted;
