@@ -148,6 +148,24 @@ class BleFootwearClient {
     await _studioControlChar!.write(utf8.encode('CANCEL'), withoutResponse: false);
   }
 
+  /// Sends zero/tilt calibration command to the footwear (Opcode 0x05 on 0003 or "CALIBRATE" on 0004).
+  Future<void> sendCalibrateZeroCommand() async {
+    if (_hapticChar != null) {
+      final bytes = Uint8List(4);
+      bytes[0] = BleConstants.commandCalibrateZero;
+      bytes[1] = 0x00;
+      bytes[2] = 0x00;
+      bytes[3] = 0x00;
+      await _hapticChar!.write(bytes, withoutResponse: false);
+      onLog?.call('[BLE] Tilt calibration command (0x05) sent via Haptic characteristic.', isError: false);
+    } else if (_studioControlChar != null) {
+      await _studioControlChar!.write(utf8.encode('CALIBRATE'), withoutResponse: false);
+      onLog?.call('[BLE] Tilt calibration command ("CALIBRATE") sent via Studio Control characteristic.', isError: false);
+    } else {
+      throw StateError('No writable characteristic available to send calibration command.');
+    }
+  }
+
   void dispose() {
     _activityController.close();
     _studioStatusController.close();

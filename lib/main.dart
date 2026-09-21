@@ -842,10 +842,20 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
             icon: const Icon(Icons.settings),
             tooltip: 'Paramètres',
             onPressed: () {
+              final isConnected = _bleClient != null &&
+                  (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected);
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => SettingsScreen(
                     surveillanceService: _surveillanceService,
+                    isFootwearConnected: isConnected,
+                    studioStatusStream: _bleClient?.studioStatusStream,
+                    onCalibrateSensor: isConnected
+                        ? () async {
+                            _addLog('CONFIG', 'Envoi ordre de calibration d\'assiette (0x05)...');
+                            await _bleClient?.sendCalibrateZeroCommand();
+                          }
+                        : null,
                   ),
                 ),
               );

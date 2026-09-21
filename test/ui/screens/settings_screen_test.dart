@@ -59,5 +59,86 @@ void main() {
 
       await service.stopSurveillance();
     });
+
+    testWidgets('Displays Sensor Calibration tile and opens modal dialog', (tester) async {
+      final service = BackgroundSurveillanceService();
+      addTearDown(service.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SettingsScreen(
+            surveillanceService: service,
+            isFootwearConnected: false,
+          ),
+        ),
+      );
+
+      expect(find.text('CALIBRATION DU CAPTEUR (ASSIETTE)'), findsOneWidget);
+      expect(find.text('Calibration de l\'assiette (Zéro gravité)'), findsOneWidget);
+
+      // Tap on calibration tile
+      await tester.tap(find.text('Calibration de l\'assiette (Zéro gravité)'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Calibration de l\'Assiette'), findsOneWidget);
+      expect(find.textContaining('Chaussure non connectée'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Démarrer'), findsOneWidget);
+
+      // Start button should be disabled when not connected
+      final startBtn = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Démarrer'));
+      expect(startBtn.onPressed, isNull);
+
+      // Dismiss dialog
+      await tester.tap(find.text('Annuler'));
+      await tester.pumpAndSettle();
+      expect(find.text('Calibration de l\'Assiette'), findsNothing);
+    });
+
+    testWidgets('Executes calibration immediately on Start (Option A) and shows countdown', (tester) async {
+      final service = BackgroundSurveillanceService();
+      addTearDown(service.dispose);
+
+      bool calibrateCalled = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SettingsScreen(
+            surveillanceService: service,
+            isFootwearConnected: true,
+            onCalibrateSensor: () async {
+              calibrateCalled = true;
+            },
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Calibration de l\'assiette (Zéro gravité)'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Calibration de l\'Assiette'), findsOneWidget);
+      expect(find.textContaining('Chaussure non connectée'), findsNothing);
+
+      // Tap start
+      await tester.tap(find.widgetWithText(FilledButton, 'Démarrer'));
+      await tester.pump();
+
+      // Verified Option A: onCalibrate called immediately upon tapping start
+      expect(calibrateCalled, isTrue);
+      expect(find.textContaining('Mesure de l\'assiette en cours'), findsOneWidget);
+
+      // Advance timer through countdown (4 seconds)
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Calibration réussie !'), findsOneWidget);
+      expect(find.text('Terminer'), findsOneWidget);
+
+      await tester.tap(find.text('Terminer'));
+      await tester.pumpAndSettle();
+      expect(find.text('Calibration de l\'Assiette'), findsNothing);
+    });
   });
 }

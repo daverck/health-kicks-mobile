@@ -23,6 +23,9 @@ class BleConstants {
   static const int packetTypeDataChunk = 0x02;
   static const int packetTypeEndOfBurst = 0x03;
 
+  /// Command opcode to trigger level/tilt zero calibration (Characteristic 0003 & 0004)
+  static const int commandCalibrateZero = 0x05;
+
   // Nominal IMU sampling rate
   static const int sampleRateHz = 50;
   static const int bytesPerFrame = 14;
