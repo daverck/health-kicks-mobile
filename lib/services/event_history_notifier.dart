@@ -139,3 +139,4 @@ class EventHistoryNotifier extends ChangeNotifier {
     notifyListeners();
   }
 }
+

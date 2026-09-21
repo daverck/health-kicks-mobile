@@ -691,3 +691,4 @@ class _SkeletonCard extends StatelessWidget {
     );
   }
 }
+
