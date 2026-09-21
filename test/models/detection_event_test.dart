@@ -52,7 +52,7 @@ void main() {
     });
 
     test('Parses timestamp in integer epoch milliseconds or seconds', () {
-      final epochMs = 1726840000000; // ms
+      const epochMs = 1726840000000; // ms
       final jsonMs = {
         'id': 'e1',
         'event_type': 'walk',

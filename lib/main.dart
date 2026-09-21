@@ -614,7 +614,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
       return;
     }
 
-    _addLog('STUDIO', 'Démarrage session Studio (5.0s, label: test_gait)...');
+    _addLog('STUDIO', 'Démarrage session Studio (5.0s, label: test)...');
 
     try {
       // 1. Ensure MQTT service is initialized and connected
@@ -631,7 +631,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
       if (_coordinator != null) {
         _addLog('STUDIO', 'Réservation REST de la session auprès du backend FastAPI (/commands/studio/start)...');
         await _coordinator!.triggerStudioSession(
-          label: 'test_gait',
+          label: 'test',
           durationSec: 5.0,
         );
       } else {
@@ -649,7 +649,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
           _addLog('STUDIO', 'Réservation REST directe auprès du backend FastAPI...');
           final resp = await _studioApiService!.startStudioSession(
             deviceId: _deviceId,
-            label: 'test_gait',
+            label: 'test',
             durationSec: 5.0,
           );
           sessionId = resp.sessionId;
@@ -660,7 +660,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         }
 
         await _bleClient!.startStudioSession(
-          label: 'test_gait',
+          label: 'test',
           durationSec: 5.0,
           sessionId: sessionId,
         );
