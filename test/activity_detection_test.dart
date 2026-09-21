@@ -28,6 +28,7 @@ void main() {
       expect(mqtt['device_id'], equals('HK-1'));
       expect(mqtt['event_type'], equals('walk'));
       expect(mqtt['confidence'], closeTo(0.85, 0.001));
+      expect(mqtt['timestamp'], equals(1726224000000));
       expect(mqtt['is_fall'], isFalse);
     });
 
@@ -54,6 +55,7 @@ void main() {
       expect(mqtt['device_id'], equals('HK-42'));
       expect(mqtt['event_type'], equals('fall_forward'));
       expect(mqtt['confidence'], closeTo(0.92, 0.001));
+      expect(mqtt['timestamp'], equals(1726224050000));
       expect(mqtt['is_fall'], isTrue);
       expect(mqtt['haptic_triggered'], isTrue);
     });
@@ -141,22 +143,20 @@ void main() {
       expect(model.timestampEpochSec, equals(24));
       expect(model.isFall, isTrue);
 
-      final before = DateTime.now().toUtc().subtract(const Duration(seconds: 2));
+      final beforeMs = DateTime.now().toUtc().subtract(const Duration(seconds: 2)).millisecondsSinceEpoch;
       final mqtt = model.toMqttPayload('HK-2');
-      final after = DateTime.now().toUtc().add(const Duration(seconds: 2));
+      final afterMs = DateTime.now().toUtc().add(const Duration(seconds: 2)).millisecondsSinceEpoch;
 
       expect(mqtt['device_id'], equals('HK-2'));
       expect(mqtt['event_type'], equals('fall_backward'));
       expect(mqtt['confidence'], closeTo(0.86, 0.001));
-      expect(mqtt['confidence_score'], closeTo(0.86, 0.001));
       expect(mqtt['is_fall'], isTrue);
       expect(mqtt['haptic_triggered'], isTrue);
 
-      final parsedTs = DateTime.parse(mqtt['timestamp'] as String);
-      expect(parsedTs.isAfter(before), isTrue);
-      expect(parsedTs.isBefore(after), isTrue);
-      expect(mqtt['timestamp_epoch'], isA<int>());
-      expect(mqtt['timestamp_epoch'], greaterThan(1700000000));
+      expect(mqtt['timestamp'], isA<int>());
+      final timestampVal = mqtt['timestamp'] as int;
+      expect(timestampVal, greaterThanOrEqualTo(beforeMs));
+      expect(timestampVal, lessThanOrEqualTo(afterMs));
     });
 
     test('Throws a FormatException if payload contains less than 7 bytes', () {

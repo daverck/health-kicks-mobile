@@ -51,15 +51,12 @@ class ActivityDetectionModel {
   /// Reference: contracts/README.md (Topic healthkicks/v1/{device_id}/events/detection)
   Map<String, dynamic> toMqttPayload(String deviceId) {
     // If the microcontroller provides a valid UTC epoch (> year 2001, 10^9 seconds),
-    // use it; otherwise fallback to current mobile gateway UTC timestamp.
-    final DateTime utcDateTime;
+    // convert to milliseconds; otherwise fallback to current mobile gateway UTC epoch milliseconds.
+    final int timestampMs;
     if (timestampEpochSec > 1000000000) {
-      utcDateTime = DateTime.fromMillisecondsSinceEpoch(
-        timestampEpochSec * 1000,
-        isUtc: true,
-      );
+      timestampMs = timestampEpochSec * 1000;
     } else {
-      utcDateTime = DateTime.now().toUtc();
+      timestampMs = DateTime.now().toUtc().millisecondsSinceEpoch;
     }
 
     final confidence = confidencePercent / 100.0;
@@ -68,9 +65,7 @@ class ActivityDetectionModel {
       'device_id': deviceId,
       'event_type': eventType,
       'confidence': confidence,
-      'confidence_score': confidence,
-      'timestamp': utcDateTime.toIso8601String(),
-      'timestamp_epoch': utcDateTime.millisecondsSinceEpoch ~/ 1000,
+      'timestamp': timestampMs,
       'is_fall': isFall,
       'haptic_triggered': isHapticTriggered,
     };
