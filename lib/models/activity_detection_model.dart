@@ -50,16 +50,27 @@ class ActivityDetectionModel {
   /// Converts the detection event to normalized JSON message for AWS IoT Core MQTT publishing.
   /// Reference: contracts/README.md (Topic healthkicks/v1/{device_id}/events/detection)
   Map<String, dynamic> toMqttPayload(String deviceId) {
-    final utcDateTime = DateTime.fromMillisecondsSinceEpoch(
-      timestampEpochSec * 1000,
-      isUtc: true,
-    );
+    // If the microcontroller provides a valid UTC epoch (> year 2001, 10^9 seconds),
+    // use it; otherwise fallback to current mobile gateway UTC timestamp.
+    final DateTime utcDateTime;
+    if (timestampEpochSec > 1000000000) {
+      utcDateTime = DateTime.fromMillisecondsSinceEpoch(
+        timestampEpochSec * 1000,
+        isUtc: true,
+      );
+    } else {
+      utcDateTime = DateTime.now().toUtc();
+    }
+
+    final confidence = confidencePercent / 100.0;
 
     return {
       'device_id': deviceId,
       'event_type': eventType,
-      'confidence': (confidencePercent / 100.0),
+      'confidence': confidence,
+      'confidence_score': confidence,
       'timestamp': utcDateTime.toIso8601String(),
+      'timestamp_epoch': utcDateTime.millisecondsSinceEpoch ~/ 1000,
       'is_fall': isFall,
       'haptic_triggered': isHapticTriggered,
     };

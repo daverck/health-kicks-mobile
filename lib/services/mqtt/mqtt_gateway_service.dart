@@ -250,6 +250,10 @@ class MqttGatewayService {
       builder.addString(jsonString);
 
       _client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
+      log?.call(
+        'Activity detection published to $topic: ${detection.eventType.toUpperCase()} (${detection.confidencePercent}%)',
+        isError: false,
+      );
     } catch (e) {
       log?.call('Error publishing detection: $e', isError: true);
     }

@@ -123,6 +123,42 @@ void main() {
       }
     });
 
+    test('Correctly handles MCU boot uptime (< 10^9) by using current UTC timestamp', () {
+      // Offset 0: state_code = 0x11 (fall_backward)
+      // Offset 1: confidence = 86%
+      // Offset 2..5: timestamp = 24 (uptime in seconds)
+      // Offset 6: flags = 0x03 (fall + haptic)
+      final byteData = ByteData(7);
+      byteData.setUint8(0, 0x11);
+      byteData.setUint8(1, 86);
+      byteData.setUint32(2, 24, Endian.big);
+      byteData.setUint8(6, 0x03);
+
+      final model = ActivityDetectionModel.fromBytes(byteData.buffer.asUint8List());
+
+      expect(model.stateCode, equals(0x11));
+      expect(model.eventType, equals('fall_backward'));
+      expect(model.timestampEpochSec, equals(24));
+      expect(model.isFall, isTrue);
+
+      final before = DateTime.now().toUtc().subtract(const Duration(seconds: 2));
+      final mqtt = model.toMqttPayload('HK-2');
+      final after = DateTime.now().toUtc().add(const Duration(seconds: 2));
+
+      expect(mqtt['device_id'], equals('HK-2'));
+      expect(mqtt['event_type'], equals('fall_backward'));
+      expect(mqtt['confidence'], closeTo(0.86, 0.001));
+      expect(mqtt['confidence_score'], closeTo(0.86, 0.001));
+      expect(mqtt['is_fall'], isTrue);
+      expect(mqtt['haptic_triggered'], isTrue);
+
+      final parsedTs = DateTime.parse(mqtt['timestamp'] as String);
+      expect(parsedTs.isAfter(before), isTrue);
+      expect(parsedTs.isBefore(after), isTrue);
+      expect(mqtt['timestamp_epoch'], isA<int>());
+      expect(mqtt['timestamp_epoch'], greaterThan(1700000000));
+    });
+
     test('Throws a FormatException if payload contains less than 7 bytes', () {
       expect(
         () => ActivityDetectionModel.fromBytes([0x01, 0x50, 0x00]),
