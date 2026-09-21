@@ -18,6 +18,9 @@ class BleConstants {
   /// Characteristic 4: Studio Data Burst (NOTIFY)
   static const String studioDataBurstCharUuid = '7a5a0005-c529-4d64-8848-18e5904de22a';
 
+  /// Characteristic 5: Step Counter / Pedometer (READ, NOTIFY)
+  static const String stepCounterCharUuid = '7a5a0006-c529-4d64-8848-18e5904de22a';
+
   // Packet types for Burst Transfer
   static const int packetTypeStartOfBurst = 0x01;
   static const int packetTypeDataChunk = 0x02;

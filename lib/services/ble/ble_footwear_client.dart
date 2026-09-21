@@ -5,12 +5,13 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../core/constants/ble_constants.dart';
 import '../../models/activity_detection_model.dart';
 import '../../models/haptic_command_model.dart';
+import '../../models/step_data_model.dart';
 import 'burst_reassembler.dart';
 
 typedef BleLogCallback = void Function(String message, {bool isError});
 
 /// GATT client for the HealthKicks smart footwear.
-/// Orchestrates notification subscriptions and writes across all 4 characteristics.
+/// Orchestrates notification subscriptions and writes across all 5 characteristics.
 class BleFootwearClient {
   final BluetoothDevice device;
   final BleLogCallback? onLog;
@@ -20,16 +21,19 @@ class BleFootwearClient {
   BluetoothCharacteristic? _hapticChar;
   BluetoothCharacteristic? _studioControlChar;
   BluetoothCharacteristic? _studioBurstChar;
+  BluetoothCharacteristic? _stepCounterChar;
 
   BluetoothCharacteristic? get activityCharacteristic => _activityChar;
   BluetoothCharacteristic? get hapticCharacteristic => _hapticChar;
   BluetoothCharacteristic? get studioControlCharacteristic => _studioControlChar;
   BluetoothCharacteristic? get studioBurstCharacteristic => _studioBurstChar;
+  BluetoothCharacteristic? get stepCounterCharacteristic => _stepCounterChar;
 
   bool get hasHaptic => _hapticChar != null;
   bool get hasStudioControl => _studioControlChar != null;
   bool get hasActivityDetection => _activityChar != null;
   bool get hasStudioBurst => _studioBurstChar != null;
+  bool get hasStepCounter => _stepCounterChar != null;
   bool get isReady => _hapticChar != null && _studioControlChar != null;
 
   final _activityController = StreamController<ActivityDetectionModel>.broadcast();
@@ -40,6 +44,12 @@ class BleFootwearClient {
 
   final _burstResultController = StreamController<BurstReassemblyResult>.broadcast();
   Stream<BurstReassemblyResult> get burstResultStream => _burstResultController.stream;
+
+  final _stepDataController = StreamController<StepDataModel>.broadcast();
+  Stream<StepDataModel> get stepDataStream => _stepDataController.stream;
+
+  StepDataModel? _currentStepData;
+  StepDataModel? get currentStepData => _currentStepData;
 
   BleFootwearClient({required this.device, this.onLog});
 
@@ -67,6 +77,9 @@ class BleFootwearClient {
       } else if (uuidStr == BleConstants.studioDataBurstCharUuid.toLowerCase()) {
         _studioBurstChar = char;
         await _subscribeToStudioBurst(char);
+      } else if (uuidStr == BleConstants.stepCounterCharUuid.toLowerCase()) {
+        _stepCounterChar = char;
+        await _subscribeToStepCounter(char);
       }
     }
   }
@@ -107,6 +120,26 @@ class BleFootwearClient {
             isError: !result.isSuccess,
           );
           _burstResultController.add(result);
+        }
+      }
+    });
+    device.cancelWhenDisconnected(sub);
+    await char.setNotifyValue(true);
+  }
+
+  Future<void> _subscribeToStepCounter(BluetoothCharacteristic char) async {
+    final sub = char.onValueReceived.listen((bytes) {
+      if (bytes.length >= 13) {
+        try {
+          final model = StepDataModel.fromBytes(bytes);
+          _currentStepData = model;
+          _stepDataController.add(model);
+          onLog?.call(
+            'Step Counter: ${model.totalSteps} steps (Walk: ${model.walkSteps}, Run: ${model.runSteps}, Stairs: ${model.stairsSteps}, SPM: ${model.cadenceSpm})',
+            isError: false,
+          );
+        } catch (e) {
+          onLog?.call('Failed to decode step counter payload: $e', isError: true);
         }
       }
     });
@@ -170,5 +203,6 @@ class BleFootwearClient {
     _activityController.close();
     _studioStatusController.close();
     _burstResultController.close();
+    _stepDataController.close();
   }
 }

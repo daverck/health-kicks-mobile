@@ -9,6 +9,7 @@ import 'core/permissions/permission_service.dart';
 import 'models/haptic_command_model.dart';
 import 'models/log_entry_model.dart';
 import 'models/studio_session_model.dart';
+import 'models/step_data_model.dart';
 import 'services/auth/auth_service.dart';
 import 'services/auth/iot_credentials_repository.dart';
 import 'services/auth/token_storage_service.dart';
@@ -23,6 +24,7 @@ import 'services/event_history_service.dart';
 import 'ui/screens/detection_events_history_screen.dart';
 import 'ui/screens/login_screen.dart';
 import 'ui/screens/settings_screen.dart';
+import 'ui/widgets/step_counter_card.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -169,6 +171,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
   BluetoothDevice? _connectedDevice;
   int _mtu = 23;
   bool _mqttConnected = false;
+  StepDataModel? _latestStepData;
 
   final List<LogEntry> _logs = [];
   final ScrollController _scrollController = ScrollController();
@@ -569,6 +572,14 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         );
       });
 
+      _bleClient!.stepDataStream.listen((stepData) {
+        if (mounted) {
+          setState(() {
+            _latestStepData = stepData;
+          });
+        }
+      });
+
       // Attach bidirectional routing coordinator
       if (_mqttService != null) {
         _setupCoordinator();
@@ -899,14 +910,18 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
               // 1. Status Cards
               Row(
                 children: [
-                  Expanded(child: _buildBleCard()),
+                   Expanded(child: _buildBleCard()),
                   const SizedBox(width: 8),
                   Expanded(child: _buildMqttCard()),
                 ],
               ),
               const SizedBox(height: 10),
 
-              // 2. Action Test Controls
+              // 2. Step Counter Card
+              StepCounterCard(stepData: _latestStepData),
+              const SizedBox(height: 10),
+
+              // 3. Action Test Controls
               Row(
                 children: [
                   Expanded(
