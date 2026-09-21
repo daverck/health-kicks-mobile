@@ -290,7 +290,6 @@ class BackgroundSurveillanceService extends ChangeNotifier {
       case BleConnectionStatus.connecting:
         return 'Connexion en cours à $_currentDeviceName...';
       case BleConnectionStatus.disconnected:
-      default:
         return 'Recherche du device... (Arrêt auto dans 5 min)';
     }
   }

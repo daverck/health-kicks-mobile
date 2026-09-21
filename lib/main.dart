@@ -19,6 +19,8 @@ import 'services/gateway_coordinator.dart';
 import 'services/log_export_service.dart';
 import 'services/mqtt/mqtt_gateway_service.dart';
 import 'services/studio/studio_api_service.dart';
+import 'services/event_history_service.dart';
+import 'ui/screens/detection_events_history_screen.dart';
 import 'ui/screens/login_screen.dart';
 import 'ui/screens/settings_screen.dart';
 
@@ -817,6 +819,24 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
                 ),
               ],
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.history_rounded),
+            tooltip: 'Historique des Événements',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => DetectionEventsHistoryScreen(
+                    service: EventHistoryService(
+                      backendBaseUrl: AppConfig.backendBaseUrl,
+                      tokenStorage: TokenStorageService(),
+                      authService: widget.authService,
+                    ),
+                    deviceId: _deviceId,
+                  ),
+                ),
+              );
+            },
           ),
           IconButton(
             icon: const Icon(Icons.settings),
