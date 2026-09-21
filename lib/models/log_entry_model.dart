@@ -7,12 +7,17 @@ class LogEntry {
   final String message;
   final Color color;
 
-  const LogEntry({
+  LogEntry({
     required this.timestamp,
     required this.tag,
-    required this.message,
+    required String message,
     this.color = Colors.grey,
-  });
+  }) : message = _stripTag(message);
+
+  static String _stripTag(String msg) {
+    // Strips leading [TAG] prefix if present to prevent tag duplication
+    return msg.replaceFirst(RegExp(r'^\[[A-Za-z0-9_.-]+\]\s*'), '');
+  }
 
   /// Formatted timestamp in HH:mm:ss.SSS format
   String get formattedTimestamp {

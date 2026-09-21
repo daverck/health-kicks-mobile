@@ -55,10 +55,10 @@ class BleConnectionManager {
     BleLogCallback? onLog,
   }) async {
     final log = onLog ?? this.onLog;
-    log?.call('[BLE] Checking permissions...');
+    log?.call('Checking permissions...');
 
     final permsResult = await _permissionService.requestDetailedBlePermissions(
-      onLog: (msg) => log?.call('[PERM] $msg'),
+      onLog: (msg) => log?.call(msg),
     );
 
     if (!permsResult.isGranted) {
@@ -66,7 +66,7 @@ class BleConnectionManager {
       final reason = permsResult.isPermanentlyDenied
           ? 'Bluetooth/Location permissions permanently denied. Please enable them in app settings.'
           : 'Bluetooth or Location permissions not granted (${permsResult.details}).';
-      log?.call('[BLE] $reason');
+      log?.call(reason);
       throw Exception(reason);
     }
 
@@ -85,23 +85,23 @@ class BleConnectionManager {
           .first
           .timeout(const Duration(seconds: 2), onTimeout: () => BluetoothAdapterState.on);
       if (state != BluetoothAdapterState.on) {
-        log?.call('[BLE] Bluetooth inactive, attempting activation...');
+        log?.call('Bluetooth inactive, attempting activation...');
         await FlutterBluePlus.turnOn().timeout(const Duration(seconds: 4));
       }
     } catch (e) {
-      log?.call('[BLE] BT adapter warning: $e');
+      log?.call('BT adapter warning: $e');
     }
 
     _updateStatus(BleConnectionStatus.scanning);
     final timeoutLabel = timeout.inMinutes > 0
         ? '${timeout.inMinutes} minute(s)'
         : '${timeout.inSeconds} second(s)';
-    log?.call('[BLE] Starting scan (timeout: $timeoutLabel)...');
+    log?.call('Starting scan (timeout: $timeoutLabel)...');
 
     // Scan timeout trigger if no device is found
     _scanTimeoutTimer = Timer(timeout, () async {
       if (_status == BleConnectionStatus.scanning) {
-        log?.call('[BLE] No device detected after $timeoutLabel. Stopping scan.');
+        log?.call('No device detected after $timeoutLabel. Stopping scan.');
         try {
           await FlutterBluePlus.stopScan();
         } catch (_) {}
@@ -122,7 +122,7 @@ class BleConnectionManager {
       _scanTimeoutTimer?.cancel();
       _scanTimeoutTimer = null;
       _updateStatus(BleConnectionStatus.disconnected);
-      log?.call('[BLE] Error starting scan: $e');
+      log?.call('Error starting scan: $e');
       rethrow;
     }
 
@@ -136,7 +136,7 @@ class BleConnectionManager {
         if (!seenDevices.contains(deviceId)) {
           seenDevices.add(deviceId);
           final displayName = name.isNotEmpty ? name : 'Unknown';
-          log?.call('[BLE] Device detected: $displayName ($deviceId)');
+          log?.call('Device detected: $displayName ($deviceId)');
         }
 
         final hasServiceUuid = r.advertisementData.serviceUuids.any(
@@ -151,7 +151,7 @@ class BleConnectionManager {
             deviceId.toLowerCase() == targetDeviceId.toLowerCase();
 
         if (hasServiceUuid || matchesTargetName || matchesTargetMac) {
-          log?.call('[BLE] Target found ($name / $deviceId), attempting connection...');
+          log?.call('Target found ($name / $deviceId), attempting connection...');
           _scanTimeoutTimer?.cancel();
           _scanTimeoutTimer = null;
           try {
@@ -172,7 +172,7 @@ class BleConnectionManager {
     final log = onLog ?? this.onLog;
     _connectedDevice = device;
     _updateStatus(BleConnectionStatus.connecting);
-    log?.call('[BLE] Connecting to ${device.platformName} (${device.remoteId.str})...');
+    log?.call('Connecting to ${device.platformName} (${device.remoteId.str})...');
 
     try {
       await device.connect(
@@ -180,16 +180,16 @@ class BleConnectionManager {
         timeout: const Duration(seconds: 15),
       );
       _updateStatus(BleConnectionStatus.connected);
-      log?.call('[BLE] Connected to ${device.remoteId.str}. Negotiating MTU...');
+      log?.call('Connected to ${device.remoteId.str}. Negotiating MTU...');
 
       // Negotiate maximum MTU (standard 247 on Android)
       if (Platform.isAndroid) {
         try {
           _negotiatedMtu = await device.requestMtu(247);
-          log?.call('[BLE] Negotiated MTU: $_negotiatedMtu bytes.');
+          log?.call('Negotiated MTU: $_negotiatedMtu bytes.');
         } catch (_) {
           _negotiatedMtu = 247;
-          log?.call('[BLE] Default MTU negotiation (247 bytes).');
+          log?.call('Default MTU negotiation (247 bytes).');
         }
       } else {
         _negotiatedMtu = 247;
@@ -198,21 +198,21 @@ class BleConnectionManager {
       // Listen to connection state to handle automatic reconnection
       _deviceStateSubscription = device.connectionState.listen((state) {
         if (state == BluetoothConnectionState.disconnected) {
-          log?.call('[BLE] Device disconnected.');
+          log?.call('Device disconnected.');
           _updateStatus(BleConnectionStatus.disconnected);
         } else if (state == BluetoothConnectionState.connected) {
           if (_status != BleConnectionStatus.ready) {
-            log?.call('[BLE] Device reconnected.');
+            log?.call('Device reconnected.');
             _updateStatus(BleConnectionStatus.connected);
           }
         }
       });
 
       _updateStatus(BleConnectionStatus.ready);
-      log?.call('[BLE] Device ready for services initialization.');
+      log?.call('Device ready for services initialization.');
     } catch (e) {
       _updateStatus(BleConnectionStatus.disconnected);
-      log?.call('[BLE] Connection error: $e');
+      log?.call('Connection error: $e');
       rethrow;
     }
   }

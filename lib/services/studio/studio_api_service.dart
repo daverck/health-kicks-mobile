@@ -91,7 +91,7 @@ class StudioApiService {
     String? token = await _tokenStorage.getAccessToken();
 
     if (token == null || token.trim().isEmpty) {
-      const msg = '[Studio] No access token available to trigger Studio session.';
+      const msg = 'No access token available to trigger Studio session.';
       onLog?.call(msg, isError: true);
       throw const HttpException(msg);
     }
@@ -123,7 +123,7 @@ class StudioApiService {
       // Handle token renewal on 401
       if (response.statusCode == 401) {
         onLog?.call(
-          '[Studio] Access token expired (HTTP 401), attempting refresh...',
+          'Access token expired (HTTP 401), attempting refresh...',
           isError: false,
         );
 
@@ -144,7 +144,7 @@ class StudioApiService {
             );
           }
         } else {
-          const msg = '[Studio] Failed to refresh authentication token: login required.';
+          const msg = 'Failed to refresh authentication token: login required.';
           onLog?.call(msg, isError: true);
           await _authService?.logout();
           await _tokenStorage.clearTokens();
@@ -156,19 +156,19 @@ class StudioApiService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final startResponse = StudioStartResponse.fromJson(data);
         onLog?.call(
-          '[Studio] Session reserved successfully in backend (id: ${startResponse.sessionId})',
+          'Session reserved successfully in backend (id: ${startResponse.sessionId})',
           isError: false,
         );
         return startResponse;
       } else {
         final errorMsg =
-            '[Studio] HTTP ${response.statusCode} failure during Studio initiation: ${response.body}';
+            'HTTP ${response.statusCode} failure during Studio initiation: ${response.body}';
         onLog?.call(errorMsg, isError: true);
         throw HttpException(errorMsg, uri: uri);
       }
     } catch (e) {
       if (e is! HttpException) {
-        onLog?.call('[Studio] Network error during Studio initiation: $e', isError: true);
+        onLog?.call('Network error during Studio initiation: $e', isError: true);
       }
       rethrow;
     }

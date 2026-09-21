@@ -72,7 +72,7 @@ class GatewayCoordinator {
     // 3. Downstream relay: Cloud MQTT Studio Start Command -> BLE Footwear
     _studioCommandSub = mqttService.studioCommandStream.listen((command) async {
       onLog?.call(
-        '[GATEWAY] Remote Studio command received (session_id: ${command.sessionId}, label: ${command.label}, duration: ${command.durationSec}s)',
+        'Remote Studio command received (session_id: ${command.sessionId}, label: ${command.label}, duration: ${command.durationSec}s)',
         isError: false,
       );
       await handleRemoteStudioCommand(command);
@@ -82,7 +82,7 @@ class GatewayCoordinator {
     _studioStatusSub = bleClient.studioStatusStream.listen((status) {
       if (status.startsWith('ERROR') || status == 'CANCELLED') {
         onLog?.call(
-          '[GATEWAY] BLE Studio status received: $status -> Releasing capture state.',
+          'BLE Studio status received: $status -> Releasing capture state.',
           isError: status.startsWith('ERROR'),
         );
         _isStudioRecordingActive = false;
@@ -94,14 +94,14 @@ class GatewayCoordinator {
     // 5. Batch relay: Reassembled BLE Studio Data Burst -> Cloud MQTT DynamoDB
     _burstSub = bleClient.burstResultStream.listen((result) async {
       onLog?.call(
-        '[GATEWAY] End-of-burst packet received: completed=${result.isCompleted}, '
+        'End-of-burst packet received: completed=${result.isCompleted}, '
         'CRC valid=${result.isCrcValid}, frames=${result.framesRecovered}/${result.totalAnnounced}',
         isError: !result.isSuccess,
       );
 
       if (result.readings.isEmpty) {
         onLog?.call(
-          '[GATEWAY] No IMU samples contained in received burst.',
+          'No IMU samples contained in received burst.',
           isError: true,
         );
         return;
@@ -109,7 +109,7 @@ class GatewayCoordinator {
 
       if (!result.isCrcValid) {
         onLog?.call(
-          '[GATEWAY] CRC32 mismatch warning. The ${result.readings.length} received frames are still forwarded.',
+          'CRC32 mismatch warning. The ${result.readings.length} received frames are still forwarded.',
           isError: true,
         );
       }
@@ -128,18 +128,18 @@ class GatewayCoordinator {
       // MQTT publish towards DynamoDB
       try {
         onLog?.call(
-          '[GATEWAY] Publishing session ${session.sessionId} (${session.readings.length} frames) to MQTT...',
+          'Publishing session ${session.sessionId} (${session.readings.length} frames) to MQTT...',
           isError: false,
         );
         await mqttService.publishStudioSession(session);
         _studioSessionSavedController.add(session);
         onLog?.call(
-          '[GATEWAY] Session ${session.sessionId} published successfully via MQTT.',
+          'Session ${session.sessionId} published successfully via MQTT.',
           isError: false,
         );
       } catch (e) {
         onLog?.call(
-          '[GATEWAY] Error publishing to MQTT: $e',
+          'Error publishing to MQTT: $e',
           isError: true,
         );
       } finally {
@@ -159,7 +159,7 @@ class GatewayCoordinator {
   }) async {
     if (_isStudioRecordingActive) {
       onLog?.call(
-        '[GATEWAY] Studio session already recording. Local trigger ignored.',
+        'Studio session already recording. Local trigger ignored.',
         isError: false,
       );
       return;
@@ -208,7 +208,7 @@ class GatewayCoordinator {
     // Check if capture is already active or if session ID matches locally started session
     if (_activeLocalSessionId == command.sessionId || _isStudioRecordingActive) {
       onLog?.call(
-        '[GATEWAY] Studio session echo ignored (active session: ${command.sessionId})',
+        'Studio session echo ignored (active session: ${command.sessionId})',
         isError: false,
       );
       return;
@@ -222,7 +222,7 @@ class GatewayCoordinator {
         DateTime.now().millisecondsSinceEpoch / 1000.0;
 
     onLog?.call(
-      '[GATEWAY] Triggering BLE capture for remote command (session: ${command.sessionId})...',
+      'Triggering BLE capture for remote command (session: ${command.sessionId})...',
       isError: false,
     );
 
@@ -255,7 +255,7 @@ class GatewayCoordinator {
   Future<void> publishBleStatus({required bool online}) async {
     if (!mqttService.isConnected) {
       onLog?.call(
-        '[GATEWAY] Presence publishing ($deviceId -> ${online ? "online" : "offline"}) deferred: MQTT not connected.',
+        'Presence publishing ($deviceId -> ${online ? "online" : "offline"}) deferred: MQTT not connected.',
         isError: false,
       );
       return;
@@ -264,12 +264,12 @@ class GatewayCoordinator {
     try {
       await mqttService.publishGatewayStatus(online: online);
       onLog?.call(
-        '[GATEWAY] Device presence status ($deviceId): ${online ? "online" : "offline"}',
+        'Device presence status ($deviceId): ${online ? "online" : "offline"}',
         isError: false,
       );
     } catch (e) {
       onLog?.call(
-        '[GATEWAY] Error publishing device presence ($deviceId): $e',
+        'Error publishing device presence ($deviceId): $e',
         isError: false,
       );
     }

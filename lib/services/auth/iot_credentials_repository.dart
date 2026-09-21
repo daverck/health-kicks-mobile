@@ -59,7 +59,7 @@ class IotCredentialsRepository {
         !_cachedCredentials!.isExpired &&
         _lastCachedDeviceId == deviceId) {
       onLog?.call(
-        '[STS] Reusing cached STS credentials (expires at ${_cachedCredentials!.expiration.toIso8601String()}).',
+        'Reusing cached STS credentials (expires at ${_cachedCredentials!.expiration.toIso8601String()}).',
         isError: false,
       );
       return _cachedCredentials!;
@@ -69,12 +69,12 @@ class IotCredentialsRepository {
     final token = await _resolveAccessToken();
     if (token == null || token.trim().isEmpty) {
       const errMsg = 'Session expired or user not logged in: unable to obtain IoT STS credentials.';
-      onLog?.call('[STS] $errMsg', isError: true);
+      onLog?.call(errMsg, isError: true);
       throw const HttpException(errMsg);
     }
 
     onLog?.call(
-      '[STS] Requesting temporary STS credentials from backend (deviceId: ${deviceId ?? "auto"})...',
+      'Requesting temporary STS credentials from backend (deviceId: ${deviceId ?? "auto"})...',
       isError: false,
     );
 
@@ -104,7 +104,7 @@ class IotCredentialsRepository {
       // Handle expired token (HTTP 401)
       if (response.statusCode == 401) {
         onLog?.call(
-          '[STS] Access token expired (HTTP 401), attempting refresh...',
+          'Access token expired (HTTP 401), attempting refresh...',
           isError: false,
         );
 
@@ -132,13 +132,13 @@ class IotCredentialsRepository {
         // If refresh failed or server still returns 401
         if (response.statusCode == 401) {
           onLog?.call(
-            '[STS] Session permanently expired (HTTP 401): logging out user to SSO login.',
+            'Session permanently expired (HTTP 401): logging out user to SSO login.',
             isError: true,
           );
           await authService?.logout();
           await tokenStorage?.clearTokens();
           const errorMsg =
-              '[STS] HTTP 401 failure (token expired): user logged out for SSO re-authentication.';
+              'HTTP 401 failure (token expired): user logged out for SSO re-authentication.';
           throw HttpException(errorMsg, uri: uri);
         }
       }
@@ -150,19 +150,19 @@ class IotCredentialsRepository {
         _lastCachedDeviceId = deviceId;
 
         onLog?.call(
-          '[STS] New STS credentials obtained successfully (Expires at: ${credentials.expiration.toIso8601String()}, Region: ${credentials.region}).',
+          'New STS credentials obtained successfully (Expires at: ${credentials.expiration.toIso8601String()}, Region: ${credentials.region}).',
           isError: false,
         );
         return credentials;
       } else {
         final errorMsg =
-            '[STS] HTTP ${response.statusCode} failure during token exchange: ${response.body}';
+            'HTTP ${response.statusCode} failure during token exchange: ${response.body}';
         onLog?.call(errorMsg, isError: true);
         throw HttpException(errorMsg, uri: uri);
       }
     } catch (e) {
       if (e is! HttpException) {
-        onLog?.call('[STS] Network error during backend request: $e', isError: true);
+        onLog?.call('Network error during backend request: $e', isError: true);
       }
       rethrow;
     }

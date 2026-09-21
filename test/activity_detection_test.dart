@@ -58,6 +58,71 @@ void main() {
       expect(mqtt['haptic_triggered'], isTrue);
     });
 
+    test('Correctly decodes stairs activity (0x03)', () {
+      final byteData = ByteData(7);
+      byteData.setUint8(0, 0x03);
+      byteData.setUint8(1, 88);
+      byteData.setUint32(2, 1726224010, Endian.big);
+      byteData.setUint8(6, 0x00);
+
+      final model = ActivityDetectionModel.fromBytes(byteData.buffer.asUint8List());
+
+      expect(model.stateCode, equals(0x03));
+      expect(model.eventType, equals('stairs'));
+      expect(model.confidencePercent, equals(88));
+      expect(model.isFall, isFalse);
+
+      final mqtt = model.toMqttPayload('HK-2');
+      expect(mqtt['event_type'], equals('stairs'));
+      expect(mqtt['confidence'], closeTo(0.88, 0.001));
+    });
+
+    test('Correctly decodes stumble_recover event (0x1E)', () {
+      final byteData = ByteData(7);
+      byteData.setUint8(0, 0x1E);
+      byteData.setUint8(1, 75);
+      byteData.setUint32(2, 1726224020, Endian.big);
+      byteData.setUint8(6, 0x00);
+
+      final model = ActivityDetectionModel.fromBytes(byteData.buffer.asUint8List());
+
+      expect(model.stateCode, equals(0x1E));
+      expect(model.eventType, equals('stumble_recover'));
+      expect(model.confidencePercent, equals(75));
+      expect(model.isFall, isFalse);
+
+      final mqtt = model.toMqttPayload('HK-2');
+      expect(mqtt['event_type'], equals('stumble_recover'));
+      expect(mqtt['confidence'], closeTo(0.75, 0.001));
+    });
+
+    test('Correctly decodes all standard activity and fall state codes', () {
+      final stateMappings = {
+        0x00: 'idle',
+        0x01: 'walk',
+        0x02: 'run',
+        0x03: 'stairs',
+        0x10: 'fall_forward',
+        0x11: 'fall_backward',
+        0x12: 'fall_lateral',
+        0x1E: 'stumble_recover',
+        0x1F: 'fall_generic',
+        0x42: 'unknown_0x42',
+      };
+
+      for (final entry in stateMappings.entries) {
+        final byteData = ByteData(7);
+        byteData.setUint8(0, entry.key);
+        byteData.setUint8(1, 90);
+        byteData.setUint32(2, 1726224000, Endian.big);
+        byteData.setUint8(6, 0x00);
+
+        final model = ActivityDetectionModel.fromBytes(byteData.buffer.asUint8List());
+        expect(model.stateCode, equals(entry.key));
+        expect(model.eventType, equals(entry.value));
+      }
+    });
+
     test('Throws a FormatException if payload contains less than 7 bytes', () {
       expect(
         () => ActivityDetectionModel.fromBytes([0x01, 0x50, 0x00]),

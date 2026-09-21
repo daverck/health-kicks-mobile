@@ -596,11 +596,11 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
     );
 
     try {
-      _addLog('HAPTIC', '[HAPTIC] Écriture sur 0003 (Intensité: ${command.intensity}, Durée: ${command.durationMs} ms)...');
+      _addLog('HAPTIC', 'Écriture sur 0003 (Intensité: ${command.intensity}, Durée: ${command.durationMs} ms)...');
       await _bleClient!.sendHapticCommand(command);
-      _addLog('HAPTIC', '[HAPTIC] Écriture sur 0003 validée avec succès (GATT write OK).', color: Colors.green);
+      _addLog('HAPTIC', 'Écriture sur 0003 validée avec succès (GATT write OK).', color: Colors.green);
     } catch (e) {
-      _addLog('HAPTIC', '[HAPTIC] Échec écriture sur 0003 : $e', color: Colors.red);
+      _addLog('HAPTIC', 'Échec écriture sur 0003 : $e', color: Colors.red);
     }
   }
 

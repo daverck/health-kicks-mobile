@@ -114,21 +114,21 @@ class EventHistoryService {
         return EventHistoryResponse(events: [], total: 0, page: page, size: size, hasMore: false);
       } else {
         final errorMsg = 'Erreur serveur (${response.statusCode}): ${response.body}';
-        onLog?.call('[Events] $errorMsg', isError: true);
+        onLog?.call(errorMsg, isError: true);
         throw HttpException(errorMsg, uri: uri);
       }
     } on SocketException catch (e) {
       final msg = 'Impossible de contacter le serveur backend ($e)';
-      onLog?.call('[Events] $msg', isError: true);
+      onLog?.call(msg, isError: true);
       throw HttpException(msg, uri: uri);
     } on TimeoutException {
       const msg = 'Délai d\'attente dépassé lors de la récupération des événements';
-      onLog?.call('[Events] $msg', isError: true);
+      onLog?.call(msg, isError: true);
       throw TimeoutException(msg);
     } catch (e) {
       if (e is HttpException || e is TimeoutException) rethrow;
       final msg = 'Erreur inattendue : $e';
-      onLog?.call('[Events] $msg', isError: true);
+      onLog?.call(msg, isError: true);
       throw HttpException(msg, uri: uri);
     }
   }

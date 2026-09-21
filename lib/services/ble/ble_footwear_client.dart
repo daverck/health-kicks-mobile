@@ -88,7 +88,7 @@ class BleFootwearClient {
     final sub = char.onValueReceived.listen((bytes) {
       if (bytes.isNotEmpty) {
         final statusMsg = utf8.decode(bytes, allowMalformed: true).trim();
-        onLog?.call('[BLE] Studio Control notification (0004): "$statusMsg"', isError: false);
+        onLog?.call('Studio Control notification (0004): "$statusMsg"', isError: false);
         _studioStatusController.add(statusMsg);
       }
     });
@@ -99,11 +99,11 @@ class BleFootwearClient {
   Future<void> _subscribeToStudioBurst(BluetoothCharacteristic char) async {
     final sub = char.onValueReceived.listen((bytes) {
       if (bytes.isNotEmpty) {
-        onLog?.call('[BLE] Burst packet received (size=${bytes.length} bytes)', isError: false);
+        onLog?.call('Burst packet received (size=${bytes.length} bytes)', isError: false);
         final result = _burstReassembler.processPacket(bytes);
         if (result != null) {
           onLog?.call(
-            '[BLE] Burst completion detected: ${result.framesRecovered}/${result.totalAnnounced} frames reassembled (CRC32: ${result.isCrcValid ? "OK" : "Failed"})',
+            'Burst completion detected: ${result.framesRecovered}/${result.totalAnnounced} frames reassembled (CRC32: ${result.isCrcValid ? "OK" : "Failed"})',
             isError: !result.isSuccess,
           );
           _burstResultController.add(result);
@@ -125,7 +125,7 @@ class BleFootwearClient {
     bytes[2] = (command.durationMs >> 8) & 0xFF;
     bytes[3] = command.durationMs & 0xFF;
     await _hapticChar!.write(bytes, withoutResponse: false);
-    onLog?.call('[BLE] Haptic command sent: int=${command.intensity}, dur=${command.durationMs}ms', isError: false);
+    onLog?.call('Haptic command sent: int=${command.intensity}, dur=${command.durationMs}ms', isError: false);
   }
 
   /// Triggers a Studio recording session (START <label> <sec> <id>).
@@ -157,10 +157,10 @@ class BleFootwearClient {
       bytes[2] = 0x00;
       bytes[3] = 0x00;
       await _hapticChar!.write(bytes, withoutResponse: false);
-      onLog?.call('[BLE] Tilt calibration command (0x05) sent via Haptic characteristic.', isError: false);
+      onLog?.call('Tilt calibration command (0x05) sent via Haptic characteristic.', isError: false);
     } else if (_studioControlChar != null) {
       await _studioControlChar!.write(utf8.encode('CALIBRATE'), withoutResponse: false);
-      onLog?.call('[BLE] Tilt calibration command ("CALIBRATE") sent via Studio Control characteristic.', isError: false);
+      onLog?.call('Tilt calibration command ("CALIBRATE") sent via Studio Control characteristic.', isError: false);
     } else {
       throw StateError('No writable characteristic available to send calibration command.');
     }

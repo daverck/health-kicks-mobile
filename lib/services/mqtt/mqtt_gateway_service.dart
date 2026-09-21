@@ -66,18 +66,18 @@ class MqttGatewayService {
       await Future.delayed(const Duration(milliseconds: 300));
     }
 
-    log?.call('[MQTT] Fetching STS credentials from backend...', isError: false);
+    log?.call('Fetching STS credentials from backend...', isError: false);
 
     try {
       final creds = await credentialsRepository.fetchCredentials(deviceId: deviceId);
       log?.call(
-        '[MQTT] Valid STS credentials obtained (Expires at: ${creds.expiration.toIso8601String()}, Region: ${creds.region})',
+        'Valid STS credentials obtained (Expires at: ${creds.expiration.toIso8601String()}, Region: ${creds.region})',
         isError: false,
       );
 
       final signedWssUrl = SigV4Signer.buildSignedWebSocketUrl(credentials: creds);
       log?.call(
-        '[MQTT] SigV4 signature generated, connecting via WSS 443 to AWS IoT Core (${creds.iotEndpoint})...',
+        'SigV4 signature generated, connecting via WSS 443 to AWS IoT Core (${creds.iotEndpoint})...',
         isError: false,
       );
 
@@ -96,7 +96,7 @@ class MqttGatewayService {
       }
       if (effectiveUserId.isEmpty || effectiveUserId == 'unknown') {
         log?.call(
-          '[MQTT] Connection rejected: no valid userId or session unresolved. Aborting to preserve multi-tenant isolation.',
+          'Connection rejected: no valid userId or session unresolved. Aborting to preserve multi-tenant isolation.',
           isError: true,
         );
         return false;
@@ -131,20 +131,20 @@ class MqttGatewayService {
 
       _client!.onConnected = () {
         _isConnected = true;
-        log?.call('[MQTT] WebSocket connected to AWS IoT Core.', isError: false);
+        log?.call('WebSocket connected to AWS IoT Core.', isError: false);
         onConnectionRestored?.call();
       };
       _client!.onDisconnected = () {
         _isConnected = false;
-        log?.call('[MQTT] WebSocket disconnected from AWS IoT Core.', isError: true);
+        log?.call('WebSocket disconnected from AWS IoT Core.', isError: true);
       };
       _client!.onAutoReconnect = () {
         _isConnected = false;
-        log?.call('[MQTT] Automatic MQTT reconnection in progress...', isError: false);
+        log?.call('Automatic MQTT reconnection in progress...', isError: false);
       };
       _client!.onAutoReconnected = () {
         _isConnected = true;
-        log?.call('[MQTT] Automatic MQTT reconnection succeeded.', isError: false);
+        log?.call('Automatic MQTT reconnection succeeded.', isError: false);
         _resubscribeTopics();
         onConnectionRestored?.call();
       };
@@ -162,18 +162,18 @@ class MqttGatewayService {
       _isConnected = status?.state == MqttConnectionState.connected;
 
       if (_isConnected) {
-        log?.call('[MQTT] Connected successfully to AWS IoT Core via SigV4 WebSockets.', isError: false);
+        log?.call('Connected successfully to AWS IoT Core via SigV4 WebSockets.', isError: false);
         _subscribeToCommands();
       } else {
         log?.call(
-          '[MQTT] AWS IoT Core WSS connection failed: status ${status?.state}.',
+          'AWS IoT Core WSS connection failed: status ${status?.state}.',
           isError: true,
         );
       }
       return _isConnected;
     } catch (e) {
       _isConnected = false;
-      log?.call('[MQTT] WebSocket error: $e', isError: true);
+      log?.call('WebSocket error: $e', isError: true);
       return false;
     }
   }
@@ -186,7 +186,7 @@ class MqttGatewayService {
     _client?.subscribe(hapticTopic, MqttQos.atLeastOnce);
     _client?.subscribe(studioStartTopic, MqttQos.atLeastOnce);
 
-    log?.call('[MQTT] Subscriptions renewed after auto-reconnect: $hapticTopic & $studioStartTopic', isError: false);
+    log?.call('Subscriptions renewed after auto-reconnect: $hapticTopic & $studioStartTopic', isError: false);
   }
 
   void _subscribeToCommands() {
@@ -197,7 +197,7 @@ class MqttGatewayService {
     _client?.subscribe(hapticTopic, MqttQos.atLeastOnce);
     _client?.subscribe(studioStartTopic, MqttQos.atLeastOnce);
 
-    log?.call('[MQTT] Active subscriptions: $hapticTopic & $studioStartTopic', isError: false);
+    log?.call('Active subscriptions: $hapticTopic & $studioStartTopic', isError: false);
 
     _updatesSub?.cancel();
     _updatesSub = _client?.updates?.listen((List<MqttReceivedMessage<MqttMessage>> messages) {
@@ -213,19 +213,19 @@ class MqttGatewayService {
             final command = HapticCommandModel.fromJson(jsonMap);
             _hapticCommandsController.add(command);
           } catch (e) {
-            log?.call('[MQTT] Error decoding haptic command: $e', isError: true);
+            log?.call('Error decoding haptic command: $e', isError: true);
           }
         } else if (msg.topic == studioStartTopic || msg.topic.endsWith('/commands/studio/start')) {
           try {
             final jsonMap = jsonDecode(payloadStr) as Map<String, dynamic>;
             final command = StudioCommandModel.fromJson(jsonMap);
             log?.call(
-              '[MQTT] Remote Studio command received (session: ${command.sessionId}, label: ${command.label}, duration: ${command.durationSec}s)',
+              'Remote Studio command received (session: ${command.sessionId}, label: ${command.label}, duration: ${command.durationSec}s)',
               isError: false,
             );
             _studioCommandsController.add(command);
           } catch (e) {
-            log?.call('[MQTT] Error decoding remote Studio command: $e', isError: true);
+            log?.call('Error decoding remote Studio command: $e', isError: true);
           }
         }
       }
@@ -237,7 +237,7 @@ class MqttGatewayService {
     final log = onLog;
 
     if (!isConnected || _client == null) {
-      log?.call('[MQTT] Unable to publish detection: MQTT not connected.', isError: false);
+      log?.call('Unable to publish detection: MQTT not connected.', isError: false);
       return;
     }
 
@@ -251,7 +251,7 @@ class MqttGatewayService {
 
       _client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
     } catch (e) {
-      log?.call('[MQTT] Error publishing detection: $e', isError: true);
+      log?.call('Error publishing detection: $e', isError: true);
     }
   }
 
@@ -263,13 +263,13 @@ class MqttGatewayService {
     // 1. Check connection and attempt automatic reconnection if needed
     if (!isConnected || _client == null) {
       log?.call(
-        '[MQTT] Client disconnected during Studio publish. Attempting auto-reconnect...',
+        'Client disconnected during Studio publish. Attempting auto-reconnect...',
         isError: false,
       );
       final connected = await connect(onLog: log);
       if (!connected) {
         log?.call(
-          '[MQTT] MQTT reconnection failed: unable to publish Studio data.',
+          'MQTT reconnection failed: unable to publish Studio data.',
           isError: true,
         );
         return;
@@ -278,7 +278,7 @@ class MqttGatewayService {
 
     if (session.readings.isEmpty) {
       log?.call(
-        '[MQTT] Warning: empty Studio session (0 samples). No batches to publish.',
+        'Warning: empty Studio session (0 samples). No batches to publish.',
         isError: true,
       );
       return;
@@ -288,7 +288,7 @@ class MqttGatewayService {
     final chunks = session.toMqttBatchPayloads(maxReadingsPerChunk: 500);
 
     log?.call(
-      '[MQTT] Starting Studio publish (${session.readings.length} frames on $topic across ${chunks.length} batch(es))...',
+      'Starting Studio publish (${session.readings.length} frames on $topic across ${chunks.length} batch(es))...',
       isError: false,
     );
 
@@ -302,12 +302,12 @@ class MqttGatewayService {
         _client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
         final readingCount = (chunk['readings'] as List?)?.length ?? 0;
         log?.call(
-          '[MQTT] Batch ${i + 1}/${chunks.length} published successfully ($readingCount frames)',
+          'Batch ${i + 1}/${chunks.length} published successfully ($readingCount frames)',
           isError: false,
         );
       } catch (e) {
         log?.call(
-          '[MQTT] Error publishing batch ${i + 1}/${chunks.length}: $e',
+          'Error publishing batch ${i + 1}/${chunks.length}: $e',
           isError: true,
         );
       }
@@ -321,7 +321,7 @@ class MqttGatewayService {
 
     if (!isConnected || _client == null) {
       log?.call(
-        '[MQTT] Device presence status ($effectiveDeviceId -> ${online ? "online" : "offline"}) ignored: MQTT client not connected (state: ${_client?.connectionStatus?.state}).',
+        'Device presence status ($effectiveDeviceId -> ${online ? "online" : "offline"}) ignored: MQTT client not connected (state: ${_client?.connectionStatus?.state}).',
         isError: false,
       );
       return;
@@ -341,12 +341,12 @@ class MqttGatewayService {
 
       _client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
       log?.call(
-        '[MQTT] Device presence status ($effectiveDeviceId -> ${online ? "online" : "offline"}) published successfully to $topic',
+        'Device presence status ($effectiveDeviceId -> ${online ? "online" : "offline"}) published successfully to $topic',
         isError: false,
       );
     } catch (e) {
       log?.call(
-        '[MQTT] Error publishing device presence ($effectiveDeviceId): $e',
+        'Error publishing device presence ($effectiveDeviceId): $e',
         isError: false,
       );
     }
