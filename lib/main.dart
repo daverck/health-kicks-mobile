@@ -880,39 +880,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: 'Paramètres',
-            onPressed: () {
-              final isConnected = _bleClient != null &&
-                  (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected);
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => SettingsScreen(
-                    surveillanceService: _surveillanceService,
-                    inactivitySettingsService: _inactivitySettingsService,
-                    bleClient: _bleClient,
-                    isFootwearConnected: isConnected,
-                    studioStatusStream: _bleClient?.studioStatusStream,
-                    bleStatus: _bleStatus,
-                    isMqttConnected: _mqttConnected,
-                    deviceName: _connectedDevice?.platformName,
-                    targetDeviceId: _targetDeviceId,
-                    mtu: _mtu,
-                    onStartBleScan: () => _startBleScan(fromButton: true),
-                    onDisconnectBle: isConnected
-                        ? () async {
-                            await _bleManager?.disconnect();
-                          }
-                        : null,
-                    onReconnectMqtt: _connectMqtt,
-                    onCalibrateSensor: isConnected
-                        ? () async {
-                            _addLog('CONFIG', 'Envoi ordre de calibration d\'assiette (0x05)...');
-                            await _bleClient?.sendCalibrateZeroCommand();
-                          }
-                        : null,
-                  ),
-                ),
-              );
-            },
+            onPressed: _openSettingsScreen,
           ),
           if (widget.onLogout != null)
             IconButton(
@@ -949,14 +917,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 1. Clean Status Indicators (Tappable to Settings)
-              Row(
-                children: [
-                  Expanded(child: _buildBleCard()),
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildMqttCard()),
-                ],
-              ),
+              // 1. Discreet Status Indicators (Tappable to Settings)
+              _buildDiscreetStatusRow(),
               const SizedBox(height: 10),
 
               // 2. Step Counter Card
@@ -1024,152 +986,127 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
     );
   }
 
-  Widget _buildBleCard() {
-    final isReady = (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected) &&
-        _bleClient != null;
-    final isScanning = _bleStatus == BleConnectionStatus.scanning;
-    final isConnecting = _bleStatus == BleConnectionStatus.connecting;
-
-    final Color statusColor = isReady
-        ? Colors.green
-        : (isScanning || isConnecting ? Colors.orange : Colors.grey);
-
-    final String statusText = isReady
-        ? 'Connecté (MTU: $_mtu)'
-        : (isScanning
-            ? 'Scan...'
-            : (isConnecting ? 'Connexion...' : 'Déconnecté'));
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => SettingsScreen(
-                surveillanceService: _surveillanceService,
-                inactivitySettingsService: _inactivitySettingsService,
-                bleClient: _bleClient,
-                isFootwearConnected: isReady,
-                studioStatusStream: _bleClient?.studioStatusStream,
-                bleStatus: _bleStatus,
-                isMqttConnected: _mqttConnected,
-                deviceName: _connectedDevice?.platformName,
-                targetDeviceId: _targetDeviceId,
-                mtu: _mtu,
-                onStartBleScan: () => _startBleScan(fromButton: true),
-                onDisconnectBle: isReady ? () async => _bleManager?.disconnect() : null,
-                onReconnectMqtt: _connectMqtt,
-              ),
-            ),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.bluetooth, color: statusColor, size: 20),
-                      const SizedBox(width: 4),
-                      const Text('Bluetooth', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    ],
-                  ),
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: statusColor),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _connectedDevice?.platformName.isNotEmpty == true
-                    ? _connectedDevice!.platformName
-                    : _targetDeviceId,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 2),
-              Text(statusText, style: TextStyle(fontSize: 11, color: statusColor, fontWeight: FontWeight.w600)),
-            ],
-          ),
+  void _openSettingsScreen() {
+    final isConnected = _bleClient != null &&
+        (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected);
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SettingsScreen(
+          surveillanceService: _surveillanceService,
+          inactivitySettingsService: _inactivitySettingsService,
+          bleClient: _bleClient,
+          isFootwearConnected: isConnected,
+          studioStatusStream: _bleClient?.studioStatusStream,
+          bleStatus: _bleStatus,
+          isMqttConnected: _mqttConnected,
+          deviceName: _connectedDevice?.platformName,
+          targetDeviceId: _targetDeviceId,
+          mtu: _mtu,
+          onStartBleScan: () => _startBleScan(fromButton: true),
+          onDisconnectBle: isConnected
+              ? () async {
+                  await _bleManager?.disconnect();
+                }
+              : null,
+          onReconnectMqtt: _connectMqtt,
+          onCalibrateSensor: isConnected
+              ? () async {
+                  _addLog('CONFIG', 'Envoi ordre de calibration d\'assiette (0x05)...');
+                  await _bleClient?.sendCalibrateZeroCommand();
+                }
+              : null,
         ),
       ),
     );
   }
 
-  Widget _buildMqttCard() {
-    final Color statusColor = _mqttConnected ? Colors.green : Colors.grey;
+  Widget _buildDiscreetStatusRow() {
+    final isBleReady = (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected) &&
+        _bleClient != null;
+    final isBleScanning = _bleStatus == BleConnectionStatus.scanning;
+    final isBleConnecting = _bleStatus == BleConnectionStatus.connecting;
 
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => SettingsScreen(
-                surveillanceService: _surveillanceService,
-                inactivitySettingsService: _inactivitySettingsService,
-                bleClient: _bleClient,
-                isFootwearConnected: _bleClient != null,
-                studioStatusStream: _bleClient?.studioStatusStream,
-                bleStatus: _bleStatus,
-                isMqttConnected: _mqttConnected,
-                deviceName: _connectedDevice?.platformName,
-                targetDeviceId: _targetDeviceId,
-                mtu: _mtu,
-                onStartBleScan: () => _startBleScan(fromButton: true),
-                onDisconnectBle: _bleClient != null ? () async => _bleManager?.disconnect() : null,
-                onReconnectMqtt: _connectMqtt,
-              ),
-            ),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final Color bleColor = isBleReady
+        ? Colors.green
+        : (isBleScanning || isBleConnecting ? Colors.orange : Colors.grey);
+    final IconData bleIcon = isBleReady
+        ? Icons.bluetooth_connected
+        : (isBleScanning || isBleConnecting ? Icons.bluetooth_searching : Icons.bluetooth_disabled);
+    final String bleTooltip = isBleReady
+        ? 'Bluetooth connecté (${_connectedDevice?.platformName.isNotEmpty == true ? _connectedDevice!.platformName : _targetDeviceId}, MTU: $_mtu)'
+        : (isBleScanning ? 'Bluetooth : Recherche en cours...' : (isBleConnecting ? 'Bluetooth : Connexion...' : 'Bluetooth déconnecté'));
+
+    final Color mqttColor = _mqttConnected ? Colors.green : Colors.grey;
+    final IconData mqttIcon = _mqttConnected ? Icons.cloud_done : Icons.cloud_off;
+    final String mqttTooltip = _mqttConnected
+        ? 'AWS IoT Core : Connecté (Port 443 WSS, ${AppConfig.awsRegion})'
+        : 'AWS IoT Core : Déconnecté';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4),
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.cloud, color: statusColor, size: 20),
-                      const SizedBox(width: 4),
-                      const Text('AWS IoT Core', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    ],
-                  ),
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: statusColor),
-                  ),
-                ],
+              Icon(
+                Icons.directions_walk_rounded,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
               ),
-              const SizedBox(height: 4),
-              const Text(
-                'Port 443 WSS (${AppConfig.awsRegion})',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 2),
+              const SizedBox(width: 6),
               Text(
-                _mqttConnected ? 'Connecté' : 'Déconnecté',
-                style: TextStyle(fontSize: 11, color: statusColor, fontWeight: FontWeight.w600),
+                'Chaussure $_deviceId',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
               ),
             ],
           ),
-        ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Tooltip(
+                message: bleTooltip,
+                child: Material(
+                  color: bleColor.withValues(alpha: 0.12),
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: _openSettingsScreen,
+                    child: Padding(
+                      padding: const EdgeInsets.all(7.0),
+                      child: Icon(bleIcon, color: bleColor, size: 18),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Tooltip(
+                message: mqttTooltip,
+                child: Material(
+                  color: mqttColor.withValues(alpha: 0.12),
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: _openSettingsScreen,
+                    child: Padding(
+                      padding: const EdgeInsets.all(7.0),
+                      child: Icon(mqttIcon, color: mqttColor, size: 18),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
