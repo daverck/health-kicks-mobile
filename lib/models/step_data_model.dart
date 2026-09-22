@@ -127,3 +127,4 @@ class StepDataModel {
     return 'StepDataModel(total: $totalSteps, walk: $walkSteps, run: $runSteps, stairs: $stairsSteps, unclassified: $unclassifiedSteps, cadence: ${cadenceSpm}spm)';
   }
 }
+

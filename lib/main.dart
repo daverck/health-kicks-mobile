@@ -21,9 +21,12 @@ import 'services/log_export_service.dart';
 import 'services/mqtt/mqtt_gateway_service.dart';
 import 'services/studio/studio_api_service.dart';
 import 'services/event_history_service.dart';
+import 'services/local_storage/step_storage_service.dart';
+import 'services/step_sync_service.dart';
 import 'ui/screens/detection_events_history_screen.dart';
 import 'ui/screens/login_screen.dart';
 import 'ui/screens/settings_screen.dart';
+import 'ui/screens/steps_history_screen.dart';
 import 'ui/widgets/step_counter_card.dart';
 
 void main() {
@@ -173,12 +176,24 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
   bool _mqttConnected = false;
   StepDataModel? _latestStepData;
 
+  final StepStorageService _stepStorageService = StepStorageService();
+  late final StepSyncService _stepSyncService;
+
   final List<LogEntry> _logs = [];
   final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    _stepSyncService = StepSyncService(
+      storageService: _stepStorageService,
+      tokenStorage: TokenStorageService(),
+      authService: widget.authService,
+      backendBaseUrl: AppConfig.backendBaseUrl,
+      onLog: (msg, {bool isError = false}) {
+        _addLog('SYNC', msg, color: isError ? Colors.red : Colors.cyan);
+      },
+    );
     _surveillanceService = BackgroundSurveillanceService(
       onLog: (tag, msg, {bool isError = false}) {
         _addLog(tag, msg, color: isError ? Colors.red : Colors.cyan);
@@ -239,6 +254,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
   @override
   void dispose() {
     _isDisposed = true;
+    _stepStorageService.close();
     _studioSavedSub?.cancel();
     _coordinator?.stopRouting();
     _bleClient?.dispose();
@@ -572,13 +588,18 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         );
       });
 
-      _bleClient!.stepDataStream.listen((stepData) {
+      _bleClient!.stepDataStream.listen((stepData) async {
         if (mounted) {
           setState(() {
             _latestStepData = stepData;
           });
         }
+        await _stepStorageService.recordStepSnapshot(DateTime.now(), stepData);
+        unawaited(_stepSyncService.syncPendingSteps(deviceId: _deviceId));
       });
+
+      // Synchronize any stored offline steps upon successful BLE handshake
+      unawaited(_stepSyncService.syncPendingSteps(deviceId: _deviceId));
 
       // Attach bidirectional routing coordinator
       if (_mqttService != null) {
@@ -832,6 +853,21 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
             ),
           ),
           IconButton(
+            icon: const Icon(Icons.show_chart_rounded),
+            tooltip: 'Historique des Pas',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => StepsHistoryScreen(
+                    storageService: _stepStorageService,
+                    syncService: _stepSyncService,
+                    deviceId: _deviceId,
+                  ),
+                ),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.history_rounded),
             tooltip: 'Historique des Événements',
             onPressed: () {
@@ -918,7 +954,20 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
               const SizedBox(height: 10),
 
               // 2. Step Counter Card
-              StepCounterCard(stepData: _latestStepData),
+              StepCounterCard(
+                stepData: _latestStepData,
+                onOpenHistory: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => StepsHistoryScreen(
+                        storageService: _stepStorageService,
+                        syncService: _stepSyncService,
+                        deviceId: _deviceId,
+                      ),
+                    ),
+                  );
+                },
+              ),
               const SizedBox(height: 10),
 
               // 3. Action Test Controls

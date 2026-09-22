@@ -5,11 +5,13 @@ import '../../models/step_data_model.dart';
 class StepCounterCard extends StatelessWidget {
   final StepDataModel? stepData;
   final int stepGoal;
+  final VoidCallback? onOpenHistory;
 
   const StepCounterCard({
     super.key,
     this.stepData,
     this.stepGoal = 10000,
+    this.onOpenHistory,
   });
 
   @override
@@ -71,31 +73,47 @@ class StepCounterCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                // Cadence Badge (SPM)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: cadenceInfo.color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: cadenceInfo.color.withValues(alpha: 0.5),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(cadenceInfo.icon, size: 16, color: cadenceInfo.color),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$cadence SPM',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: cadenceInfo.color,
+                // Cadence Badge (SPM) & History Action
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: cadenceInfo.color.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: cadenceInfo.color.withValues(alpha: 0.5),
                         ),
                       ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(cadenceInfo.icon, size: 16, color: cadenceInfo.color),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$cadence SPM',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: cadenceInfo.color,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (onOpenHistory != null) ...[
+                      const SizedBox(width: 6),
+                      IconButton(
+                        icon: const Icon(Icons.history_rounded, size: 20),
+                        tooltip: 'Historique des Pas',
+                        onPressed: onOpenHistory,
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
                     ],
-                  ),
+                  ],
                 ),
               ],
             ),
@@ -261,3 +279,4 @@ class _CadenceStyle {
     required this.icon,
   });
 }
+
