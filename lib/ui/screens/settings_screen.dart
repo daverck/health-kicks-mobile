@@ -2,10 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/background_surveillance_service.dart';
 import '../../services/inactivity_settings_service.dart';
+import '../../services/ble/ble_connection_manager.dart';
 import '../../services/ble/ble_footwear_client.dart';
 
 /// Screen allowing the user to configure mobile gateway settings,
-/// background surveillance service, inactivity reminder, and IMU zero/tilt sensor calibration.
+/// BLE/MQTT connectivity actions, background surveillance, inactivity reminders, and tilt calibration.
 class SettingsScreen extends StatefulWidget {
   final BackgroundSurveillanceService surveillanceService;
   final InactivitySettingsService? inactivitySettingsService;
@@ -13,6 +14,16 @@ class SettingsScreen extends StatefulWidget {
   final Future<void> Function()? onCalibrateSensor;
   final bool isFootwearConnected;
   final Stream<String>? studioStatusStream;
+
+  // Connectivity action controls & status
+  final Future<void> Function()? onStartBleScan;
+  final Future<void> Function()? onDisconnectBle;
+  final Future<void> Function()? onReconnectMqtt;
+  final BleConnectionStatus bleStatus;
+  final bool isMqttConnected;
+  final String? deviceName;
+  final String? targetDeviceId;
+  final int mtu;
 
   const SettingsScreen({
     super.key,
@@ -22,6 +33,14 @@ class SettingsScreen extends StatefulWidget {
     this.onCalibrateSensor,
     this.isFootwearConnected = false,
     this.studioStatusStream,
+    this.onStartBleScan,
+    this.onDisconnectBle,
+    this.onReconnectMqtt,
+    this.bleStatus = BleConnectionStatus.disconnected,
+    this.isMqttConnected = false,
+    this.deviceName,
+    this.targetDeviceId,
+    this.mtu = 23,
   });
 
   @override
@@ -66,6 +85,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isBleReady = widget.isFootwearConnected ||
+        widget.bleStatus == BleConnectionStatus.ready ||
+        widget.bleStatus == BleConnectionStatus.connected;
+    final isBleScanning = widget.bleStatus == BleConnectionStatus.scanning;
+    final isBleConnecting = widget.bleStatus == BleConnectionStatus.connecting;
+
+    final Color bleColor = isBleReady
+        ? Colors.green
+        : (isBleScanning || isBleConnecting ? Colors.orange : Colors.grey);
+
+    final String bleStatusText = isBleReady
+        ? 'Connecté (MTU: ${widget.mtu})'
+        : (isBleScanning
+            ? 'Scan en cours...'
+            : (isBleConnecting ? 'Connexion en cours...' : 'Déconnecté'));
+
+    final Color mqttColor = widget.isMqttConnected ? Colors.green : Colors.grey;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Paramètres'),
@@ -89,7 +126,184 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
 
-              // 2. Mode Surveillance Active SwitchListTile
+              // 1.1 Bluetooth BLE Control Card
+              Card(
+                margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(
+                    color: Theme.of(context).dividerColor.withValues(alpha: 0.15),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Icon(Icons.bluetooth, color: bleColor, size: 22),
+                                const SizedBox(width: 8),
+                                const Expanded(
+                                  child: Text(
+                                    'Bluetooth Low Energy (BLE)',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: bleColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(shape: BoxShape.circle, color: bleColor),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  bleStatusText,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: bleColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Périphérique cible : ${widget.deviceName ?? widget.targetDeviceId ?? "HealthKicks-HK-2"}',
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.refresh, size: 16),
+                              label: const Text('Re-scanner'),
+                              onPressed: widget.onStartBleScan,
+                            ),
+                          ),
+                          if (isBleReady && widget.onDisconnectBle != null) ...[
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: FilledButton.tonalIcon(
+                                icon: const Icon(Icons.bluetooth_disabled, size: 16),
+                                label: const Text('Déconnecter'),
+                                onPressed: widget.onDisconnectBle,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // 1.2 AWS IoT Core Control Card
+              Card(
+                margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(
+                    color: Theme.of(context).dividerColor.withValues(alpha: 0.15),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Icon(Icons.cloud, color: mqttColor, size: 22),
+                                const SizedBox(width: 8),
+                                const Expanded(
+                                  child: Text(
+                                    'AWS IoT Core Cloud',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: mqttColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(shape: BoxShape.circle, color: mqttColor),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  widget.isMqttConnected ? 'Connecté' : 'Déconnecté',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: mqttColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Passerelle WebSockets MQTT SigV4 (Port 443)',
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.sync, size: 16),
+                          label: const Text('Re-connecter Cloud MQTT'),
+                          onPressed: widget.onReconnectMqtt,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              // 1.3 Mode Surveillance Active SwitchListTile
               SwitchListTile(
                 secondary: Icon(
                   Icons.shield_outlined,
@@ -120,7 +334,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     : null,
               ),
 
-              // 3. Platform warning or battery note
+              // Platform warning or battery note
               if (!widget.surveillanceService.isSupported)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -189,7 +403,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               const Divider(height: 32),
 
-              // 4. Prolonged Inactivity Reminder Category
+              // 2. Prolonged Inactivity Reminder Category
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 child: Text(
@@ -354,7 +568,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               const Divider(height: 32),
 
-              // 5. Sensor Calibration Category
+              // 3. Sensor Calibration Category
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 child: Text(
@@ -384,7 +598,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               const Divider(height: 32),
 
-              // 6. App Info section
+              // 4. App Info section
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 child: Text(

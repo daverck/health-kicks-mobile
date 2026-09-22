@@ -72,3 +72,4 @@ class InactivitySettingsService extends ChangeNotifier {
     }
   }
 }
+

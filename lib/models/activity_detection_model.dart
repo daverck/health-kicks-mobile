@@ -93,7 +93,6 @@ class ActivityDetectionModel {
       case 0x1F:
         return 'fall_generic';
       case BleConstants.stateCodeInactivityAlert:
-      case 0x20:
         return 'inactivity_alert';
       default:
         return 'unknown_0x${code.toRadixString(16).padLeft(2, '0')}';

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:healthkicks_mobile/services/background_surveillance_service.dart';
+import 'package:healthkicks_mobile/services/ble/ble_connection_manager.dart';
 import 'package:healthkicks_mobile/ui/screens/settings_screen.dart';
 
 void main() {
@@ -12,6 +13,51 @@ void main() {
   });
 
   group('SettingsScreen - UI and Mode Surveillance Active', () {
+    testWidgets('Displays Settings AppBar, BLE and Cloud connection controls', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final service = BackgroundSurveillanceService();
+      addTearDown(service.dispose);
+
+      bool scanCalled = false;
+      bool disconnectCalled = false;
+      bool reconnectMqttCalled = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SettingsScreen(
+            surveillanceService: service,
+            bleStatus: BleConnectionStatus.ready,
+            isMqttConnected: true,
+            deviceName: 'HealthKicks-HK-2',
+            onStartBleScan: () async => scanCalled = true,
+            onDisconnectBle: () async => disconnectCalled = true,
+            onReconnectMqtt: () async => reconnectMqttCalled = true,
+          ),
+        ),
+      );
+
+      expect(find.text('Paramètres'), findsOneWidget);
+      expect(find.text('PASSERELLE & CONNECTIVITÉ'), findsOneWidget);
+      expect(find.text('Bluetooth Low Energy (BLE)'), findsOneWidget);
+      expect(find.text('AWS IoT Core Cloud'), findsOneWidget);
+      expect(find.text('Re-scanner'), findsOneWidget);
+      expect(find.text('Déconnecter'), findsOneWidget);
+      expect(find.text('Re-connecter Cloud MQTT'), findsOneWidget);
+
+      await tester.tap(find.text('Re-scanner'));
+      expect(scanCalled, isTrue);
+
+      await tester.tap(find.text('Déconnecter'));
+      expect(disconnectCalled, isTrue);
+
+      await tester.tap(find.text('Re-connecter Cloud MQTT'));
+      expect(reconnectMqttCalled, isTrue);
+    });
+
     testWidgets('Displays Settings AppBar and Mode Surveillance Active tile', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 2.0;
@@ -114,7 +160,7 @@ void main() {
       expect(find.text('Calibration de l\'Assiette'), findsNothing);
     });
 
-    testWidgets('Executes calibration immediately on Start (Option A) and shows countdown', (tester) async {
+    testWidgets('Executes calibration immediately on Start and shows countdown', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 2.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -152,7 +198,6 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Démarrer'));
       await tester.pump();
 
-      // Verified Option A: onCalibrate called immediately upon tapping start
       expect(calibrateCalled, isTrue);
       expect(find.textContaining('Mesure de l\'assiette en cours'), findsOneWidget);
 
