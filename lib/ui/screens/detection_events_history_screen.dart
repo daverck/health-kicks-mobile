@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../models/activity_detection_model.dart';
 import '../../models/detection_event.dart';
 import '../../services/event_history_notifier.dart';
 import '../../services/event_history_service.dart';
@@ -11,12 +12,14 @@ class DetectionEventsHistoryScreen extends StatefulWidget {
   final EventHistoryNotifier? notifier;
   final EventHistoryService? service;
   final String? deviceId;
+  final List<ActivityDetectionModel>? liveActivities;
 
   const DetectionEventsHistoryScreen({
     super.key,
     this.notifier,
     this.service,
     this.deviceId,
+    this.liveActivities,
   });
 
   @override
@@ -41,16 +44,15 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
         EventHistoryNotifier(
           service: widget.service ?? EventHistoryService(),
           deviceId: widget.deviceId,
+          liveActivities: widget.liveActivities,
         );
 
     _scrollController.addListener(_onScroll);
 
-    // Initial fetch if notifier doesn't have data yet
-    if (_notifier.events.isEmpty && !_notifier.isLoading) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _notifier.loadInitial();
-      });
-    }
+    // Initial fetch from cloud
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _notifier.loadInitial();
+    });
   }
 
   void _onScroll() {

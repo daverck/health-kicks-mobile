@@ -122,7 +122,7 @@ class _ActivityItemTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final meta = _getActivityMeta(activity.eventType, isFall: activity.isFall);
-    final formattedTime = _formatTimestamp(activity.timestampEpochSec);
+    final formattedTime = _formatTimestamp(activity);
 
     return Row(
       children: [
@@ -202,18 +202,11 @@ class _ActivityItemTile extends StatelessWidget {
     );
   }
 
-  String _formatTimestamp(int epochSec) {
-    if (epochSec > 1000000000) {
-      final dt = DateTime.fromMillisecondsSinceEpoch(epochSec * 1000).toLocal();
-      final h = dt.hour.toString().padLeft(2, '0');
-      final m = dt.minute.toString().padLeft(2, '0');
-      final s = dt.second.toString().padLeft(2, '0');
-      return '$h:$m:$s';
-    }
-    final now = DateTime.now();
-    final h = now.hour.toString().padLeft(2, '0');
-    final m = now.minute.toString().padLeft(2, '0');
-    final s = now.second.toString().padLeft(2, '0');
+  String _formatTimestamp(ActivityDetectionModel activity) {
+    final dt = activity.effectiveTimestamp.toLocal();
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    final s = dt.second.toString().padLeft(2, '0');
     return '$h:$m:$s';
   }
 
@@ -286,3 +279,4 @@ class _ActivityMeta {
     required this.color,
   });
 }
+

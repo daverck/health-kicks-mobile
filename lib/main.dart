@@ -177,6 +177,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
   bool _mqttConnected = false;
   StepDataModel? _latestStepData;
   final List<ActivityDetectionModel> _recentActivities = [];
+  DateTime? _lastInactivityToastTime;
 
   final StepStorageService _stepStorageService = StepStorageService();
   late final StepSyncService _stepSyncService;
@@ -635,25 +636,30 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         );
 
         if (detection.eventType == 'inactivity_alert' && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.airline_seat_recline_normal, color: Colors.white),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Rappel d\'inactivité : Vous êtes immobile depuis ${_inactivitySettingsService.thresholdMinutes} minutes. Pensez à faire quelques pas !',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+          final now = DateTime.now();
+          if (_lastInactivityToastTime == null || now.difference(_lastInactivityToastTime!).inSeconds >= 30) {
+            _lastInactivityToastTime = now;
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.airline_seat_recline_normal, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Rappel d\'inactivité : Vous êtes immobile depuis ${_inactivitySettingsService.thresholdMinutes} minutes. Pensez à faire quelques pas !',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+                backgroundColor: Colors.deepOrange.shade700,
+                duration: const Duration(seconds: 4),
+                behavior: SnackBarBehavior.floating,
               ),
-              backgroundColor: Colors.deepOrange.shade700,
-              duration: const Duration(seconds: 8),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+            );
+          }
         }
       });
 
@@ -860,6 +866,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
                       authService: widget.authService,
                     ),
                     deviceId: _deviceId,
+                    liveActivities: _recentActivities,
                   ),
                 ),
               );
@@ -982,6 +989,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
                           authService: widget.authService,
                         ),
                         deviceId: _deviceId,
+                        liveActivities: _recentActivities,
                       ),
                     ),
                   );

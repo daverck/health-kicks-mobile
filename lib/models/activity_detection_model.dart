@@ -8,6 +8,7 @@ class ActivityDetectionModel {
   final String eventType;
   final int confidencePercent;
   final int timestampEpochSec;
+  final DateTime? receivedAt;
   final bool isFall;
   final bool isHapticTriggered;
 
@@ -16,9 +17,18 @@ class ActivityDetectionModel {
     required this.eventType,
     required this.confidencePercent,
     required this.timestampEpochSec,
+    this.receivedAt,
     required this.isFall,
     required this.isHapticTriggered,
   });
+
+  DateTime get effectiveTimestamp {
+    if (receivedAt != null) return receivedAt!;
+    if (timestampEpochSec > 1000000000) {
+      return DateTime.fromMillisecondsSinceEpoch(timestampEpochSec * 1000).toLocal();
+    }
+    return DateTime.now();
+  }
 
   /// Decodes 7 bytes of Big-Endian binary payload per the HealthKicks GATT specification.
   factory ActivityDetectionModel.fromBytes(List<int> bytes) {
@@ -43,6 +53,7 @@ class ActivityDetectionModel {
       eventType: eventType,
       confidencePercent: confidence,
       timestampEpochSec: timestamp,
+      receivedAt: DateTime.now(),
       isFall: isFall,
       isHapticTriggered: isHapticTriggered,
     );
@@ -52,12 +63,12 @@ class ActivityDetectionModel {
   /// Reference: contracts/README.md (Topic healthkicks/v1/{device_id}/events/detection)
   Map<String, dynamic> toMqttPayload(String deviceId) {
     // If the microcontroller provides a valid UTC epoch (> year 2001, 10^9 seconds),
-    // convert to milliseconds; otherwise fallback to current mobile gateway UTC epoch milliseconds.
+    // convert to milliseconds; otherwise fallback to reception UTC epoch milliseconds.
     final int timestampMs;
     if (timestampEpochSec > 1000000000) {
       timestampMs = timestampEpochSec * 1000;
     } else {
-      timestampMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+      timestampMs = effectiveTimestamp.toUtc().millisecondsSinceEpoch;
     }
 
     final confidence = confidencePercent / 100.0;
@@ -97,10 +108,5 @@ class ActivityDetectionModel {
       default:
         return 'unknown_0x${code.toRadixString(16).padLeft(2, '0')}';
     }
-  }
-
-  @override
-  String toString() {
-    return 'ActivityDetectionModel(eventType: $eventType, conf: $confidencePercent%, ts: $timestampEpochSec, fall: $isFall)';
   }
 }

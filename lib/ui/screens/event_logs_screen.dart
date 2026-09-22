@@ -430,3 +430,4 @@ class _EventLogsScreenState extends State<EventLogsScreen> {
     );
   }
 }
+

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'activity_detection_model.dart';
 
 /// Severity classification of a biomechanical detection event.
 enum EventSeverity {
@@ -45,7 +46,7 @@ class DetectionEvent {
       final type = (json['event_type'] as String? ?? json['eventType'] as String? ?? '').toLowerCase();
       if (type.contains('fall') || type == 'free_fall' || type == 'emergency') {
         severity = EventSeverity.critical;
-      } else if (type.contains('impact') || type.contains('stumble') || type.contains('immobility')) {
+      } else if (type.contains('impact') || type.contains('stumble') || type.contains('immobility') || type == 'inactivity_alert') {
         severity = EventSeverity.warning;
       } else {
         severity = EventSeverity.info;
@@ -92,6 +93,32 @@ class DetectionEvent {
     );
   }
 
+  factory DetectionEvent.fromActivityDetection(ActivityDetectionModel model, {String deviceId = 'HK-2'}) {
+    final EventSeverity severity;
+    if (model.isFall || model.eventType.contains('fall')) {
+      severity = EventSeverity.critical;
+    } else if (model.eventType == 'inactivity_alert' || model.eventType == 'stumble_recover') {
+      severity = EventSeverity.warning;
+    } else {
+      severity = EventSeverity.info;
+    }
+
+    return DetectionEvent(
+      id: 'live_${model.effectiveTimestamp.millisecondsSinceEpoch}_${model.stateCode}',
+      deviceId: deviceId,
+      eventType: model.eventType,
+      timestamp: model.effectiveTimestamp,
+      severity: severity,
+      confidence: model.confidencePercent / 100.0,
+      isValidated: true,
+      metadata: {
+        'state_code': model.stateCode,
+        'haptic_triggered': model.isHapticTriggered,
+        'live': true,
+      },
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -124,6 +151,8 @@ class DetectionEvent {
         return 'Trébuchement rattrapé';
       case 'prolonged_immobility':
         return 'Immobilité prolongée';
+      case 'inactivity_alert':
+        return 'Rappel d\'inactivité';
       case 'walk':
       case 'walking':
         return 'Marche';
@@ -143,6 +172,9 @@ class DetectionEvent {
 
   /// Icon corresponding to the event nature.
   IconData get icon {
+    if (eventType == 'inactivity_alert') {
+      return Icons.alarm_rounded;
+    }
     switch (severity) {
       case EventSeverity.critical:
         return Icons.warning_rounded;
@@ -158,38 +190,46 @@ class DetectionEvent {
     }
   }
 
-  /// Severity badge and indicator color.
+  /// Primary color associated with the event severity.
   Color get color {
     switch (severity) {
       case EventSeverity.critical:
-        return const Color(0xFFDC2626); // Bright Red
+        return const Color(0xFFDC2626); // Red
       case EventSeverity.warning:
-        return const Color(0xFFD97706); // Amber
+        return const Color(0xFFD97706); // Amber/Orange
       case EventSeverity.info:
         return const Color(0xFF0F766E); // HealthKicks Teal
     }
   }
 
-  /// Relative human-readable timestamp (e.g. "Il y a 10 min", "Hier à 14:30").
-  String get relativeTime {
-    final now = DateTime.now();
-    final difference = now.difference(timestamp);
+  /// Formatted localized timestamp (e.g., '14:22:10 - 22/09/2026')
+  String get formattedDate {
+    return DateFormat('HH:mm:ss - dd/MM/yyyy').format(timestamp);
+  }
 
-    if (difference.inSeconds < 60) {
+  /// Short time representation (e.g., '14:22:10')
+  String get shortTime {
+    return DateFormat('HH:mm:ss').format(timestamp);
+  }
+
+  /// User-friendly relative time description (e.g. 'À l'instant', 'Il y a 5 min', 'Il y a 2 h')
+  String get relativeTime {
+    final diff = DateTime.now().difference(timestamp);
+    if (diff.inSeconds < 45) {
       return 'À l\'instant';
-    } else if (difference.inMinutes < 60) {
-      return 'Il y a ${difference.inMinutes} min';
-    } else if (difference.inHours < 24 && now.day == timestamp.day) {
-      return 'Aujourd\'hui à ${DateFormat('HH:mm').format(timestamp)}';
-    } else if (difference.inDays < 2 && (now.day - timestamp.day == 1 || difference.inHours < 48)) {
-      return 'Hier à ${DateFormat('HH:mm').format(timestamp)}';
+    } else if (diff.inMinutes < 60) {
+      return 'Il y a ${diff.inMinutes} min';
+    } else if (diff.inHours < 24) {
+      return 'Il y a ${diff.inHours} h';
+    } else if (diff.inDays < 7) {
+      return 'Il y a ${diff.inDays} j';
     } else {
-      return DateFormat('dd/MM/yyyy HH:mm').format(timestamp);
+      return DateFormat('dd/MM').format(timestamp);
     }
   }
 }
 
-/// Paginated API response container for event history.
+/// Paginated response from backend events API.
 class EventHistoryResponse {
   final List<DetectionEvent> events;
   final int total;
@@ -205,22 +245,32 @@ class EventHistoryResponse {
     required this.hasMore,
   });
 
-  factory EventHistoryResponse.fromJson(Map<String, dynamic> json, {int page = 1, int size = 20}) {
-    final rawItems = json['items'] ?? json['events'] ?? json['data'] ?? [];
-    final itemsList = (rawItems is List)
-        ? rawItems.map((e) => DetectionEvent.fromJson(e as Map<String, dynamic>)).toList()
-        : <DetectionEvent>[];
+  factory EventHistoryResponse.fromJson(
+    Map<String, dynamic> json, {
+    int page = 1,
+    int size = 20,
+  }) {
+    final rawItems = json['items'] ?? json['events'] ?? json['data'];
+    final List<DetectionEvent> events = [];
+    if (rawItems is List) {
+      for (final item in rawItems) {
+        if (item is Map<String, dynamic>) {
+          events.add(DetectionEvent.fromJson(item));
+        }
+      }
+    }
 
-    final total = json['total'] as int? ?? json['total_count'] as int? ?? itemsList.length;
-    final hasMore = json['has_more'] as bool? ?? (itemsList.length >= size && (page * size) < total);
+    final total = json['total'] as int? ?? events.length;
+    final parsedPage = json['page'] as int? ?? page;
+    final parsedSize = json['size'] as int? ?? size;
+    final bool hasMore = json['has_more'] as bool? ?? ((parsedPage * parsedSize) < total);
 
     return EventHistoryResponse(
-      events: itemsList,
+      events: events,
       total: total,
-      page: page,
-      size: size,
+      page: parsedPage,
+      size: parsedSize,
       hasMore: hasMore,
     );
   }
 }
-

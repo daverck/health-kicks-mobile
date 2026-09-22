@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 
+import '../models/activity_detection_model.dart';
 import '../models/detection_event.dart';
 import 'event_history_service.dart';
 
@@ -22,7 +23,14 @@ class EventHistoryNotifier extends ChangeNotifier {
   EventHistoryNotifier({
     required EventHistoryService service,
     this.deviceId,
-  }) : _service = service;
+    List<ActivityDetectionModel>? liveActivities,
+  }) : _service = service {
+    if (liveActivities != null && liveActivities.isNotEmpty) {
+      _events = liveActivities
+          .map((a) => DetectionEvent.fromActivityDetection(a, deviceId: deviceId ?? 'HK-2'))
+          .toList();
+    }
+  }
 
   List<DetectionEvent> get events => List.unmodifiable(_events);
   bool get isLoading => _isLoading;
@@ -40,7 +48,6 @@ class EventHistoryNotifier extends ChangeNotifier {
     _isLoading = true;
     _errorMessage = null;
     _currentPage = 1;
-    _hasMore = true;
     notifyListeners();
 
     try {
@@ -51,11 +58,20 @@ class EventHistoryNotifier extends ChangeNotifier {
         deviceId: deviceId,
       );
 
-      _events = response.events;
+      final liveSessionEvents = _events.where((e) => e.id.startsWith('live_')).toList();
+      final cloudIds = response.events.map((e) => e.id).toSet();
+      final merged = [
+        ...liveSessionEvents.where((e) => !cloudIds.contains(e.id)),
+        ...response.events,
+      ];
+      _events = merged;
       _hasMore = response.hasMore;
       _errorMessage = null;
     } catch (e) {
-      _errorMessage = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
+      // If error occurs (e.g. offline), retain live session events
+      if (_events.isEmpty) {
+        _errorMessage = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -76,11 +92,19 @@ class EventHistoryNotifier extends ChangeNotifier {
         deviceId: deviceId,
       );
 
-      _events = response.events;
+      final liveSessionEvents = _events.where((e) => e.id.startsWith('live_')).toList();
+      final cloudIds = response.events.map((e) => e.id).toSet();
+      final merged = [
+        ...liveSessionEvents.where((e) => !cloudIds.contains(e.id)),
+        ...response.events,
+      ];
+      _events = merged;
       _hasMore = response.hasMore;
       _errorMessage = null;
     } catch (e) {
-      _errorMessage = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
+      if (_events.isEmpty) {
+        _errorMessage = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
+      }
     } finally {
       notifyListeners();
     }
@@ -139,4 +163,3 @@ class EventHistoryNotifier extends ChangeNotifier {
     notifyListeners();
   }
 }
-
