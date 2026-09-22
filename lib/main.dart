@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import 'core/config/app_config.dart';
@@ -196,6 +197,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
       },
     );
     _stepSyncService.startPeriodicSync(deviceId: _deviceId);
+    unawaited(_loadInitialDailySteps());
     _surveillanceService = BackgroundSurveillanceService(
       onLog: (tag, msg, {bool isError = false}) {
         _addLog(tag, msg, color: isError ? Colors.red : Colors.cyan);
@@ -204,6 +206,44 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
     _surveillanceService.initialize();
     _ensureBleManager();
     _initGateway();
+  }
+
+  /// Loads today's step count initially from SQLite offline storage and updates from cloud history.
+  Future<void> _loadInitialDailySteps() async {
+    try {
+      // 1. Query SQLite local storage for immediate offline display
+      final now = DateTime.now();
+      final localRecord = await _stepStorageService.getDailySteps(now);
+      if (localRecord != null && mounted) {
+        setState(() {
+          _latestStepData = StepDataModel(
+            totalSteps: localRecord.totalSteps,
+            walkSteps: localRecord.walkSteps,
+            runSteps: localRecord.runSteps,
+            stairsSteps: localRecord.stairsSteps,
+            unclassifiedSteps: localRecord.unclassifiedSteps,
+            cadenceSpm: 0,
+            timestamp: now,
+          );
+        });
+      }
+
+      // 2. Query cloud history for today's steps (recovers steps on fresh login / new device)
+      final cloudSteps = await _stepSyncService.fetchTodaySteps(deviceId: _deviceId);
+      if (cloudSteps != null && mounted) {
+        final currentTotal = _latestStepData?.totalSteps ?? 0;
+        if (cloudSteps.totalSteps >= currentTotal) {
+          setState(() {
+            _latestStepData = cloudSteps;
+          });
+          await _stepStorageService.recordStepSnapshot(DateTime.now(), cloudSteps);
+          final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+          await _stepStorageService.markDaysSynced([todayStr]);
+        }
+      }
+    } catch (e) {
+      _addLog('SYNC', 'Erreur chargement initial des pas : $e', color: Colors.orange);
+    }
   }
 
   @override

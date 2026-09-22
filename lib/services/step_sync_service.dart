@@ -2,15 +2,18 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 
 import '../core/config/app_config.dart';
+import '../models/step_data_model.dart';
 import 'auth/auth_service.dart';
 import 'auth/token_storage_service.dart';
 import 'local_storage/step_storage_service.dart';
 
 typedef StepSyncLogCallback = void Function(String message, {bool isError});
 
-/// Synchronization service responsible for pushing offline step snapshots to the backend.
+/// Synchronization service responsible for pushing offline step snapshots to the backend
+/// and fetching daily step counts from the cloud history.
 class StepSyncService {
   final StepStorageService _storageService;
   final TokenStorageService _tokenStorage;
@@ -96,6 +99,86 @@ class StepSyncService {
   /// Disposes timers and resources.
   void dispose() {
     stopPeriodicSync();
+  }
+
+  /// Fetches today's aggregated step count from the backend cloud.
+  /// Returns null on network error, HTTP failure, or if no entry matches today's date.
+  Future<StepDataModel?> fetchTodaySteps({required String deviceId}) async {
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final uri = Uri.parse('$_backendBaseUrl/api/v1/steps/history?device_id=$deviceId&days=1');
+
+    Map<String, String> buildHeaders(String? currentToken) => {
+          'Accept': 'application/json',
+          if (currentToken != null && currentToken.isNotEmpty) 'Authorization': 'Bearer $currentToken',
+        };
+
+    try {
+      String? token = await _tokenStorage.getAccessToken();
+      var response = await _httpClient
+          .get(
+            uri,
+            headers: buildHeaders(token),
+          )
+          .timeout(const Duration(seconds: 12));
+
+      // Handle 401 token refresh
+      if (response.statusCode == 401 && _authService != null) {
+        onLog?.call('Token expired while fetching daily steps (HTTP 401), refreshing...', isError: false);
+        final refreshed = await _authService.refreshToken();
+        if (refreshed) {
+          token = await _tokenStorage.getAccessToken();
+          response = await _httpClient
+              .get(
+                uri,
+                headers: buildHeaders(token),
+              )
+              .timeout(const Duration(seconds: 12));
+        }
+      }
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final history = data['history'] as List<dynamic>?;
+        if (history == null || history.isEmpty) {
+          return null;
+        }
+
+        for (final item in history) {
+          final itemMap = item as Map<String, dynamic>;
+          if (itemMap['date'] == todayStr) {
+            final byActivity = itemMap['by_activity'] as Map<String, dynamic>? ?? {};
+            final walk = (byActivity['walk'] as num?)?.toInt() ?? 0;
+            final run = (byActivity['run'] as num?)?.toInt() ?? 0;
+            final stairs = (byActivity['stairs'] as num?)?.toInt() ?? 0;
+            final unclassified = (byActivity['unclassified'] as num?)?.toInt() ?? 0;
+            final total = (itemMap['total_steps'] as num?)?.toInt() ?? (walk + run + stairs + unclassified);
+
+            return StepDataModel(
+              totalSteps: total,
+              walkSteps: walk,
+              runSteps: run,
+              stairsSteps: stairs,
+              unclassifiedSteps: unclassified,
+              cadenceSpm: 0,
+              timestamp: DateTime.now(),
+            );
+          }
+        }
+        return null;
+      } else {
+        onLog?.call('Failed to fetch daily steps: HTTP ${response.statusCode} - ${response.body}', isError: true);
+        return null;
+      }
+    } on SocketException catch (e) {
+      onLog?.call('No network connection to fetch daily steps: $e', isError: true);
+      return null;
+    } on TimeoutException {
+      onLog?.call('Timeout while fetching daily steps', isError: true);
+      return null;
+    } catch (e) {
+      onLog?.call('Unexpected error while fetching daily steps: $e', isError: true);
+      return null;
+    }
   }
 
   /// Gathers unsynced days from SQLite and POSTs them to `/api/v1/steps/sync`.
