@@ -86,7 +86,11 @@ void main() {
         find.widgetWithText(SwitchListTile, 'Alerte de sédentarité'),
         findsOneWidget,
       );
-      expect(find.byType(SwitchListTile), findsNWidgets(2));
+      expect(
+        find.widgetWithText(SwitchListTile, 'Répéter les alertes'),
+        findsOneWidget,
+      );
+      expect(find.byType(SwitchListTile), findsNWidgets(3));
     });
 
     testWidgets('Reflects active state when service state changes', (tester) async {
@@ -121,8 +125,8 @@ void main() {
     });
 
     testWidgets('Displays Sensor Calibration tile and opens modal dialog', (tester) async {
-      tester.view.physicalSize = const Size(1080, 2400);
-      tester.view.devicePixelRatio = 2.0;
+      tester.view.physicalSize = const Size(1080, 3200);
+      tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
@@ -138,6 +142,12 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('Calibration de l\'assiette (Zéro gravité)'),
+        500,
+        scrollable: find.byType(Scrollable).first,
+      );
 
       expect(find.text('CALIBRATION DU CAPTEUR (ASSIETTE)'), findsOneWidget);
       expect(find.text('Calibration de l\'assiette (Zéro gravité)'), findsOneWidget);
@@ -161,8 +171,8 @@ void main() {
     });
 
     testWidgets('Executes calibration immediately on Start and shows countdown', (tester) async {
-      tester.view.physicalSize = const Size(1080, 2400);
-      tester.view.devicePixelRatio = 2.0;
+      tester.view.physicalSize = const Size(1080, 3200);
+      tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
@@ -183,6 +193,12 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('Calibration de l\'assiette (Zéro gravité)'),
+        500,
+        scrollable: find.byType(Scrollable).first,
+      );
 
       expect(find.text('CALIBRATION DU CAPTEUR (ASSIETTE)'), findsOneWidget);
       expect(find.text('Calibration de l\'assiette (Zéro gravité)'), findsOneWidget);
@@ -237,10 +253,19 @@ void main() {
 
       expect(find.text('RAPPEL D\'INACTIVITÉ PROLONGÉE'), findsOneWidget);
       expect(find.text('Alerte de sédentarité'), findsOneWidget);
+      expect(find.text('Répéter les alertes'), findsOneWidget);
       expect(find.text('50 min'), findsOneWidget);
       expect(find.text('10 min'), findsOneWidget);
       expect(find.byType(Slider), findsNWidgets(2));
       expect(find.text('Synchronisé en direct avec la chaussure'), findsOneWidget);
+
+      // Toggle repeat alerts off
+      await tester.tap(find.widgetWithText(SwitchListTile, 'Répéter les alertes'));
+      await tester.pumpAndSettle();
+
+      // Cooldown slider should now be hidden
+      expect(find.text('Délai de répétition (Cooldown / Snooze)'), findsNothing);
+      expect(find.byType(Slider), findsOneWidget); // Only threshold slider remains
     });
   });
 }

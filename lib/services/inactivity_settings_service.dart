@@ -6,25 +6,29 @@ import 'ble/ble_footwear_client.dart';
 /// and synchronizing parameters with the HealthKicks footwear over BLE Characteristic 0003.
 class InactivitySettingsService extends ChangeNotifier {
   static const String keyEnabled = 'inact_enabled';
+  static const String keyRepeatEnabled = 'inact_repeat_enabled';
   static const String keyThresholdMin = 'inact_threshold_min';
   static const String keyCooldownMin = 'inact_cooldown_min';
 
   bool _isEnabled = true;
+  bool _isRepeatEnabled = true;
   int _thresholdMinutes = 50;
   int _cooldownMinutes = 10;
   bool _isSynced = false;
 
   bool get isEnabled => _isEnabled;
+  bool get isRepeatEnabled => _isRepeatEnabled;
   int get thresholdMinutes => _thresholdMinutes;
   int get cooldownMinutes => _cooldownMinutes;
   int get thresholdSec => _thresholdMinutes * 60;
-  int get cooldownSec => _cooldownMinutes * 60;
+  int get cooldownSec => _isRepeatEnabled ? _cooldownMinutes * 60 : 0;
   bool get isSynced => _isSynced;
 
   /// Loads persisted settings from SharedPreferences.
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     _isEnabled = prefs.getBool(keyEnabled) ?? true;
+    _isRepeatEnabled = prefs.getBool(keyRepeatEnabled) ?? true;
     _thresholdMinutes = prefs.getInt(keyThresholdMin) ?? 50;
     _cooldownMinutes = prefs.getInt(keyCooldownMin) ?? 10;
     notifyListeners();
@@ -33,16 +37,21 @@ class InactivitySettingsService extends ChangeNotifier {
   /// Updates inactivity settings, persists to SharedPreferences, and syncs over BLE if client is connected.
   Future<void> updateSettings({
     required bool enabled,
+    bool? repeatEnabled,
     required int thresholdMinutes,
     required int cooldownMinutes,
     BleFootwearClient? bleClient,
   }) async {
     _isEnabled = enabled;
+    if (repeatEnabled != null) {
+      _isRepeatEnabled = repeatEnabled;
+    }
     _thresholdMinutes = thresholdMinutes;
     _cooldownMinutes = cooldownMinutes;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(keyEnabled, _isEnabled);
+    await prefs.setBool(keyRepeatEnabled, _isRepeatEnabled);
     await prefs.setInt(keyThresholdMin, _thresholdMinutes);
     await prefs.setInt(keyCooldownMin, _cooldownMinutes);
 

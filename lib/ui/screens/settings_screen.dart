@@ -434,6 +434,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: (bool value) async {
                   await _inactivityService.updateSettings(
                     enabled: value,
+                    repeatEnabled: _inactivityService.isRepeatEnabled,
                     thresholdMinutes: _inactivityService.thresholdMinutes,
                     cooldownMinutes: _inactivityService.cooldownMinutes,
                     bleClient: widget.bleClient,
@@ -482,6 +483,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         onChanged: (double val) {
                           _inactivityService.updateSettings(
                             enabled: _inactivityService.isEnabled,
+                            repeatEnabled: _inactivityService.isRepeatEnabled,
                             thresholdMinutes: val.round(),
                             cooldownMinutes: _inactivityService.cooldownMinutes,
                             bleClient: widget.bleClient,
@@ -491,55 +493,82 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Expanded(
-                            child: Text(
-                              'Délai de répétition (Cooldown / Snooze)',
-                              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.secondaryContainer,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              '${_inactivityService.cooldownMinutes} min',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                                color: Theme.of(context).colorScheme.onSecondaryContainer,
+                SwitchListTile(
+                  secondary: Icon(
+                    Icons.replay_outlined,
+                    color: _inactivityService.isRepeatEnabled
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.grey,
+                  ),
+                  title: const Text(
+                    'Répéter les alertes',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: const Text(
+                    'Fait re-vibrer la chaussure à intervalle régulier si vous restez assis',
+                  ),
+                  value: _inactivityService.isRepeatEnabled,
+                  onChanged: (bool value) async {
+                    await _inactivityService.updateSettings(
+                      enabled: _inactivityService.isEnabled,
+                      repeatEnabled: value,
+                      thresholdMinutes: _inactivityService.thresholdMinutes,
+                      cooldownMinutes: _inactivityService.cooldownMinutes,
+                      bleClient: widget.bleClient,
+                    );
+                  },
+                ),
+                if (_inactivityService.isRepeatEnabled)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Délai de répétition (Cooldown / Snooze)',
+                                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                      Slider(
-                        value: _inactivityService.cooldownMinutes.toDouble(),
-                        min: 5,
-                        max: 30,
-                        divisions: 5,
-                        label: '${_inactivityService.cooldownMinutes} min',
-                        onChanged: (double val) {
-                          _inactivityService.updateSettings(
-                            enabled: _inactivityService.isEnabled,
-                            thresholdMinutes: _inactivityService.thresholdMinutes,
-                            cooldownMinutes: val.round(),
-                            bleClient: widget.bleClient,
-                          );
-                        },
-                      ),
-                    ],
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.secondaryContainer,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '${_inactivityService.cooldownMinutes} min',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Slider(
+                          value: _inactivityService.cooldownMinutes.toDouble(),
+                          min: 5,
+                          max: 30,
+                          divisions: 5,
+                          label: '${_inactivityService.cooldownMinutes} min',
+                          onChanged: (double val) {
+                            _inactivityService.updateSettings(
+                              enabled: _inactivityService.isEnabled,
+                              repeatEnabled: _inactivityService.isRepeatEnabled,
+                              thresholdMinutes: _inactivityService.thresholdMinutes,
+                              cooldownMinutes: val.round(),
+                              bleClient: widget.bleClient,
+                            );
+                          },
+                        ),
+                      ],
+                    ),
                   ),
-                ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
                   child: Row(
