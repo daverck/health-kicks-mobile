@@ -32,6 +32,7 @@ import 'ui/screens/settings_screen.dart';
 import 'ui/screens/steps_history_screen.dart';
 import 'ui/widgets/recent_activities_card.dart';
 import 'ui/widgets/step_counter_card.dart';
+import 'ui/widgets/studio_session_dialog.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -725,7 +726,21 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
     }
   }
 
-  Future<void> _triggerTestStudioSession() async {
+  void _showStudioSessionDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StudioSessionDialog(
+        onStartSession: ({required String label, required double durationSec}) async {
+          await _triggerStudioSession(label: label, durationSec: durationSec);
+        },
+      ),
+    );
+  }
+
+  Future<void> _triggerStudioSession({
+    required String label,
+    required double durationSec,
+  }) async {
     final isConnected = _bleClient != null &&
         (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected) &&
         _bleClient!.hasStudioControl;
@@ -735,7 +750,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
       return;
     }
 
-    _addLog('STUDIO', 'Démarrage session Studio (5.0s, label: test)...');
+    _addLog('STUDIO', 'Démarrage session Studio (${durationSec.toStringAsFixed(1)}s, label: $label)...');
 
     try {
       // 1. Ensure MQTT service is initialized and connected
@@ -752,8 +767,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
       if (_coordinator != null) {
         _addLog('STUDIO', 'Réservation REST de la session auprès du backend FastAPI (/commands/studio/start)...');
         await _coordinator!.triggerStudioSession(
-          label: 'test',
-          durationSec: 5.0,
+          label: label,
+          durationSec: durationSec,
         );
       } else {
         _studioApiService ??= StudioApiService(
@@ -770,8 +785,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           _addLog('STUDIO', 'Réservation REST directe auprès du backend FastAPI...');
           final resp = await _studioApiService!.startStudioSession(
             deviceId: _deviceId,
-            label: 'test',
-            durationSec: 5.0,
+            label: label,
+            durationSec: durationSec,
           );
           sessionId = resp.sessionId;
           _addLog('STUDIO', 'Session réservée : $sessionId', color: Colors.green);
@@ -781,8 +796,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         }
 
         await _bleClient!.startStudioSession(
-          label: 'test',
-          durationSec: 5.0,
+          label: label,
+          durationSec: durationSec,
           sessionId: sessionId,
         );
       }
@@ -812,6 +827,9 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
 
   @override
   Widget build(BuildContext context) {
+    final isClinicianOrAdmin = widget.authService?.currentUser?.role == 'admin' ||
+        widget.authService?.currentUser?.role == 'clinician';
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('HealthKicks BLE-to-MQTT Gateway'),
@@ -969,14 +987,16 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
                       onPressed: _sendTestHapticCommand,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('Studio 5s'),
-                      onPressed: _triggerTestStudioSession,
+                  if (isClinicianOrAdmin) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.play_arrow),
+                        label: const Text('Studio'),
+                        onPressed: _showStudioSessionDialog,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ],
