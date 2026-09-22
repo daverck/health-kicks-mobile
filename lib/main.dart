@@ -156,7 +156,7 @@ class GatewayDashboardScreen extends StatefulWidget {
   State<GatewayDashboardScreen> createState() => _GatewayDashboardScreenState();
 }
 
-class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
+class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with WidgetsBindingObserver {
   final String _deviceId = 'HK-2';
   final String _targetDeviceId = 'HealthKicks-HK-2';
   IotCredentialsRepository? _credentialsRepo;
@@ -185,6 +185,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _stepSyncService = StepSyncService(
       storageService: _stepStorageService,
       tokenStorage: TokenStorageService(),
@@ -194,6 +195,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         _addLog('SYNC', msg, color: isError ? Colors.red : Colors.cyan);
       },
     );
+    _stepSyncService.startPeriodicSync(deviceId: _deviceId);
     _surveillanceService = BackgroundSurveillanceService(
       onLog: (tag, msg, {bool isError = false}) {
         _addLog(tag, msg, color: isError ? Colors.red : Colors.cyan);
@@ -202,6 +204,17 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
     _surveillanceService.initialize();
     _ensureBleManager();
     _initGateway();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    final isForeground = state == AppLifecycleState.resumed;
+    _stepSyncService.setForegroundState(isForeground);
+
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      unawaited(_stepSyncService.flushImmediateSync(deviceId: _deviceId));
+    }
   }
 
   void _ensureBleManager() {
@@ -243,6 +256,9 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
         }
         _bleClient?.dispose();
         _bleClient = null;
+        if (status == BleConnectionStatus.disconnected) {
+          unawaited(_stepSyncService.flushImmediateSync(deviceId: _deviceId));
+        }
       } else if (status == BleConnectionStatus.ready && _bleManager?.connectedDevice != null) {
         _onBleDeviceReady(_bleManager!.connectedDevice!);
       }
@@ -254,6 +270,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
   @override
   void dispose() {
     _isDisposed = true;
+    WidgetsBinding.instance.removeObserver(this);
+    _stepSyncService.dispose();
     _stepStorageService.close();
     _studioSavedSub?.cancel();
     _coordinator?.stopRouting();
@@ -595,11 +613,10 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> {
           });
         }
         await _stepStorageService.recordStepSnapshot(DateTime.now(), stepData);
-        unawaited(_stepSyncService.syncPendingSteps(deviceId: _deviceId));
       });
 
       // Synchronize any stored offline steps upon successful BLE handshake
-      unawaited(_stepSyncService.syncPendingSteps(deviceId: _deviceId));
+      unawaited(_stepSyncService.flushImmediateSync(deviceId: _deviceId));
 
       // Attach bidirectional routing coordinator
       if (_mqttService != null) {

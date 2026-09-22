@@ -70,7 +70,97 @@ void main() {
 
       final unsynced = await storageService.getUnsyncedDays();
       expect(unsynced.isEmpty, isTrue);
+
+      syncService.dispose();
+    });
+
+    test('startPeriodicSync sets active device, default intervals and starts timer', () {
+      final syncService = StepSyncService(
+        storageService: storageService,
+        tokenStorage: tokenStorage,
+      );
+
+      expect(syncService.isPeriodicRunning, isFalse);
+      syncService.startPeriodicSync(deviceId: 'HK-TEST');
+
+      expect(syncService.activeDeviceId, equals('HK-TEST'));
+      expect(syncService.isForeground, isTrue);
+      expect(syncService.foregroundInterval, equals(const Duration(minutes: 5)));
+      expect(syncService.backgroundInterval, equals(const Duration(minutes: 30)));
+      expect(syncService.isPeriodicRunning, isTrue);
+
+      syncService.stopPeriodicSync();
+      expect(syncService.isPeriodicRunning, isFalse);
+      syncService.dispose();
+    });
+
+    test('setForegroundState updates state and reschedules timer', () {
+      final syncService = StepSyncService(
+        storageService: storageService,
+        tokenStorage: tokenStorage,
+      );
+
+      syncService.startPeriodicSync(
+        deviceId: 'HK-TEST',
+        foregroundInterval: const Duration(minutes: 2),
+        backgroundInterval: const Duration(minutes: 15),
+      );
+
+      expect(syncService.isForeground, isTrue);
+      expect(syncService.foregroundInterval, equals(const Duration(minutes: 2)));
+
+      syncService.setForegroundState(false);
+      expect(syncService.isForeground, isFalse);
+      expect(syncService.backgroundInterval, equals(const Duration(minutes: 15)));
+      expect(syncService.isPeriodicRunning, isTrue);
+
+      syncService.setForegroundState(true);
+      expect(syncService.isForeground, isTrue);
+      expect(syncService.isPeriodicRunning, isTrue);
+
+      syncService.dispose();
+      expect(syncService.isPeriodicRunning, isFalse);
+    });
+
+    test('flushImmediateSync uses activeDeviceId fallback', () async {
+      final now = DateTime(2026, 9, 22);
+      await storageService.recordStepSnapshot(
+        now,
+        StepDataModel(
+          totalSteps: 100,
+          walkSteps: 100,
+          runSteps: 0,
+          stairsSteps: 0,
+          unclassifiedSteps: 0,
+          cadenceSpm: 80,
+          timestamp: now,
+        ),
+      );
+
+      String? capturedDeviceId;
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/v1/steps/sync' && request.method == 'POST') {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          capturedDeviceId = body['device_id'];
+          return http.Response(jsonEncode({'status': 'success', 'synced': 1}), 200);
+        }
+        return http.Response('Not Found', 404);
+      });
+
+      final syncService = StepSyncService(
+        storageService: storageService,
+        tokenStorage: tokenStorage,
+        backendBaseUrl: 'http://127.0.0.1:8000',
+        httpClient: mockClient,
+      );
+
+      syncService.startPeriodicSync(deviceId: 'HK-ACTIVE-99');
+      final result = await syncService.flushImmediateSync();
+
+      expect(result, isTrue);
+      expect(capturedDeviceId, equals('HK-ACTIVE-99'));
+
+      syncService.dispose();
     });
   });
 }
-

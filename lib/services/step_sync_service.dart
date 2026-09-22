@@ -22,6 +22,18 @@ class StepSyncService {
   bool _isSyncing = false;
   bool get isSyncing => _isSyncing;
 
+  Timer? _periodicTimer;
+  bool _isForeground = true;
+  String? _activeDeviceId;
+  Duration _foregroundInterval = const Duration(minutes: 5);
+  Duration _backgroundInterval = const Duration(minutes: 30);
+
+  bool get isForeground => _isForeground;
+  bool get isPeriodicRunning => _periodicTimer != null && _periodicTimer!.isActive;
+  String? get activeDeviceId => _activeDeviceId;
+  Duration get foregroundInterval => _foregroundInterval;
+  Duration get backgroundInterval => _backgroundInterval;
+
   StepSyncService({
     required StepStorageService storageService,
     TokenStorageService? tokenStorage,
@@ -34,6 +46,57 @@ class StepSyncService {
         _authService = authService,
         _backendBaseUrl = (backendBaseUrl ?? AppConfig.backendBaseUrl).trim().replaceAll(RegExp(r'/+$'), ''),
         _httpClient = httpClient ?? http.Client();
+
+  /// Starts the periodic cloud synchronization timer.
+  void startPeriodicSync({
+    required String deviceId,
+    Duration? foregroundInterval,
+    Duration? backgroundInterval,
+  }) {
+    _activeDeviceId = deviceId;
+    if (foregroundInterval != null) {
+      _foregroundInterval = foregroundInterval;
+    }
+    if (backgroundInterval != null) {
+      _backgroundInterval = backgroundInterval;
+    }
+    _resetPeriodicTimer();
+  }
+
+  /// Updates app lifecycle state and reschedules periodic timer accordingly.
+  void setForegroundState(bool isForeground) {
+    if (_isForeground == isForeground) return;
+    _isForeground = isForeground;
+    if (_periodicTimer != null) {
+      _resetPeriodicTimer();
+    }
+  }
+
+  /// Stops periodic cloud synchronization timer.
+  void stopPeriodicSync() {
+    _periodicTimer?.cancel();
+    _periodicTimer = null;
+  }
+
+  /// Resets and starts the periodic timer with interval based on foreground/background status.
+  void _resetPeriodicTimer() {
+    _periodicTimer?.cancel();
+    final interval = _isForeground ? _foregroundInterval : _backgroundInterval;
+    _periodicTimer = Timer.periodic(interval, (_) {
+      unawaited(flushImmediateSync());
+    });
+  }
+
+  /// Triggers an immediate synchronization flush for pending steps.
+  Future<bool> flushImmediateSync({String? deviceId}) {
+    final targetDeviceId = deviceId ?? _activeDeviceId ?? 'HK-2';
+    return syncPendingSteps(deviceId: targetDeviceId);
+  }
+
+  /// Disposes timers and resources.
+  void dispose() {
+    stopPeriodicSync();
+  }
 
   /// Gathers unsynced days from SQLite and POSTs them to `/api/v1/steps/sync`.
   Future<bool> syncPendingSteps({required String deviceId}) async {
@@ -135,4 +198,3 @@ class StepSyncService {
     }
   }
 }
-

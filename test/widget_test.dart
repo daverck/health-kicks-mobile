@@ -3,12 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:healthkicks_mobile/main.dart';
 import 'package:healthkicks_mobile/services/auth/auth_service.dart';
 import 'package:healthkicks_mobile/services/auth/token_storage_service.dart';
 import 'services/auth/token_storage_service_test.dart';
 
 void main() {
+  setUpAll(() {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  });
   testWidgets('HealthKicksApp displays LoginScreen if no local token without backend URL field', (WidgetTester tester) async {
     final fakeStorage = FakeFlutterSecureStorage();
     final tokenStorage = TokenStorageService(storage: fakeStorage);
