@@ -277,6 +277,20 @@ class StepStorageService {
     return history;
   }
 
+  /// Purges synced records older than [retentionDays] (default: 90 days).
+  /// Unsynced records (sync_status = 0) are strictly preserved regardless of age.
+  Future<int> purgeOldRecords({int retentionDays = 90}) async {
+    final db = await database;
+    final cutoffDate = DateTime.now().subtract(Duration(days: retentionDays));
+    final cutoffDateStr = _formatDate(cutoffDate);
+
+    return await db.delete(
+      tableName,
+      where: '$columnDate < ? AND $columnSyncStatus = 1',
+      whereArgs: [cutoffDateStr],
+    );
+  }
+
   /// Closes database connection.
   Future<void> close() async {
     if (_db != null && _db!.isOpen) {

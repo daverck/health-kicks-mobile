@@ -93,6 +93,58 @@ void main() {
       expect(history.length, equals(7));
       expect(history.any((r) => r.totalSteps == 5000), isTrue);
     });
+
+    test('purgeOldRecords deletes synced records older than retention period but keeps unsynced ones', () async {
+      final now = DateTime.now();
+      final oldDate = now.subtract(const Duration(days: 100));
+      final recentDate = now.subtract(const Duration(days: 10));
+
+      final oldModel = StepDataModel(
+        totalSteps: 3000,
+        walkSteps: 3000,
+        runSteps: 0,
+        stairsSteps: 0,
+        unclassifiedSteps: 0,
+        cadenceSpm: 90,
+        timestamp: oldDate,
+      );
+
+      final recentModel = StepDataModel(
+        totalSteps: 4000,
+        walkSteps: 4000,
+        runSteps: 0,
+        stairsSteps: 0,
+        unclassifiedSteps: 0,
+        cadenceSpm: 95,
+        timestamp: recentDate,
+      );
+
+      // Record both
+      await storageService.recordStepSnapshot(oldDate, oldModel);
+      await storageService.recordStepSnapshot(recentDate, recentModel);
+
+      // 1. Without syncing, purge should delete 0 records (preserves unsynced)
+      final purgedUnsynced = await storageService.purgeOldRecords(retentionDays: 90);
+      expect(purgedUnsynced, equals(0));
+
+      // 2. Mark oldDate as synced
+      final oldDateStr = "${oldDate.year}-${oldDate.month.toString().padLeft(2, '0')}-${oldDate.day.toString().padLeft(2, '0')}";
+      await storageService.markDaysSynced([oldDateStr]);
+
+      // 3. Purge should now delete oldDate records (4 activity entries: walk, run, stairs, unclassified)
+      final purgedSynced = await storageService.purgeOldRecords(retentionDays: 90);
+      expect(purgedSynced, equals(4));
+
+      // Old date is gone
+      final oldRecord = await storageService.getDailySteps(oldDate);
+      expect(oldRecord, isNull);
+
+      // Recent date is still present
+      final recentRecord = await storageService.getDailySteps(recentDate);
+      expect(recentRecord, isNotNull);
+      expect(recentRecord!.totalSteps, equals(4000));
+    });
   });
 }
+
 

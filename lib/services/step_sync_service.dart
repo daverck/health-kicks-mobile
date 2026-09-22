@@ -123,6 +123,12 @@ class StepSyncService {
         await _storageService.markDaysSynced(syncedDates);
       }
 
+      // Automatically clean up locally stored steps older than 90 days that have already synced
+      final purged = await _storageService.purgeOldRecords(retentionDays: 90);
+      if (purged > 0) {
+        onLog?.call('Nettoyage SQLite : $purged ancien(s) enregistrement(s) (>90j) purgé(s).', isError: false);
+      }
+
       return allSuccess;
     } finally {
       _isSyncing = false;
