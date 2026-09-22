@@ -29,6 +29,12 @@ class BleConstants {
   /// Command opcode to trigger level/tilt zero calibration (Characteristic 0003 & 0004)
   static const int commandCalibrateZero = 0x05;
 
+  /// Command opcode to configure prolonged inactivity reminder (Characteristic 0003)
+  static const int commandSetInactivity = 0x06;
+
+  /// State code for prolonged inactivity alert (Characteristic 0002)
+  static const int stateCodeInactivityAlert = 0x20;
+
   // Nominal IMU sampling rate
   static const int sampleRateHz = 50;
   static const int bytesPerFrame = 14;

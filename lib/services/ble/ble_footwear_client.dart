@@ -161,6 +161,29 @@ class BleFootwearClient {
     onLog?.call('Haptic command sent: int=${command.intensity}, dur=${command.durationMs}ms', isError: false);
   }
 
+  /// Sends the prolonged inactivity reminder configuration (6 bytes Big-Endian, Opcode 0x06).
+  Future<void> sendInactivityConfig({
+    required bool enabled,
+    required int thresholdSec,
+    required int cooldownSec,
+  }) async {
+    if (_hapticChar == null) {
+      throw StateError('Haptic Command characteristic not initialized.');
+    }
+    final bytes = Uint8List(6);
+    bytes[0] = BleConstants.commandSetInactivity;
+    bytes[1] = enabled ? 1 : 0;
+    bytes[2] = (thresholdSec >> 8) & 0xFF;
+    bytes[3] = thresholdSec & 0xFF;
+    bytes[4] = (cooldownSec >> 8) & 0xFF;
+    bytes[5] = cooldownSec & 0xFF;
+    await _hapticChar!.write(bytes, withoutResponse: false);
+    onLog?.call(
+      'Inactivity config sent: enabled=$enabled, thresh=${thresholdSec}s, cool=${cooldownSec}s',
+      isError: false,
+    );
+  }
+
   /// Triggers a Studio recording session (START <label> <sec> <id>).
   Future<void> startStudioSession({
     required String label,

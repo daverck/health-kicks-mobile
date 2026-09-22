@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import '../core/constants/ble_constants.dart';
 
 /// Model representing an activity detection event decoded from BLE characteristic 7a5a0002.
 /// Contract reference: contracts/ble_gatt_specs.md (Characteristic 1)
@@ -91,6 +92,9 @@ class ActivityDetectionModel {
         return 'stumble_recover';
       case 0x1F:
         return 'fall_generic';
+      case BleConstants.stateCodeInactivityAlert:
+      case 0x20:
+        return 'inactivity_alert';
       default:
         return 'unknown_0x${code.toRadixString(16).padLeft(2, '0')}';
     }

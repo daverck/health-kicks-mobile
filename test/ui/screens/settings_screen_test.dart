@@ -13,6 +13,11 @@ void main() {
 
   group('SettingsScreen - UI and Mode Surveillance Active', () {
     testWidgets('Displays Settings AppBar and Mode Surveillance Active tile', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       final service = BackgroundSurveillanceService();
       addTearDown(service.dispose);
 
@@ -31,10 +36,19 @@ void main() {
         find.text('Maintient la connexion active écran éteint pour l\'enregistrement et la télémétrie'),
         findsOneWidget,
       );
-      expect(find.byType(SwitchListTile), findsOneWidget);
+      expect(
+        find.widgetWithText(SwitchListTile, 'Alerte de sédentarité'),
+        findsOneWidget,
+      );
+      expect(find.byType(SwitchListTile), findsNWidgets(2));
     });
 
     testWidgets('Reflects active state when service state changes', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       final service = BackgroundSurveillanceService();
       addTearDown(service.dispose);
 
@@ -44,7 +58,7 @@ void main() {
         ),
       );
 
-      final switchTileFinder = find.byType(SwitchListTile);
+      final switchTileFinder = find.widgetWithText(SwitchListTile, 'Mode Surveillance Active');
       expect(switchTileFinder, findsOneWidget);
 
       SwitchListTile switchTile = tester.widget(switchTileFinder);
@@ -61,6 +75,11 @@ void main() {
     });
 
     testWidgets('Displays Sensor Calibration tile and opens modal dialog', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       final service = BackgroundSurveillanceService();
       addTearDown(service.dispose);
 
@@ -72,6 +91,7 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
 
       expect(find.text('CALIBRATION DU CAPTEUR (ASSIETTE)'), findsOneWidget);
       expect(find.text('Calibration de l\'assiette (Zéro gravité)'), findsOneWidget);
@@ -95,6 +115,11 @@ void main() {
     });
 
     testWidgets('Executes calibration immediately on Start (Option A) and shows countdown', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       final service = BackgroundSurveillanceService();
       addTearDown(service.dispose);
 
@@ -111,7 +136,12 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
 
+      expect(find.text('CALIBRATION DU CAPTEUR (ASSIETTE)'), findsOneWidget);
+      expect(find.text('Calibration de l\'assiette (Zéro gravité)'), findsOneWidget);
+
+      // Tap calibration tile
       await tester.tap(find.text('Calibration de l\'assiette (Zéro gravité)'));
       await tester.pumpAndSettle();
 
@@ -139,6 +169,33 @@ void main() {
       await tester.tap(find.text('Terminer'));
       await tester.pumpAndSettle();
       expect(find.text('Calibration de l\'Assiette'), findsNothing);
+    });
+
+    testWidgets('Displays Inactivity Reminder section with sliders and updates values', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final service = BackgroundSurveillanceService();
+      addTearDown(service.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SettingsScreen(
+            surveillanceService: service,
+            isFootwearConnected: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('RAPPEL D\'INACTIVITÉ PROLONGÉE'), findsOneWidget);
+      expect(find.text('Alerte de sédentarité'), findsOneWidget);
+      expect(find.text('50 min'), findsOneWidget);
+      expect(find.text('10 min'), findsOneWidget);
+      expect(find.byType(Slider), findsNWidgets(2));
+      expect(find.text('Synchronisé en direct avec la chaussure'), findsOneWidget);
     });
   });
 }

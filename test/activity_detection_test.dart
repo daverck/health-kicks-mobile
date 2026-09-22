@@ -109,6 +109,7 @@ void main() {
         0x12: 'fall_lateral',
         0x1E: 'stumble_recover',
         0x1F: 'fall_generic',
+        0x20: 'inactivity_alert',
         0x42: 'unknown_0x42',
       };
 

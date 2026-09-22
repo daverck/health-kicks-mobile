@@ -22,6 +22,7 @@ import 'services/log_export_service.dart';
 import 'services/mqtt/mqtt_gateway_service.dart';
 import 'services/studio/studio_api_service.dart';
 import 'services/event_history_service.dart';
+import 'services/inactivity_settings_service.dart';
 import 'services/local_storage/step_storage_service.dart';
 import 'services/step_sync_service.dart';
 import 'ui/screens/detection_events_history_screen.dart';
@@ -179,6 +180,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
 
   final StepStorageService _stepStorageService = StepStorageService();
   late final StepSyncService _stepSyncService;
+  late final InactivitySettingsService _inactivitySettingsService;
 
   final List<LogEntry> _logs = [];
   final ScrollController _scrollController = ScrollController();
@@ -187,6 +189,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _inactivitySettingsService = InactivitySettingsService();
+    unawaited(_inactivitySettingsService.loadSettings());
     _stepSyncService = StepSyncService(
       storageService: _stepStorageService,
       tokenStorage: TokenStorageService(),
@@ -311,6 +315,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
   void dispose() {
     _isDisposed = true;
     WidgetsBinding.instance.removeObserver(this);
+    _inactivitySettingsService.dispose();
     _stepSyncService.dispose();
     _stepStorageService.close();
     _studioSavedSub?.cancel();
@@ -632,6 +637,28 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           'ACTIVITY',
           '${detection.eventType.toUpperCase()} (${detection.confidencePercent}%) | Chute=${detection.isFall} | Haptique=${detection.isHapticTriggered}',
         );
+
+        if (detection.eventType == 'inactivity_alert' && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.airline_seat_recline_normal, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Rappel d\'inactivité : Vous êtes immobile depuis ${_inactivitySettingsService.thresholdMinutes} minutes. Pensez à faire quelques pas !',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.deepOrange.shade700,
+              duration: const Duration(seconds: 8),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       });
 
       _bleClient!.studioStatusStream.listen((statusMsg) {
@@ -654,6 +681,9 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         }
         await _stepStorageService.recordStepSnapshot(DateTime.now(), stepData);
       });
+
+      // Synchronize stored inactivity preferences to footwear
+      unawaited(_inactivitySettingsService.syncToBle(_bleClient!));
 
       // Synchronize any stored offline steps upon successful BLE handshake
       unawaited(_stepSyncService.flushImmediateSync(deviceId: _deviceId));
@@ -952,6 +982,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
                 MaterialPageRoute(
                   builder: (_) => SettingsScreen(
                     surveillanceService: _surveillanceService,
+                    inactivitySettingsService: _inactivitySettingsService,
+                    bleClient: _bleClient,
                     isFootwearConnected: isConnected,
                     studioStatusStream: _bleClient?.studioStatusStream,
                     onCalibrateSensor: isConnected

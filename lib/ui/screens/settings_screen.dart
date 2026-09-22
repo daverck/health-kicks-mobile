@@ -1,11 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/background_surveillance_service.dart';
+import '../../services/inactivity_settings_service.dart';
+import '../../services/ble/ble_footwear_client.dart';
 
 /// Screen allowing the user to configure mobile gateway settings,
-/// background surveillance service, and IMU zero/tilt sensor calibration.
-class SettingsScreen extends StatelessWidget {
+/// background surveillance service, inactivity reminder, and IMU zero/tilt sensor calibration.
+class SettingsScreen extends StatefulWidget {
   final BackgroundSurveillanceService surveillanceService;
+  final InactivitySettingsService? inactivitySettingsService;
+  final BleFootwearClient? bleClient;
   final Future<void> Function()? onCalibrateSensor;
   final bool isFootwearConnected;
   final Stream<String>? studioStatusStream;
@@ -13,19 +17,49 @@ class SettingsScreen extends StatelessWidget {
   const SettingsScreen({
     super.key,
     required this.surveillanceService,
+    this.inactivitySettingsService,
+    this.bleClient,
     this.onCalibrateSensor,
     this.isFootwearConnected = false,
     this.studioStatusStream,
   });
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  late final InactivitySettingsService _inactivityService;
+  bool _ownsInactivityService = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.inactivitySettingsService != null) {
+      _inactivityService = widget.inactivitySettingsService!;
+    } else {
+      _inactivityService = InactivitySettingsService();
+      _ownsInactivityService = true;
+      unawaited(_inactivityService.loadSettings());
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_ownsInactivityService) {
+      _inactivityService.dispose();
+    }
+    super.dispose();
+  }
 
   void _showCalibrationDialog(BuildContext context) {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => _ImuCalibrationDialog(
-        onCalibrate: onCalibrateSensor,
-        isConnected: isFootwearConnected,
-        studioStatusStream: studioStatusStream,
+        onCalibrate: widget.onCalibrateSensor,
+        isConnected: widget.isFootwearConnected,
+        studioStatusStream: widget.studioStatusStream,
       ),
     );
   }
@@ -37,7 +71,7 @@ class SettingsScreen extends StatelessWidget {
         title: const Text('Paramètres'),
       ),
       body: ListenableBuilder(
-        listenable: surveillanceService,
+        listenable: Listenable.merge([widget.surveillanceService, _inactivityService]),
         builder: (context, _) {
           return ListView(
             padding: const EdgeInsets.symmetric(vertical: 12.0),
@@ -59,7 +93,7 @@ class SettingsScreen extends StatelessWidget {
               SwitchListTile(
                 secondary: Icon(
                   Icons.shield_outlined,
-                  color: surveillanceService.isSurveillanceActive
+                  color: widget.surveillanceService.isSurveillanceActive
                       ? Theme.of(context).colorScheme.primary
                       : Colors.grey,
                 ),
@@ -70,10 +104,10 @@ class SettingsScreen extends StatelessWidget {
                 subtitle: const Text(
                   'Maintient la connexion active écran éteint pour l\'enregistrement et la télémétrie',
                 ),
-                value: surveillanceService.isSurveillanceActive,
-                onChanged: surveillanceService.isSupported
+                value: widget.surveillanceService.isSurveillanceActive,
+                onChanged: widget.surveillanceService.isSupported
                     ? (bool value) async {
-                        await surveillanceService.toggleSurveillance(value);
+                        await widget.surveillanceService.toggleSurveillance(value);
                         if (context.mounted && !value) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -87,7 +121,7 @@ class SettingsScreen extends StatelessWidget {
               ),
 
               // 3. Platform warning or battery note
-              if (!surveillanceService.isSupported)
+              if (!widget.surveillanceService.isSupported)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                   child: Container(
@@ -155,7 +189,172 @@ class SettingsScreen extends StatelessWidget {
 
               const Divider(height: 32),
 
-              // 4. Sensor Calibration Category
+              // 4. Prolonged Inactivity Reminder Category
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Text(
+                  'RAPPEL D\'INACTIVITÉ PROLONGÉE',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.1,
+                      ),
+                ),
+              ),
+
+              SwitchListTile(
+                secondary: Icon(
+                  Icons.airline_seat_recline_normal_outlined,
+                  color: _inactivityService.isEnabled
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.grey,
+                ),
+                title: const Text(
+                  'Alerte de sédentarité',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  'Vibration discrète de la chaussure après une longue période d\'immobilité',
+                ),
+                value: _inactivityService.isEnabled,
+                onChanged: (bool value) async {
+                  await _inactivityService.updateSettings(
+                    enabled: value,
+                    thresholdMinutes: _inactivityService.thresholdMinutes,
+                    cooldownMinutes: _inactivityService.cooldownMinutes,
+                    bleClient: widget.bleClient,
+                  );
+                },
+              ),
+
+              if (_inactivityService.isEnabled) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Délai avant première alerte',
+                              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${_inactivityService.thresholdMinutes} min',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: Theme.of(context).colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Slider(
+                        value: _inactivityService.thresholdMinutes.toDouble(),
+                        min: 10,
+                        max: 120,
+                        divisions: 22,
+                        label: '${_inactivityService.thresholdMinutes} min',
+                        onChanged: (double val) {
+                          _inactivityService.updateSettings(
+                            enabled: _inactivityService.isEnabled,
+                            thresholdMinutes: val.round(),
+                            cooldownMinutes: _inactivityService.cooldownMinutes,
+                            bleClient: widget.bleClient,
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Délai de répétition (Cooldown / Snooze)',
+                              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.secondaryContainer,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${_inactivityService.cooldownMinutes} min',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: Theme.of(context).colorScheme.onSecondaryContainer,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Slider(
+                        value: _inactivityService.cooldownMinutes.toDouble(),
+                        min: 5,
+                        max: 30,
+                        divisions: 5,
+                        label: '${_inactivityService.cooldownMinutes} min',
+                        onChanged: (double val) {
+                          _inactivityService.updateSettings(
+                            enabled: _inactivityService.isEnabled,
+                            thresholdMinutes: _inactivityService.thresholdMinutes,
+                            cooldownMinutes: val.round(),
+                            bleClient: widget.bleClient,
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                  child: Row(
+                    children: [
+                      Icon(
+                        widget.isFootwearConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
+                        size: 14,
+                        color: widget.isFootwearConnected ? Colors.green : Colors.grey,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          widget.isFootwearConnected
+                              ? 'Synchronisé en direct avec la chaussure'
+                              : 'Sera synchronisé dès la prochaine connexion BLE',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: widget.isFootwearConnected ? Colors.green.shade700 : Colors.grey.shade600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              const Divider(height: 32),
+
+              // 5. Sensor Calibration Category
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 child: Text(
@@ -185,7 +384,7 @@ class SettingsScreen extends StatelessWidget {
 
               const Divider(height: 32),
 
-              // 5. App Info section
+              // 6. App Info section
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 child: Text(
@@ -288,7 +487,6 @@ class _ImuCalibrationDialogState extends State<_ImuCalibrationDialog> {
       _errorMessage = '';
     });
 
-    // Option A: Send BLE command immediately on tapping Start
     try {
       if (widget.onCalibrate != null) {
         await widget.onCalibrate!();
@@ -473,5 +671,3 @@ class _ImuCalibrationDialogState extends State<_ImuCalibrationDialog> {
     );
   }
 }
-
-
