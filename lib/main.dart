@@ -304,7 +304,9 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         if (status == BleConnectionStatus.disconnected) {
           unawaited(_stepSyncService.flushImmediateSync(deviceId: _deviceId));
         }
-      } else if (status == BleConnectionStatus.ready && _bleManager?.connectedDevice != null) {
+      } else if ((status == BleConnectionStatus.ready ||
+              (status == BleConnectionStatus.connected && _bleClient == null)) &&
+          _bleManager?.connectedDevice != null) {
         _onBleDeviceReady(_bleManager!.connectedDevice!);
       }
     });
@@ -615,6 +617,9 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
       );
       _addLog('BLE', 'Découverte des services GATT en cours...');
       await _bleClient!.initializeServices();
+      if (mounted) {
+        setState(() {});
+      }
       _addLog(
         'BLE',
         'Souscription active : Activity (0002), Studio Control (0004), Burst (0005) | Haptique (0003) ${_bleClient!.hasHaptic ? "prêt" : "non trouvé"}',
@@ -685,15 +690,27 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         await _stepStorageService.recordStepSnapshot(DateTime.now(), stepData);
       });
 
-      // Synchronize stored inactivity preferences to footwear
-      unawaited(_inactivitySettingsService.syncToBle(_bleClient!));
+      // Synchronize stored inactivity preferences to footwear (isolated)
+      try {
+        unawaited(_inactivitySettingsService.syncToBle(_bleClient!));
+      } catch (e) {
+        _addLog('BLE', 'Erreur sync paramètres inactivité : $e', color: Colors.orange);
+      }
 
-      // Synchronize any stored offline steps upon successful BLE handshake
-      unawaited(_stepSyncService.flushImmediateSync(deviceId: _deviceId));
+      // Synchronize any stored offline steps upon successful BLE handshake (isolated from SSO/network)
+      try {
+        unawaited(_stepSyncService.flushImmediateSync(deviceId: _deviceId));
+      } catch (e) {
+        _addLog('SYNC', 'Erreur synchronisation pas cloud : $e', color: Colors.orange);
+      }
 
-      // Attach bidirectional routing coordinator
-      if (_mqttService != null) {
-        _setupCoordinator();
+      // Attach bidirectional routing coordinator (isolated from local BLE state)
+      try {
+        if (_mqttService != null) {
+          _setupCoordinator();
+        }
+      } catch (e) {
+        _addLog('GATEWAY', 'Erreur initialisation coordinateur MQTT : $e', color: Colors.orange);
       }
     } catch (e) {
       _addLog('BLE', 'Erreur initialisation GATT : $e', color: Colors.red);
@@ -1042,7 +1059,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
 
   Widget _buildDiscreetStatusRow() {
     final isBleReady = (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected) &&
-        _bleClient != null;
+        (_bleClient != null || _connectedDevice != null);
     final isBleScanning = _bleStatus == BleConnectionStatus.scanning;
     final isBleConnecting = _bleStatus == BleConnectionStatus.connecting;
 
