@@ -23,17 +23,43 @@ void main() {
       expect(model.stairsSteps, 600);
       expect(model.unclassifiedSteps, 120);
       expect(model.cadenceSpm, 112);
+      expect(model.gctMs, 0); // Default when not provided in 13-byte payload
       expect(model.timestamp, now);
     });
 
-    test('Decodes boundary max values (uint32, uint16, uint8)', () {
-      final buffer = ByteData(13);
+    test('Correctly decodes 15 bytes Big-Endian payload including GCT', () {
+      final buffer = ByteData(15);
+      buffer.setUint32(0, 15420, Endian.big); // total_steps
+      buffer.setUint16(4, 10200, Endian.big); // walk_steps
+      buffer.setUint16(6, 4500, Endian.big);  // run_steps
+      buffer.setUint16(8, 600, Endian.big);   // stairs_steps
+      buffer.setUint16(10, 120, Endian.big);  // unclassified_steps
+      buffer.setUint8(12, 168);               // cadence_spm
+      buffer.setUint16(13, 245, Endian.big);  // current_gct_ms (245 ms)
+
+      final bytes = buffer.buffer.asUint8List();
+      final now = DateTime(2026, 9, 22, 10, 0, 0);
+      final model = StepDataModel.fromBytes(bytes, now);
+
+      expect(model.totalSteps, 15420);
+      expect(model.walkSteps, 10200);
+      expect(model.runSteps, 4500);
+      expect(model.stairsSteps, 600);
+      expect(model.unclassifiedSteps, 120);
+      expect(model.cadenceSpm, 168);
+      expect(model.gctMs, 245);
+      expect(model.timestamp, now);
+    });
+
+    test('Decodes boundary max values (uint32, uint16, uint8, uint16 GCT)', () {
+      final buffer = ByteData(15);
       buffer.setUint32(0, 4294967295, Endian.big);
       buffer.setUint16(4, 65535, Endian.big);
       buffer.setUint16(6, 65535, Endian.big);
       buffer.setUint16(8, 65535, Endian.big);
       buffer.setUint16(10, 65535, Endian.big);
       buffer.setUint8(12, 255);
+      buffer.setUint16(13, 65535, Endian.big);
 
       final model = StepDataModel.fromBytes(buffer.buffer.asUint8List());
 
@@ -43,10 +69,11 @@ void main() {
       expect(model.stairsSteps, 65535);
       expect(model.unclassifiedSteps, 65535);
       expect(model.cadenceSpm, 255);
+      expect(model.gctMs, 65535);
     });
 
     test('Decodes zero values correctly', () {
-      final bytes = Uint8List(13); // All 0s
+      final bytes = Uint8List(15); // All 0s
       final model = StepDataModel.fromBytes(bytes);
 
       expect(model.totalSteps, 0);
@@ -55,6 +82,7 @@ void main() {
       expect(model.stairsSteps, 0);
       expect(model.unclassifiedSteps, 0);
       expect(model.cadenceSpm, 0);
+      expect(model.gctMs, 0);
     });
 
     test('Throws FormatException if payload length < 13 bytes', () {
@@ -65,7 +93,7 @@ void main() {
       );
     });
 
-    test('JSON and MQTT payload serializations include all fields', () {
+    test('JSON and MQTT payload serializations include all fields including gct_ms', () {
       final model = StepDataModel(
         totalSteps: 1000,
         walkSteps: 800,
@@ -73,6 +101,7 @@ void main() {
         stairsSteps: 50,
         unclassifiedSteps: 0,
         cadenceSpm: 95,
+        gctMs: 240,
         timestamp: DateTime.utc(2026, 9, 22, 12, 0, 0),
       );
 
@@ -83,11 +112,13 @@ void main() {
       expect(json['stairs_steps'], 50);
       expect(json['unclassified_steps'], 0);
       expect(json['cadence_spm'], 95);
+      expect(json['gct_ms'], 240);
 
       final mqtt = model.toMqttPayload('HK-2');
       expect(mqtt['device_id'], 'HK-2');
       expect(mqtt['total_steps'], 1000);
       expect(mqtt['cadence_spm'], 95);
+      expect(mqtt['gct_ms'], 240);
       expect(mqtt['timestamp'], 1790078400000);
     });
   });

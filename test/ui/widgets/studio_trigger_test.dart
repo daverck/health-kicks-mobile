@@ -134,7 +134,9 @@ void main() {
       expect(find.text('Test Haptique'), findsOneWidget);
       expect(find.text('Studio'), findsOneWidget);
 
-      // Tap Studio button to open dialog
+      // Scroll to Studio button to ensure it is within viewport and tap to open dialog
+      await tester.ensureVisible(find.text('Studio'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Studio'));
       await tester.pumpAndSettle();
 

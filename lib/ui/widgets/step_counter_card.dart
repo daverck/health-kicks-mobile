@@ -23,6 +23,8 @@ class StepCounterCard extends StatelessWidget {
     final stairs = stepData?.stairsSteps ?? 0;
     final unclassified = stepData?.unclassifiedSteps ?? 0;
     final cadence = stepData?.cadenceSpm ?? 0;
+    final gct = stepData?.gctMs ?? 0;
+    final isRunning = run > walk;
 
     final progress = (stepGoal > 0) ? (total / stepGoal).clamp(0.0, 1.0) : 0.0;
     final cadenceInfo = _getCadenceStyle(cadence);
@@ -156,7 +158,11 @@ class StepCounterCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+
+            // Ground Contact Time (GCT) Biomechanical Metric Tile
+            _buildGctTile(context, gct, isRunning),
+            const SizedBox(height: 14),
 
             // Activity Breakdown Chips
             Wrap(
@@ -195,6 +201,67 @@ class StepCounterCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildGctTile(BuildContext context, int gct, bool isRunning) {
+    final theme = Theme.of(context);
+    final style = _getGctStyle(gct, isRunning);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: style.color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: style.color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Icon(style.icon, size: 20, color: style.color),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Temps de contact au sol',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                  Text(
+                    style.label,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: style.color,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: style.color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              gct > 0 ? '$gct ms' : '-- ms',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: style.color,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -266,6 +333,60 @@ class StepCounterCard extends StatelessWidget {
       );
     }
   }
+
+  _GctStyle _getGctStyle(int gct, bool isRunning) {
+    if (gct == 0) {
+      return const _GctStyle(
+        label: 'En attente de foulée',
+        color: Colors.grey,
+        icon: Icons.timer_outlined,
+      );
+    }
+
+    if (isRunning || gct <= 380) {
+      // Running efficiency evaluation
+      if (gct < 240) {
+        return const _GctStyle(
+          label: 'Foulée très dynamique (< 240 ms)',
+          color: Colors.green,
+          icon: Icons.electric_bolt_rounded,
+        );
+      } else if (gct <= 260) {
+        return const _GctStyle(
+          label: 'Foulée dynamique (< 260 ms)',
+          color: Colors.green,
+          icon: Icons.check_circle_outline_rounded,
+        );
+      } else if (gct <= 320) {
+        return const _GctStyle(
+          label: 'Foulée standard course',
+          color: Colors.teal,
+          icon: Icons.speed_rounded,
+        );
+      } else {
+        return const _GctStyle(
+          label: 'Appui long course (> 320 ms)',
+          color: Colors.orange,
+          icon: Icons.hourglass_bottom_rounded,
+        );
+      }
+    } else {
+      // Walking evaluation
+      if (gct <= 600) {
+        return const _GctStyle(
+          label: 'Contact marche normal',
+          color: Colors.blue,
+          icon: Icons.directions_walk_rounded,
+        );
+      } else {
+        return const _GctStyle(
+          label: 'Contact marche prolongé',
+          color: Colors.blueGrey,
+          icon: Icons.timelapse_rounded,
+        );
+      }
+    }
+  }
 }
 
 class _CadenceStyle {
@@ -274,6 +395,18 @@ class _CadenceStyle {
   final IconData icon;
 
   const _CadenceStyle({
+    required this.label,
+    required this.color,
+    required this.icon,
+  });
+}
+
+class _GctStyle {
+  final String label;
+  final Color color;
+  final IconData icon;
+
+  const _GctStyle({
     required this.label,
     required this.color,
     required this.icon,
