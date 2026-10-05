@@ -16,11 +16,13 @@ class SettingsScreen extends StatefulWidget {
   final Stream<String>? studioStatusStream;
 
   // Connectivity action controls & status
+  final BleConnectionManager? bleManager;
   final Future<void> Function()? onStartBleScan;
   final Future<void> Function()? onDisconnectBle;
   final Future<void> Function()? onReconnectMqtt;
   final BleConnectionStatus bleStatus;
   final bool isMqttConnected;
+  final ValueNotifier<bool>? isMqttConnectedNotifier;
   final String? deviceName;
   final String? targetDeviceId;
   final int mtu;
@@ -29,6 +31,7 @@ class SettingsScreen extends StatefulWidget {
     super.key,
     required this.surveillanceService,
     this.inactivitySettingsService,
+    this.bleManager,
     this.bleClient,
     this.onCalibrateSensor,
     this.isFootwearConnected = false,
@@ -38,6 +41,7 @@ class SettingsScreen extends StatefulWidget {
     this.onReconnectMqtt,
     this.bleStatus = BleConnectionStatus.disconnected,
     this.isMqttConnected = false,
+    this.isMqttConnectedNotifier,
     this.deviceName,
     this.targetDeviceId,
     this.mtu = 23,
@@ -71,13 +75,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.dispose();
   }
 
-  void _showCalibrationDialog(BuildContext context) {
+  void _showCalibrationDialog(BuildContext context, bool isConnected) {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => _ImuCalibrationDialog(
         onCalibrate: widget.onCalibrateSensor,
-        isConnected: widget.isFootwearConnected,
+        isConnected: isConnected,
         studioStatusStream: widget.studioStatusStream,
       ),
     );
@@ -85,31 +89,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isBleReady = widget.isFootwearConnected ||
-        widget.bleStatus == BleConnectionStatus.ready ||
-        widget.bleStatus == BleConnectionStatus.connected;
-    final isBleScanning = widget.bleStatus == BleConnectionStatus.scanning;
-    final isBleConnecting = widget.bleStatus == BleConnectionStatus.connecting;
-
-    final Color bleColor = isBleReady
-        ? Colors.green
-        : (isBleScanning || isBleConnecting ? Colors.orange : Colors.grey);
-
-    final String bleStatusText = isBleReady
-        ? 'Connecté (MTU: ${widget.mtu})'
-        : (isBleScanning
-            ? 'Scan en cours...'
-            : (isBleConnecting ? 'Connexion en cours...' : 'Déconnecté'));
-
-    final Color mqttColor = widget.isMqttConnected ? Colors.green : Colors.grey;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Paramètres'),
       ),
       body: ListenableBuilder(
-        listenable: Listenable.merge([widget.surveillanceService, _inactivityService]),
+        listenable: Listenable.merge([
+          widget.surveillanceService,
+          _inactivityService,
+          if (widget.bleManager != null) widget.bleManager!,
+          if (widget.isMqttConnectedNotifier != null) widget.isMqttConnectedNotifier!,
+        ]),
         builder: (context, _) {
+          final currentBleStatus = widget.bleManager?.status ?? widget.bleStatus;
+          final isBleReady = widget.isFootwearConnected ||
+              currentBleStatus == BleConnectionStatus.ready ||
+              currentBleStatus == BleConnectionStatus.connected;
+          final isBleScanning = currentBleStatus == BleConnectionStatus.scanning;
+          final isBleConnecting = currentBleStatus == BleConnectionStatus.connecting;
+
+          final Color bleColor = isBleReady
+              ? Colors.green
+              : (isBleScanning || isBleConnecting ? Colors.orange : Colors.grey);
+
+          final currentMtu = widget.bleManager?.negotiatedMtu ?? widget.mtu;
+          final String currentDeviceName = widget.bleManager?.connectedDevice?.platformName.isNotEmpty == true
+              ? widget.bleManager!.connectedDevice!.platformName
+              : (widget.deviceName ?? widget.targetDeviceId ?? 'HealthKicks-HK-2');
+
+          final String bleStatusText = isBleReady
+              ? 'Connecté (MTU: $currentMtu)'
+              : (isBleScanning
+                  ? 'Scan en cours...'
+                  : (isBleConnecting ? 'Connexion en cours...' : 'Déconnecté'));
+
+          final isMqttConnected = widget.isMqttConnectedNotifier?.value ?? widget.isMqttConnected;
+          final Color mqttColor = isMqttConnected ? Colors.green : Colors.grey;
+
+          final VoidCallback? onDisconnect = isBleReady
+              ? (widget.onDisconnectBle != null
+                  ? () {
+                      widget.onDisconnectBle!();
+                    }
+                  : (widget.bleManager != null
+                      ? () {
+                          widget.bleManager!.disconnect();
+                        }
+                      : null))
+              : null;
+
           return ListView(
             padding: const EdgeInsets.symmetric(vertical: 12.0),
             children: [
@@ -190,7 +218,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Périphérique cible : ${widget.deviceName ?? widget.targetDeviceId ?? "HealthKicks-HK-2"}',
+                        'Périphérique cible : $currentDeviceName',
                         style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                       ),
                       const SizedBox(height: 10),
@@ -203,13 +231,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               onPressed: widget.onStartBleScan,
                             ),
                           ),
-                          if (isBleReady && widget.onDisconnectBle != null) ...[
+                          if (onDisconnect != null) ...[
                             const SizedBox(width: 8),
                             Expanded(
                               child: FilledButton.tonalIcon(
                                 icon: const Icon(Icons.bluetooth_disabled, size: 16),
                                 label: const Text('Déconnecter'),
-                                onPressed: widget.onDisconnectBle,
+                                onPressed: onDisconnect,
                               ),
                             ),
                           ],
@@ -270,7 +298,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  widget.isMqttConnected ? 'Connecté' : 'Déconnecté',
+                                  isMqttConnected ? 'Connecté' : 'Déconnecté',
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
@@ -574,19 +602,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Row(
                     children: [
                       Icon(
-                        widget.isFootwearConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
+                        isBleReady ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
                         size: 14,
-                        color: widget.isFootwearConnected ? Colors.green : Colors.grey,
+                        color: isBleReady ? Colors.green : Colors.grey,
                       ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          widget.isFootwearConnected
+                          isBleReady
                               ? 'Synchronisé en direct avec la chaussure'
                               : 'Sera synchronisé dès la prochaine connexion BLE',
                           style: TextStyle(
                             fontSize: 11,
-                            color: widget.isFootwearConnected ? Colors.green.shade700 : Colors.grey.shade600,
+                            color: isBleReady ? Colors.green.shade700 : Colors.grey.shade600,
                           ),
                         ),
                       ),
@@ -622,7 +650,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   'Recalibre l\'horizontalité et la compensation d\'inclinaison mécanique',
                 ),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => _showCalibrationDialog(context),
+                onTap: () => _showCalibrationDialog(context, isBleReady),
               ),
 
               const Divider(height: 32),

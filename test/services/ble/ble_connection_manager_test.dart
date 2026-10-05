@@ -62,6 +62,52 @@ void main() {
       );
       expect(manager.status, equals(BleConnectionStatus.disconnected));
     });
+
+    test('BleConnectionManager notifies ChangeNotifier listeners and statusStream on transitions', () async {
+      final manager = BleConnectionManager(
+        permissionService: FakePermissionService(granted: true),
+      );
+      addTearDown(manager.dispose);
+
+      int listenerNotificationCount = 0;
+      manager.addListener(() {
+        listenerNotificationCount++;
+      });
+
+      final receivedStatuses = <BleConnectionStatus>[];
+      final sub = manager.statusStream.listen(receivedStatuses.add);
+      addTearDown(sub.cancel);
+
+      manager.updateStatusForTesting(BleConnectionStatus.scanning);
+      expect(manager.status, equals(BleConnectionStatus.scanning));
+      expect(listenerNotificationCount, equals(1));
+
+      manager.updateStatusForTesting(BleConnectionStatus.connecting);
+      expect(manager.status, equals(BleConnectionStatus.connecting));
+      expect(listenerNotificationCount, equals(2));
+
+      manager.updateStatusForTesting(BleConnectionStatus.connected);
+      expect(manager.status, equals(BleConnectionStatus.connected));
+      expect(listenerNotificationCount, equals(3));
+
+      manager.updateStatusForTesting(BleConnectionStatus.ready);
+      expect(manager.status, equals(BleConnectionStatus.ready));
+      expect(listenerNotificationCount, equals(4));
+
+      manager.updateStatusForTesting(BleConnectionStatus.disconnected);
+      expect(manager.status, equals(BleConnectionStatus.disconnected));
+      expect(listenerNotificationCount, equals(5));
+
+      await pumpEventQueue();
+
+      expect(receivedStatuses, equals([
+        BleConnectionStatus.scanning,
+        BleConnectionStatus.connecting,
+        BleConnectionStatus.connected,
+        BleConnectionStatus.ready,
+        BleConnectionStatus.disconnected,
+      ]));
+    });
   });
 }
 

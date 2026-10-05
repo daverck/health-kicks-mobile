@@ -176,6 +176,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
   BluetoothDevice? _connectedDevice;
   int _mtu = 23;
   bool _mqttConnected = false;
+  final ValueNotifier<bool> _mqttConnectedNotifier = ValueNotifier<bool>(false);
+  bool _isInitializingBleClient = false;
   StepDataModel? _latestStepData;
   final List<ActivityDetectionModel> _recentActivities = [];
   DateTime? _lastInactivityToastTime;
@@ -277,8 +279,13 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
       },
     );
 
+    _bleStatus = _bleManager!.status;
+    _connectedDevice = _bleManager!.connectedDevice;
+    _mtu = _bleManager!.negotiatedMtu;
+    _bleManager!.addListener(_onBleManagerUpdated);
+
     _bleManager!.statusStream.listen((status) {
-      if (!mounted) return;
+      if (!mounted || _isDisposed) return;
       setState(() {
         _bleStatus = status;
         _connectedDevice = _bleManager?.connectedDevice;
@@ -312,12 +319,22 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
     });
   }
 
+  void _onBleManagerUpdated() {
+    if (!mounted || _isDisposed) return;
+    setState(() {
+      _bleStatus = _bleManager!.status;
+      _connectedDevice = _bleManager!.connectedDevice;
+      _mtu = _bleManager!.negotiatedMtu;
+    });
+  }
+
   bool _isDisposed = false;
 
   @override
   void dispose() {
     _isDisposed = true;
     WidgetsBinding.instance.removeObserver(this);
+    _bleManager?.removeListener(_onBleManagerUpdated);
     _inactivitySettingsService.dispose();
     _stepSyncService.dispose();
     _stepStorageService.close();
@@ -327,6 +344,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
     _bleManager?.dispose();
     _surveillanceService.dispose();
     _mqttService?.disconnect();
+    _mqttConnectedNotifier.dispose();
     super.dispose();
   }
 
@@ -435,7 +453,10 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
 
       final connected = await _mqttService!.connect();
       if (mounted) {
-        setState(() => _mqttConnected = connected);
+        setState(() {
+          _mqttConnected = connected;
+          _mqttConnectedNotifier.value = connected;
+        });
       }
 
       if (connected) {
@@ -457,7 +478,10 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
     } catch (e) {
       _addLog('MQTT', 'Erreur MQTT inattendue : $e', color: Colors.red);
       if (mounted) {
-        setState(() => _mqttConnected = false);
+        setState(() {
+          _mqttConnected = false;
+          _mqttConnectedNotifier.value = false;
+        });
       }
     }
   }
@@ -555,6 +579,13 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
 
     _ensureBleManager();
 
+    if (mounted) {
+      setState(() {
+        _bleStatus = BleConnectionStatus.scanning;
+        _connectedDevice = null;
+      });
+    }
+
     // When starting scan, device is no longer active: publish offline
     if (_coordinator != null) {
       _coordinator?.stopRouting(notifyOffline: true);
@@ -606,9 +637,16 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
   }
 
   Future<void> _onBleDeviceReady(BluetoothDevice device) async {
+    if (_isInitializingBleClient) return;
+    if (_bleClient != null && _bleClient!.device.remoteId == device.remoteId && _bleClient!.isReady) {
+      return;
+    }
+    _isInitializingBleClient = true;
+
     _addLog('BLE', 'Appareil connecté : ${device.platformName} (MTU: $_mtu octets)');
 
     try {
+      _bleClient?.dispose();
       _bleClient = BleFootwearClient(
         device: device,
         onLog: (msg, {bool isError = false}) {
@@ -714,6 +752,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
       }
     } catch (e) {
       _addLog('BLE', 'Erreur initialisation GATT : $e', color: Colors.red);
+    } finally {
+      _isInitializingBleClient = false;
     }
   }
 
@@ -1024,6 +1064,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
   }
 
   void _openSettingsScreen() {
+    _ensureBleManager();
     final isConnected = _bleClient != null &&
         (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected);
     Navigator.of(context).push(
@@ -1031,27 +1072,27 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         builder: (_) => SettingsScreen(
           surveillanceService: _surveillanceService,
           inactivitySettingsService: _inactivitySettingsService,
+          bleManager: _bleManager,
           bleClient: _bleClient,
           isFootwearConnected: isConnected,
           studioStatusStream: _bleClient?.studioStatusStream,
           bleStatus: _bleStatus,
           isMqttConnected: _mqttConnected,
+          isMqttConnectedNotifier: _mqttConnectedNotifier,
           deviceName: _connectedDevice?.platformName,
           targetDeviceId: _targetDeviceId,
           mtu: _mtu,
           onStartBleScan: () => _startBleScan(fromButton: true),
-          onDisconnectBle: isConnected
-              ? () async {
-                  await _bleManager?.disconnect();
-                }
-              : null,
+          onDisconnectBle: () async {
+            await _bleManager?.disconnect();
+          },
           onReconnectMqtt: _connectMqtt,
-          onCalibrateSensor: isConnected
-              ? () async {
-                  _addLog('CONFIG', 'Envoi ordre de calibration d\'assiette (0x05)...');
-                  await _bleClient?.sendCalibrateZeroCommand();
-                }
-              : null,
+          onCalibrateSensor: () async {
+            if (_bleClient != null) {
+              _addLog('CONFIG', 'Envoi ordre de calibration d\'assiette (0x05)...');
+              await _bleClient?.sendCalibrateZeroCommand();
+            }
+          },
         ),
       ),
     );

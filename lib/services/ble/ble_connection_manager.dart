@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../core/constants/ble_constants.dart';
 import '../../core/permissions/permission_service.dart';
@@ -15,7 +16,7 @@ enum BleConnectionStatus {
 typedef BleLogCallback = void Function(String message);
 
 /// Bluetooth Low Energy connection lifecycle manager for the HealthKicks footwear device.
-class BleConnectionManager {
+class BleConnectionManager extends ChangeNotifier {
   final PermissionService _permissionService;
   final BleLogCallback? onLog;
 
@@ -40,12 +41,19 @@ class BleConnectionManager {
     this.onLog,
   }) : _permissionService = permissionService ?? PermissionService();
 
+  bool _isDisposed = false;
+
   void _updateStatus(BleConnectionStatus newStatus) {
+    if (_isDisposed) return;
     _status = newStatus;
+    notifyListeners();
     if (!_statusController.isClosed) {
       _statusController.add(newStatus);
     }
   }
+
+  @visibleForTesting
+  void updateStatusForTesting(BleConnectionStatus newStatus) => _updateStatus(newStatus);
 
   /// Starts scanning and automatically connects to the first detected HealthKicks device.
   /// If no device is found after [timeout] (default 3 minutes), scanning stops automatically.
@@ -160,7 +168,11 @@ class BleConnectionManager {
           await _scanSubscription?.cancel();
           _scanSubscription = null;
 
-          await connectToDevice(r.device, onLog: log);
+          try {
+            await connectToDevice(r.device, onLog: log);
+          } catch (e) {
+            log?.call('Auto-connect attempt failed: $e');
+          }
           break;
         }
       }
@@ -194,16 +206,24 @@ class BleConnectionManager {
       } else {
         _negotiatedMtu = 247;
       }
+      notifyListeners();
 
-      // Listen to connection state to handle automatic reconnection
+      // Listen to connection state to handle automatic reconnection & unexpected drops
+      await _deviceStateSubscription?.cancel();
       _deviceStateSubscription = device.connectionState.listen((state) {
         if (state == BluetoothConnectionState.disconnected) {
           log?.call('Device disconnected.');
+          _connectedDevice = null;
+          _negotiatedMtu = 23;
+          _deviceStateSubscription?.cancel();
+          _deviceStateSubscription = null;
           _updateStatus(BleConnectionStatus.disconnected);
         } else if (state == BluetoothConnectionState.connected) {
           if (_status != BleConnectionStatus.ready) {
             log?.call('Device reconnected.');
+            _connectedDevice = device;
             _updateStatus(BleConnectionStatus.connected);
+            _updateStatus(BleConnectionStatus.ready);
           }
         }
       });
@@ -211,6 +231,10 @@ class BleConnectionManager {
       _updateStatus(BleConnectionStatus.ready);
       log?.call('Device ready for services initialization.');
     } catch (e) {
+      _connectedDevice = null;
+      _negotiatedMtu = 23;
+      await _deviceStateSubscription?.cancel();
+      _deviceStateSubscription = null;
       _updateStatus(BleConnectionStatus.disconnected);
       log?.call('Connection error: $e');
       rethrow;
@@ -227,16 +251,29 @@ class BleConnectionManager {
     _deviceStateSubscription = null;
 
     if (_connectedDevice != null) {
-      await _connectedDevice!.disconnect();
+      try {
+        await _connectedDevice!.disconnect();
+      } catch (_) {}
       _connectedDevice = null;
     }
+    _negotiatedMtu = 23;
     _updateStatus(BleConnectionStatus.disconnected);
   }
 
+  @override
   void dispose() {
+    _isDisposed = true;
     _scanTimeoutTimer?.cancel();
     _scanTimeoutTimer = null;
-    disconnect();
+    _scanSubscription?.cancel();
+    _deviceStateSubscription?.cancel();
+    if (_connectedDevice != null) {
+      try {
+        _connectedDevice!.disconnect();
+      } catch (_) {}
+      _connectedDevice = null;
+    }
     _statusController.close();
+    super.dispose();
   }
 }

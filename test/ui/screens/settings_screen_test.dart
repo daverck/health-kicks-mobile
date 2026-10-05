@@ -267,5 +267,66 @@ void main() {
       expect(find.text('Délai de répétition (Cooldown / Snooze)'), findsNothing);
       expect(find.byType(Slider), findsOneWidget); // Only threshold slider remains
     });
+
+    testWidgets('SettingsScreen dynamically updates BLE status badge and buttons in real time when BleConnectionManager changes', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final service = BackgroundSurveillanceService();
+      addTearDown(service.dispose);
+
+      final bleManager = BleConnectionManager();
+      addTearDown(bleManager.dispose);
+
+      final mqttNotifier = ValueNotifier<bool>(true);
+      addTearDown(mqttNotifier.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SettingsScreen(
+            surveillanceService: service,
+            bleManager: bleManager,
+            isMqttConnectedNotifier: mqttNotifier,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 1. Initial state: Disconnected
+      expect(find.text('Déconnecté'), findsOneWidget);
+      expect(find.text('Re-scanner'), findsOneWidget);
+      expect(find.text('Déconnecter'), findsNothing);
+
+      // 2. Transition to Scanning
+      bleManager.updateStatusForTesting(BleConnectionStatus.scanning);
+      await tester.pump();
+      expect(find.text('Scan en cours...'), findsOneWidget);
+      expect(find.text('Déconnecter'), findsNothing);
+
+      // 3. Transition to Connecting
+      bleManager.updateStatusForTesting(BleConnectionStatus.connecting);
+      await tester.pump();
+      expect(find.text('Connexion en cours...'), findsOneWidget);
+      expect(find.text('Déconnecter'), findsNothing);
+
+      // 4. Transition to Ready
+      bleManager.updateStatusForTesting(BleConnectionStatus.ready);
+      await tester.pump();
+      expect(find.text('Connecté (MTU: 23)'), findsOneWidget);
+      expect(find.text('Déconnecter'), findsOneWidget);
+
+      // 5. Cloud MQTT transition
+      mqttNotifier.value = false;
+      await tester.pump();
+
+      // 6. Transition back to Disconnected
+      bleManager.updateStatusForTesting(BleConnectionStatus.disconnected);
+      await tester.pump();
+      expect(find.text('Connecté (MTU: 23)'), findsNothing);
+      expect(find.text('Déconnecter'), findsNothing);
+      expect(find.text('Re-scanner'), findsOneWidget);
+    });
   });
 }
