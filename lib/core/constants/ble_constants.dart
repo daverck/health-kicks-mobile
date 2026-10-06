@@ -40,6 +40,7 @@ class BleConstants {
   static const int otaRespChunkAck = 0x11;
   static const int otaRespSuccess = 0x12;
   static const int otaRespError = 0xFF;
+  static const int otaErrChecksumMismatch = 0x07;
 
   // Packet types for Burst Transfer
   static const int packetTypeStartOfBurst = 0x01;

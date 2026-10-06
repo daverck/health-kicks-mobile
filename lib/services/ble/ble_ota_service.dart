@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../core/constants/ble_constants.dart';
 
@@ -101,6 +102,8 @@ class BleOtaService {
         return 'Image validation/CRC failed (esp_ota_end 0x05)';
       case 0x06:
         return 'Switch active boot partition failed (0x06)';
+      case 0x07:
+        return 'SHA-256 cryptographic checksum mismatch (0x07)';
       default:
         return 'Unknown firmware error code (0x${code.toRadixString(16)})';
     }
@@ -289,15 +292,20 @@ class BleOtaService {
 
       stopwatch.stop();
 
-      // 8. Finalize update by sending OTA_END (0x02)
+      // 8. Finalize update by sending OTA_END (0x02) with 32-byte SHA-256 digest
       _emit(_currentProgress.copyWith(
         status: BleOtaStatus.finalizing,
         bytesSent: totalSize,
         progress: 1.0,
-        message: 'Vérification de l\'intégrité de l\'image et bascule de boot...',
+        message: 'Validation cryptographique SHA-256 et bascule de boot...',
       ));
 
-      await controlChar.write([BleConstants.otaCmdEnd], withoutResponse: false);
+      final sha256Bytes = sha256.convert(firmwareBytes).bytes;
+      final endPayload = Uint8List(1 + 32);
+      endPayload[0] = BleConstants.otaCmdEnd;
+      endPayload.setRange(1, 33, sha256Bytes);
+
+      await controlChar.write(endPayload, withoutResponse: false);
 
       // 9. Await OTA_SUCCESS confirmation (timeout 15 seconds)
       try {

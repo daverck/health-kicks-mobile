@@ -28,6 +28,7 @@ void main() {
       expect(BleOtaService.formatErrorCode(0x04), contains('byte count mismatch'));
       expect(BleOtaService.formatErrorCode(0x05), contains('esp_ota_end'));
       expect(BleOtaService.formatErrorCode(0x06), contains('Switch active boot partition failed'));
+      expect(BleOtaService.formatErrorCode(0x07), contains('SHA-256'));
       expect(BleOtaService.formatErrorCode(0x99), contains('0x99'));
     });
 
