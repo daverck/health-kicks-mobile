@@ -1,0 +1,619 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:http/http.dart' as http;
+import '../../services/ble/ble_ota_service.dart';
+
+/// Screen managing firmware selection and Over-The-Air (OTA) flashing over BLE GATT.
+class FirmwareUpdateScreen extends StatefulWidget {
+  final BluetoothDevice? device;
+  final String currentFirmwareVersion;
+  final BleOtaService? otaService;
+
+  const FirmwareUpdateScreen({
+    super.key,
+    this.device,
+    this.currentFirmwareVersion = 'v1.2.0-esp32s3',
+    this.otaService,
+  });
+
+  @override
+  State<FirmwareUpdateScreen> createState() => _FirmwareUpdateScreenState();
+}
+
+class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
+  late final BleOtaService _otaService;
+  StreamSubscription<BleOtaProgress>? _otaSubscription;
+
+  Uint8List? _selectedFirmwareBytes;
+  String? _selectedFileName;
+  String _targetFirmwareVersion = 'v1.2.1-esp32s3';
+
+  final TextEditingController _urlController = TextEditingController();
+  final TextEditingController _customPathController = TextEditingController();
+  bool _isDownloading = false;
+
+  BleOtaProgress _progress =
+      const BleOtaProgress(status: BleOtaStatus.idle);
+
+  @override
+  void initState() {
+    super.initState();
+    _otaService = widget.otaService ?? BleOtaService();
+    _otaSubscription = _otaService.progressStream.listen((prog) {
+      if (mounted) {
+        setState(() {
+          _progress = prog;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _otaSubscription?.cancel();
+    _urlController.dispose();
+    _customPathController.dispose();
+    if (widget.otaService == null) {
+      _otaService.dispose();
+    }
+    super.dispose();
+  }
+
+  void _generateDemoBinary(int sizeKb) {
+    // Generates a mock ESP32-S3 test binary with valid image header magic 0xE9
+    final size = sizeKb * 1024;
+    final bytes = Uint8List(size);
+    bytes[0] = 0xE9; // ESP32 image magic byte
+    bytes[1] = 0x03; // Segment count
+    bytes[2] = 0x02; // Flash SPI mode
+    bytes[3] = 0x20; // Flash SPI speed / size
+
+    // Fill with pattern
+    for (int i = 4; i < size; i++) {
+      bytes[i] = (i % 256);
+    }
+
+    setState(() {
+      _selectedFirmwareBytes = bytes;
+      _selectedFileName = 'demo_firmware_${sizeKb}kb.bin';
+      _targetFirmwareVersion = 'v1.2.1-test';
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Binaire de test chargé ($sizeKb Ko, magique 0xE9)'),
+        backgroundColor: Colors.blueGrey,
+      ),
+    );
+  }
+
+  Future<void> _loadFromLocalPath(String path) async {
+    final file = File(path);
+    if (!await file.exists()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Fichier introuvable : $path'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final bytes = await file.readAsBytes();
+    if (!mounted) return;
+    setState(() {
+      _selectedFirmwareBytes = bytes;
+      _selectedFileName = file.uri.pathSegments.last;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Fichier chargé (${(bytes.length / 1024).toStringAsFixed(1)} Ko)'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  Future<void> _downloadFromUrl(String url) async {
+    if (url.trim().isEmpty) return;
+
+    setState(() {
+      _isDownloading = true;
+    });
+
+    try {
+      final response = await http.get(Uri.parse(url.trim()));
+      if (response.statusCode == 200) {
+        if (!mounted) return;
+        setState(() {
+          _selectedFirmwareBytes = response.bodyBytes;
+          _selectedFileName = url.split('/').last.split('?').first;
+          if (_selectedFileName!.isEmpty) {
+            _selectedFileName = 'firmware_downloaded.bin';
+          }
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Téléchargement réussi (${(_selectedFirmwareBytes!.length / 1024).toStringAsFixed(1)} Ko)'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        throw Exception('HTTP ${response.statusCode}');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur de téléchargement : $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _startFlashing() async {
+    if (widget.device == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Aucune chaussure connectée en BLE.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedFirmwareBytes == null || _selectedFirmwareBytes!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Veuillez sélectionner ou charger un fichier binaire.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Open non-dismissible modal during update
+    _showProgressModal();
+
+    await _otaService.startUpdate(
+      device: widget.device!,
+      firmwareBytes: _selectedFirmwareBytes!,
+    );
+  }
+
+  void _showProgressModal() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        return StreamBuilder<BleOtaProgress>(
+          stream: _otaService.progressStream,
+          initialData: _progress,
+          builder: (context, snapshot) {
+            final prog = snapshot.data ?? _progress;
+            final isBusy = prog.status == BleOtaStatus.preparing ||
+                prog.status == BleOtaStatus.transferring ||
+                prog.status == BleOtaStatus.finalizing;
+            final isDone = prog.status == BleOtaStatus.success;
+            final isError = prog.status == BleOtaStatus.error ||
+                prog.status == BleOtaStatus.aborted;
+
+            return PopScope(
+              canPop: !isBusy,
+              child: AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                title: Row(
+                  children: [
+                    Icon(
+                      isDone
+                          ? Icons.check_circle
+                          : isError
+                              ? Icons.error_outline
+                              : Icons.system_update_alt,
+                      color: isDone
+                          ? Colors.green
+                          : isError
+                              ? Colors.red
+                              : Theme.of(context).primaryColor,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        isDone
+                            ? 'Mise à jour réussie'
+                            : isError
+                                ? 'Erreur de mise à jour'
+                                : 'Mise à jour en cours',
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                    ),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      prog.message ?? 'Préparation du transfert...',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isError ? Colors.red.shade700 : Colors.black87,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    LinearProgressIndicator(
+                      value: prog.status == BleOtaStatus.preparing
+                          ? null
+                          : prog.progress,
+                      minHeight: 10,
+                      borderRadius: BorderRadius.circular(5),
+                      backgroundColor: Colors.grey.shade200,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        isDone
+                            ? Colors.green
+                            : isError
+                                ? Colors.red
+                                : Theme.of(context).primaryColor,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${(prog.progress * 100).toStringAsFixed(1)} %',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          '${(prog.bytesSent / 1024).toStringAsFixed(0)} / ${(prog.totalBytes / 1024).toStringAsFixed(0)} Ko',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (prog.status == BleOtaStatus.transferring) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Débit : ${prog.speedKbps.toStringAsFixed(1)} Ko/s',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          if (prog.estimatedTimeRemaining != null)
+                            Text(
+                              'Restant : ~${prog.estimatedTimeRemaining!.inSeconds} s',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                    if (isDone) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.green.shade200),
+                        ),
+                        child: const Text(
+                          'L\'ESP32-S3 a validé la nouvelle partition et redémarre automatiquement.',
+                          style: TextStyle(fontSize: 12, color: Colors.green),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                actions: [
+                  if (isBusy && prog.status != BleOtaStatus.finalizing)
+                    TextButton(
+                      onPressed: () {
+                        _otaService.abort();
+                      },
+                      child: const Text(
+                        'Annuler',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  if (!isBusy)
+                    FilledButton(
+                      onPressed: () {
+                        Navigator.of(dialogCtx).pop();
+                      },
+                      child: Text(isDone ? 'Terminer' : 'Fermer'),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasDevice = widget.device != null;
+    final isUpdating = _otaService.isUpdating;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Mise à jour Firmware OTA'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // 1. Device Info Card
+          Card(
+            elevation: 1,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: hasDevice ? Colors.green.shade100 : Colors.red.shade100,
+                    child: Icon(
+                      hasDevice ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
+                      color: hasDevice ? Colors.green.shade800 : Colors.red.shade800,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          hasDevice
+                              ? widget.device!.platformName.isNotEmpty
+                                  ? widget.device!.platformName
+                                  : 'Chaussure Connectée (ESP32-S3)'
+                              : 'Non connectée',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Version installée : ${widget.currentFirmwareVersion}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 2. Target Firmware Selection Card
+          Card(
+            elevation: 1,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Fichier Binaire Firmware (.bin)',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Sélectionnez le binaire compilé (ex. PlatformIO firmware.bin) à injecter dans le slot OTA inactif.',
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Selected File Badge
+                  if (_selectedFirmwareBytes != null)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.description, color: Colors.blue),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _selectedFileName ?? 'firmware.bin',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                Text(
+                                  '${(_selectedFirmwareBytes!.length / 1024).toStringAsFixed(1)} Ko · Cible: $_targetFirmwareVersion',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 20),
+                            onPressed: () {
+                              setState(() {
+                                _selectedFirmwareBytes = null;
+                                _selectedFileName = null;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'Aucun fichier sélectionné',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 8),
+
+                  // Option A: Quick Demo Binary
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.flash_on, size: 18),
+                          label: const Text('Binaire Test 64 Ko'),
+                          onPressed: isUpdating ? null : () => _generateDemoBinary(64),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.flash_on, size: 18),
+                          label: const Text('Binaire Test 256 Ko'),
+                          onPressed: isUpdating ? null : () => _generateDemoBinary(256),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Option B: Download from URL
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _urlController,
+                          decoration: InputDecoration(
+                            hintText: 'https://.../firmware.bin',
+                            isDense: true,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            prefixIcon: const Icon(Icons.link, size: 20),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: (_isDownloading || isUpdating)
+                            ? null
+                            : () => _downloadFromUrl(_urlController.text),
+                        child: _isDownloading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text('Télécharger'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Option C: Local path
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _customPathController,
+                          decoration: InputDecoration(
+                            hintText: 'Chemin local (.bin)...',
+                            isDense: true,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            prefixIcon: const Icon(Icons.folder_open, size: 20),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton(
+                        onPressed: isUpdating
+                            ? null
+                            : () => _loadFromLocalPath(_customPathController.text),
+                        child: const Text('Charger'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // 3. Trigger Flash Button
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            icon: const Icon(Icons.cloud_upload_outlined),
+            label: const Text(
+              'Lancer la Mise à Jour OTA',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            onPressed: (!hasDevice || _selectedFirmwareBytes == null || isUpdating)
+                ? null
+                : _startFlashing,
+          ),
+        ],
+      ),
+    );
+  }
+}

@@ -4,6 +4,7 @@ import '../../services/background_surveillance_service.dart';
 import '../../services/inactivity_settings_service.dart';
 import '../../services/ble/ble_connection_manager.dart';
 import '../../services/ble/ble_footwear_client.dart';
+import 'firmware_update_screen.dart';
 
 /// Screen allowing the user to configure mobile gateway settings,
 /// BLE/MQTT connectivity actions, background surveillance, inactivity reminders, and tilt calibration.
@@ -655,7 +656,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               const Divider(height: 32),
 
-              // 4. App Info section
+              // 4. Firmware OTA Update Category
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Text(
+                  'MISE À JOUR MATÉRIELLE (FIRMWARE OTA)',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.1,
+                      ),
+                ),
+              ),
+              ListTile(
+                leading: Icon(
+                  Icons.system_update_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                title: const Text(
+                  'Mise à jour du firmware (BLE)',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  'Transférer un nouveau binaire .bin vers la chaussure connectée',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (ctx) => FirmwareUpdateScreen(
+                        device: widget.bleClient?.device ?? widget.bleManager?.connectedDevice,
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              const Divider(height: 32),
+
+              // 5. App Info section
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 child: Text(

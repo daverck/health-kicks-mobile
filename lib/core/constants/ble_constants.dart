@@ -21,6 +21,26 @@ class BleConstants {
   /// Characteristic 5: Step Counter / Pedometer (READ, NOTIFY)
   static const String stepCounterCharUuid = '7a5a0006-c529-4d64-8848-18e5904de22a';
 
+  /// Secondary Service: OTA Firmware Update
+  static const String otaServiceUuid = '7a5a0010-c529-4d64-8848-18e5904de22a';
+
+  /// OTA Characteristic 1: OTA Control (WRITE, NOTIFY)
+  static const String otaControlCharUuid = '7a5a0011-c529-4d64-8848-18e5904de22a';
+
+  /// OTA Characteristic 2: OTA Data (WRITE, WRITE WITHOUT RESPONSE)
+  static const String otaDataCharUuid = '7a5a0012-c529-4d64-8848-18e5904de22a';
+
+  // OTA Commands (Phone -> ESP32)
+  static const int otaCmdBegin = 0x01;
+  static const int otaCmdEnd = 0x02;
+  static const int otaCmdAbort = 0x03;
+
+  // OTA Notifications (ESP32 -> Phone)
+  static const int otaRespReady = 0x10;
+  static const int otaRespChunkAck = 0x11;
+  static const int otaRespSuccess = 0x12;
+  static const int otaRespError = 0xFF;
+
   // Packet types for Burst Transfer
   static const int packetTypeStartOfBurst = 0x01;
   static const int packetTypeDataChunk = 0x02;
