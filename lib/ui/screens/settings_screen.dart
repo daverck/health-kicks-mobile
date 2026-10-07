@@ -4,13 +4,15 @@ import '../../services/background_surveillance_service.dart';
 import '../../services/inactivity_settings_service.dart';
 import '../../services/ble/ble_connection_manager.dart';
 import '../../services/ble/ble_footwear_client.dart';
+import '../../services/theme_service.dart';
 import 'firmware_update_screen.dart';
 
 /// Screen allowing the user to configure mobile gateway settings,
-/// BLE/MQTT connectivity actions, background surveillance, inactivity reminders, and tilt calibration.
+/// BLE/MQTT connectivity actions, background surveillance, inactivity reminders, appearance/theme, and tilt calibration.
 class SettingsScreen extends StatefulWidget {
   final BackgroundSurveillanceService surveillanceService;
   final InactivitySettingsService? inactivitySettingsService;
+  final ThemeService? themeService;
   final BleFootwearClient? bleClient;
   final Future<void> Function()? onCalibrateSensor;
   final bool isFootwearConnected;
@@ -32,6 +34,7 @@ class SettingsScreen extends StatefulWidget {
     super.key,
     required this.surveillanceService,
     this.inactivitySettingsService,
+    this.themeService,
     this.bleManager,
     this.bleClient,
     this.onCalibrateSensor,
@@ -55,6 +58,8 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late final InactivitySettingsService _inactivityService;
   bool _ownsInactivityService = false;
+  late final ThemeService _themeService;
+  bool _ownsThemeService = false;
 
   @override
   void initState() {
@@ -66,12 +71,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _ownsInactivityService = true;
       unawaited(_inactivityService.loadSettings());
     }
+
+    if (widget.themeService != null) {
+      _themeService = widget.themeService!;
+    } else {
+      _themeService = ThemeService();
+      _ownsThemeService = true;
+      unawaited(_themeService.loadTheme());
+    }
   }
 
   @override
   void dispose() {
     if (_ownsInactivityService) {
       _inactivityService.dispose();
+    }
+    if (_ownsThemeService) {
+      _themeService.dispose();
     }
     super.dispose();
   }
@@ -694,7 +710,88 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               const Divider(height: 32),
 
-              // 5. App Info section
+              // 5. App Theme Category
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Text(
+                  'APPARENCE & THÈME',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.1,
+                      ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                child: Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(
+                      color: Theme.of(context).dividerColor.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Thème de l\'application',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Choisissez le mode d\'affichage clair, sombre ou automatique.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        ListenableBuilder(
+                          listenable: _themeService,
+                          builder: (context, _) {
+                            return SizedBox(
+                              width: double.infinity,
+                              child: SegmentedButton<AppThemeMode>(
+                                segments: const [
+                                  ButtonSegment<AppThemeMode>(
+                                    value: AppThemeMode.system,
+                                    label: Text('Système'),
+                                    icon: Icon(Icons.brightness_auto, size: 18),
+                                  ),
+                                  ButtonSegment<AppThemeMode>(
+                                    value: AppThemeMode.light,
+                                    label: Text('Clair'),
+                                    icon: Icon(Icons.light_mode, size: 18),
+                                  ),
+                                  ButtonSegment<AppThemeMode>(
+                                    value: AppThemeMode.dark,
+                                    label: Text('Sombre'),
+                                    icon: Icon(Icons.dark_mode, size: 18),
+                                  ),
+                                ],
+                                selected: {_themeService.currentMode},
+                                onSelectionChanged: (Set<AppThemeMode> selected) {
+                                  if (selected.isNotEmpty) {
+                                    _themeService.setThemeMode(selected.first);
+                                  }
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              const Divider(height: 32),
+
+              // 6. App Info section
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 child: Text(

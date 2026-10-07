@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:healthkicks_mobile/services/background_surveillance_service.dart';
 import 'package:healthkicks_mobile/services/ble/ble_connection_manager.dart';
+import 'package:healthkicks_mobile/services/theme_service.dart';
 import 'package:healthkicks_mobile/ui/screens/settings_screen.dart';
 
 void main() {
@@ -327,6 +328,57 @@ void main() {
       expect(find.text('Connecté (MTU: 23)'), findsNothing);
       expect(find.text('Déconnecter'), findsNothing);
       expect(find.text('Re-scanner'), findsOneWidget);
+    });
+
+    testWidgets('Renders APPARENCE & THÈME category and toggles theme modes', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final surveillance = BackgroundSurveillanceService();
+      addTearDown(surveillance.dispose);
+
+      final themeService = ThemeService();
+      addTearDown(themeService.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SettingsScreen(
+            surveillanceService: surveillance,
+            themeService: themeService,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('APPARENCE & THÈME'),
+        300,
+        scrollable: find.byType(Scrollable),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('APPARENCE & THÈME'), findsOneWidget);
+      expect(find.text('Thème de l\'application'), findsOneWidget);
+      expect(find.text('Système'), findsOneWidget);
+      expect(find.text('Clair'), findsOneWidget);
+      expect(find.text('Sombre'), findsOneWidget);
+
+      // Tap on Light theme
+      await tester.tap(find.text('Clair'));
+      await tester.pumpAndSettle();
+      expect(themeService.currentMode, equals(AppThemeMode.light));
+
+      // Tap on Dark theme
+      await tester.tap(find.text('Sombre'));
+      await tester.pumpAndSettle();
+      expect(themeService.currentMode, equals(AppThemeMode.dark));
+
+      // Tap on System theme
+      await tester.tap(find.text('Système'));
+      await tester.pumpAndSettle();
+      expect(themeService.currentMode, equals(AppThemeMode.system));
     });
   });
 }

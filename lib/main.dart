@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import 'core/config/app_config.dart';
 import 'core/constants/ble_constants.dart';
 import 'core/permissions/permission_service.dart';
+import 'core/theme/app_theme.dart';
 import 'models/activity_detection_model.dart';
 import 'models/haptic_command_model.dart';
 import 'models/log_entry_model.dart';
@@ -25,6 +26,7 @@ import 'services/event_history_service.dart';
 import 'services/inactivity_settings_service.dart';
 import 'services/local_storage/step_storage_service.dart';
 import 'services/step_sync_service.dart';
+import 'services/theme_service.dart';
 import 'ui/screens/detection_events_history_screen.dart';
 import 'ui/screens/event_logs_screen.dart';
 import 'ui/screens/login_screen.dart';
@@ -34,36 +36,52 @@ import 'ui/widgets/recent_activities_card.dart';
 import 'ui/widgets/step_counter_card.dart';
 import 'ui/widgets/studio_session_dialog.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const HealthKicksApp());
+  final themeService = ThemeService();
+  await themeService.loadTheme();
+  runApp(HealthKicksApp(themeService: themeService));
 }
 
-class HealthKicksApp extends StatelessWidget {
+class HealthKicksApp extends StatefulWidget {
   final AuthService? authService;
+  final ThemeService? themeService;
 
-  const HealthKicksApp({super.key, this.authService});
+  const HealthKicksApp({super.key, this.authService, this.themeService});
+
+  @override
+  State<HealthKicksApp> createState() => _HealthKicksAppState();
+}
+
+class _HealthKicksAppState extends State<HealthKicksApp> {
+  late final ThemeService _themeService;
+
+  @override
+  void initState() {
+    super.initState();
+    _themeService = widget.themeService ?? ThemeService();
+    if (widget.themeService == null) {
+      _themeService.loadTheme();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'HealthKicks Mobile',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0F766E),
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0F766E),
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
-      home: AuthGate(authService: authService),
+    return ListenableBuilder(
+      listenable: _themeService,
+      builder: (context, _) {
+        return MaterialApp(
+          title: 'HealthKicks Mobile',
+          debugShowCheckedModeBanner: false,
+          themeMode: _themeService.themeMode,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          home: AuthGate(
+            authService: widget.authService,
+            themeService: _themeService,
+          ),
+        );
+      },
     );
   }
 }
@@ -71,8 +89,9 @@ class HealthKicksApp extends StatelessWidget {
 /// Route guard: checks for presence of a valid JWT session at startup.
 class AuthGate extends StatefulWidget {
   final AuthService? authService;
+  final ThemeService? themeService;
 
-  const AuthGate({super.key, this.authService});
+  const AuthGate({super.key, this.authService, this.themeService});
 
   @override
   State<AuthGate> createState() => _AuthGateState();
@@ -127,6 +146,7 @@ class _AuthGateState extends State<AuthGate> {
         if (_authService.state == AuthState.authenticated) {
           return GatewayDashboardScreen(
             authService: _authService,
+            themeService: widget.themeService,
             onLogout: () async {
               await _authService.logout();
             },
@@ -146,11 +166,13 @@ class _AuthGateState extends State<AuthGate> {
 
 class GatewayDashboardScreen extends StatefulWidget {
   final AuthService? authService;
+  final ThemeService? themeService;
   final VoidCallback? onLogout;
 
   const GatewayDashboardScreen({
     super.key,
     this.authService,
+    this.themeService,
     this.onLogout,
   });
 
@@ -1072,6 +1094,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         builder: (_) => SettingsScreen(
           surveillanceService: _surveillanceService,
           inactivitySettingsService: _inactivitySettingsService,
+          themeService: widget.themeService,
           bleManager: _bleManager,
           bleClient: _bleClient,
           isFootwearConnected: isConnected,
