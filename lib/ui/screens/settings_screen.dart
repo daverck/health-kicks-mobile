@@ -260,6 +260,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ],
                         ],
                       ),
+                      if (widget.bleClient != null) ...[
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.straighten, size: 16),
+                            label: const Text("Étalonner l'assiette du capteur (4s)"),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Theme.of(context).colorScheme.primary,
+                            ),
+                            onPressed: () async {
+                              try {
+                                await widget.bleClient?.sendCalibrateZeroCommand();
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        "Étalonnage initié. Gardez la chaussure immobile à plat pendant 4 secondes pour ajuster la baseline à 0.",
+                                      ),
+                                      duration: Duration(seconds: 4),
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text("Échec de l'étalonnage: $e")),
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
