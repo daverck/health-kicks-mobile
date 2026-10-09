@@ -14,6 +14,7 @@ class SettingsScreen extends StatefulWidget {
   final InactivitySettingsService? inactivitySettingsService;
   final ThemeService? themeService;
   final BleFootwearClient? bleClient;
+  final ValueNotifier<BleFootwearClient?>? bleClientNotifier;
   final Future<void> Function()? onCalibrateSensor;
   final bool isFootwearConnected;
   final Stream<String>? studioStatusStream;
@@ -37,6 +38,7 @@ class SettingsScreen extends StatefulWidget {
     this.themeService,
     this.bleManager,
     this.bleClient,
+    this.bleClientNotifier,
     this.onCalibrateSensor,
     this.isFootwearConnected = false,
     this.studioStatusStream,
@@ -60,6 +62,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _ownsInactivityService = false;
   late final ThemeService _themeService;
   bool _ownsThemeService = false;
+
+  bool _isLocallyDisconnected = false;
+  BleConnectionStatus? _previousBleStatus;
 
   @override
   void initState() {
@@ -93,13 +98,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showCalibrationDialog(BuildContext context, bool isConnected) {
+    final activeBleClient = widget.bleClientNotifier?.value ?? widget.bleClient;
     showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => _ImuCalibrationDialog(
-        onCalibrate: widget.onCalibrateSensor,
+        onCalibrate: activeBleClient != null
+            ? activeBleClient.sendCalibrateZeroCommand
+            : widget.onCalibrateSensor,
         isConnected: isConnected,
-        studioStatusStream: widget.studioStatusStream,
+        studioStatusStream: activeBleClient?.studioStatusStream ?? widget.studioStatusStream,
       ),
     );
   }
@@ -115,15 +123,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
           widget.surveillanceService,
           _inactivityService,
           if (widget.bleManager != null) widget.bleManager!,
+          if (widget.bleClientNotifier != null) widget.bleClientNotifier!,
           if (widget.isMqttConnectedNotifier != null) widget.isMqttConnectedNotifier!,
         ]),
         builder: (context, _) {
           final currentBleStatus = widget.bleManager?.status ?? widget.bleStatus;
-          final isBleReady = widget.isFootwearConnected ||
-              currentBleStatus == BleConnectionStatus.ready ||
-              currentBleStatus == BleConnectionStatus.connected;
-          final isBleScanning = currentBleStatus == BleConnectionStatus.scanning;
-          final isBleConnecting = currentBleStatus == BleConnectionStatus.connecting;
+          if ((currentBleStatus == BleConnectionStatus.ready ||
+                  currentBleStatus == BleConnectionStatus.connected) &&
+              (_previousBleStatus != null &&
+                  _previousBleStatus != BleConnectionStatus.ready &&
+                  _previousBleStatus != BleConnectionStatus.connected)) {
+            _isLocallyDisconnected = false;
+          }
+          _previousBleStatus = currentBleStatus;
+          final isBleReady = !_isLocallyDisconnected &&
+              (widget.bleManager != null
+                  ? (currentBleStatus == BleConnectionStatus.ready ||
+                      currentBleStatus == BleConnectionStatus.connected)
+                  : (widget.isFootwearConnected ||
+                      currentBleStatus == BleConnectionStatus.ready ||
+                      currentBleStatus == BleConnectionStatus.connected));
+          final isBleScanning = !_isLocallyDisconnected && currentBleStatus == BleConnectionStatus.scanning;
+          final isBleConnecting = !_isLocallyDisconnected && currentBleStatus == BleConnectionStatus.connecting;
+          final activeBleClient = widget.bleClientNotifier?.value ?? widget.bleClient;
 
           final Color bleColor = isBleReady
               ? Colors.green
@@ -144,15 +166,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           final Color mqttColor = isMqttConnected ? Colors.green : Colors.grey;
 
           final VoidCallback? onDisconnect = isBleReady
-              ? (widget.onDisconnectBle != null
-                  ? () {
-                      widget.onDisconnectBle!();
-                    }
-                  : (widget.bleManager != null
-                      ? () {
-                          widget.bleManager!.disconnect();
-                        }
-                      : null))
+              ? () {
+                  setState(() {
+                    _isLocallyDisconnected = true;
+                  });
+                  if (widget.onDisconnectBle != null) {
+                    widget.onDisconnectBle!();
+                  } else if (widget.bleManager != null) {
+                    widget.bleManager!.disconnect();
+                  }
+                }
               : null;
 
           return ListView(
@@ -196,7 +219,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 const SizedBox(width: 8),
                                 const Expanded(
                                   child: Text(
-                                    'Bluetooth Low Energy (BLE)',
+                                    'Bluetooth',
                                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -245,7 +268,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: OutlinedButton.icon(
                               icon: const Icon(Icons.refresh, size: 16),
                               label: const Text('Re-scanner'),
-                              onPressed: widget.onStartBleScan,
+                              onPressed: () {
+                                setState(() {
+                                  _isLocallyDisconnected = false;
+                                });
+                                widget.onStartBleScan?.call();
+                              },
                             ),
                           ),
                           if (onDisconnect != null) ...[
@@ -260,7 +288,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ],
                         ],
                       ),
-                      if (widget.bleClient != null) ...[
+                      if (isBleReady && (activeBleClient != null || widget.onCalibrateSensor != null)) ...[
                         const SizedBox(height: 8),
                         SizedBox(
                           width: double.infinity,
@@ -272,7 +300,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             onPressed: () async {
                               try {
-                                await widget.bleClient?.sendCalibrateZeroCommand();
+                                if (activeBleClient != null) {
+                                  await activeBleClient.sendCalibrateZeroCommand();
+                                } else if (widget.onCalibrateSensor != null) {
+                                  await widget.onCalibrateSensor!();
+                                }
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
@@ -324,7 +356,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 const SizedBox(width: 8),
                                 const Expanded(
                                   child: Text(
-                                    'AWS IoT Core Cloud',
+                                    'Cloud',
                                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                                     overflow: TextOverflow.ellipsis,
                                   ),

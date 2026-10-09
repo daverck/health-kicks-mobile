@@ -189,6 +189,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
   late final BackgroundSurveillanceService _surveillanceService;
   BleConnectionManager? _bleManager;
   BleFootwearClient? _bleClient;
+  final ValueNotifier<BleFootwearClient?> _bleClientNotifier = ValueNotifier<BleFootwearClient?>(null);
   MqttGatewayService? _mqttService;
   GatewayCoordinator? _coordinator;
   StudioApiService? _studioApiService;
@@ -330,6 +331,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         }
         _bleClient?.dispose();
         _bleClient = null;
+        _bleClientNotifier.value = null;
         if (status == BleConnectionStatus.disconnected) {
           unawaited(_stepSyncService.flushImmediateSync(deviceId: _deviceId));
         }
@@ -363,6 +365,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
     _studioSavedSub?.cancel();
     _coordinator?.stopRouting();
     _bleClient?.dispose();
+    _bleClient = null;
+    _bleClientNotifier.dispose();
     _bleManager?.dispose();
     _surveillanceService.dispose();
     _mqttService?.disconnect();
@@ -617,6 +621,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
     }
     _bleClient?.dispose();
     _bleClient = null;
+    _bleClientNotifier.value = null;
 
     // Cancel any active scan before restarting
     try {
@@ -677,6 +682,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
       );
       _addLog('BLE', 'Découverte des services GATT en cours...');
       await _bleClient!.initializeServices();
+      _bleClientNotifier.value = _bleClient;
       if (mounted) {
         setState(() {});
       }
@@ -1097,6 +1103,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           themeService: widget.themeService,
           bleManager: _bleManager,
           bleClient: _bleClient,
+          bleClientNotifier: _bleClientNotifier,
           isFootwearConnected: isConnected,
           studioStatusStream: _bleClient?.studioStatusStream,
           bleStatus: _bleStatus,
@@ -1111,9 +1118,10 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           },
           onReconnectMqtt: _connectMqtt,
           onCalibrateSensor: () async {
-            if (_bleClient != null) {
+            final activeClient = _bleClientNotifier.value ?? _bleClient;
+            if (activeClient != null) {
               _addLog('CONFIG', 'Envoi ordre de calibration d\'assiette (0x05)...');
-              await _bleClient?.sendCalibrateZeroCommand();
+              await activeClient.sendCalibrateZeroCommand();
             }
           },
         ),

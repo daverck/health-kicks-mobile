@@ -43,8 +43,8 @@ void main() {
 
       expect(find.text('Paramètres'), findsOneWidget);
       expect(find.text('PASSERELLE & CONNECTIVITÉ'), findsOneWidget);
-      expect(find.text('Bluetooth Low Energy (BLE)'), findsOneWidget);
-      expect(find.text('AWS IoT Core Cloud'), findsOneWidget);
+      expect(find.text('Bluetooth'), findsOneWidget);
+      expect(find.text('Cloud'), findsOneWidget);
       expect(find.text('Re-scanner'), findsOneWidget);
       expect(find.text('Déconnecter'), findsOneWidget);
       expect(find.text('Re-connecter Cloud MQTT'), findsOneWidget);
@@ -52,11 +52,15 @@ void main() {
       await tester.tap(find.text('Re-scanner'));
       expect(scanCalled, isTrue);
 
-      await tester.tap(find.text('Déconnecter'));
-      expect(disconnectCalled, isTrue);
-
       await tester.tap(find.text('Re-connecter Cloud MQTT'));
       expect(reconnectMqttCalled, isTrue);
+
+      await tester.tap(find.text('Déconnecter'));
+      expect(disconnectCalled, isTrue);
+      await tester.pump();
+      // After tapping Déconnecter, button transitions immediately to disconnected state
+      expect(find.text('Déconnecter'), findsNothing);
+      expect(find.text('Déconnecté'), findsOneWidget);
     });
 
     testWidgets('Displays Settings AppBar and Mode Surveillance Active tile', (tester) async {
@@ -379,6 +383,48 @@ void main() {
       await tester.tap(find.text('Système'));
       await tester.pumpAndSettle();
       expect(themeService.currentMode, equals(AppThemeMode.system));
+    });
+
+    testWidgets('Shows calibration button when disconnected device reconnects', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final service = BackgroundSurveillanceService();
+      addTearDown(service.dispose);
+
+      final bleManager = BleConnectionManager();
+      addTearDown(bleManager.dispose);
+
+      bool calibrated = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SettingsScreen(
+            surveillanceService: service,
+            bleManager: bleManager,
+            bleStatus: BleConnectionStatus.disconnected,
+            onCalibrateSensor: () async {
+              calibrated = true;
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Initially disconnected: calibration button should not be present in Bluetooth card
+      expect(find.text("Étalonner l'assiette du capteur (4s)"), findsNothing);
+
+      // Reconnect via bleManager
+      bleManager.updateStatusForTesting(BleConnectionStatus.ready);
+      await tester.pumpAndSettle();
+
+      // Now connected: calibration button appears
+      expect(find.text("Étalonner l'assiette du capteur (4s)"), findsOneWidget);
+
+      await tester.tap(find.text("Étalonner l'assiette du capteur (4s)"));
+      expect(calibrated, isTrue);
     });
   });
 }
