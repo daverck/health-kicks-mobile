@@ -41,8 +41,15 @@ class StudioSessionDialog extends StatefulWidget {
     StudioActivityOption(key: 'walk', label: 'Marche', emoji: '🚶'),
     StudioActivityOption(key: 'run', label: 'Course', emoji: '🏃'),
     StudioActivityOption(key: 'stairs', label: 'Escaliers', emoji: '🪜'),
+    StudioActivityOption(key: 'stairs_up', label: 'Escaliers (Montée)', emoji: '↗️'),
+    StudioActivityOption(key: 'stairs_down', label: 'Escaliers (Descente)', emoji: '↘️'),
     StudioActivityOption(key: 'idle', label: 'Repos / Assis', emoji: '🪑'),
     StudioActivityOption(key: 'jump', label: 'Saut', emoji: '🦘'),
+    StudioActivityOption(key: 'stumble_recover', label: 'Trébuchement rattrapé', emoji: '⚠️'),
+    StudioActivityOption(key: 'fall_forward', label: 'Chute avant', emoji: '⤵️'),
+    StudioActivityOption(key: 'fall_backward', label: 'Chute arrière', emoji: '⤴️'),
+    StudioActivityOption(key: 'fall_lateral', label: 'Chute latérale', emoji: '↔️'),
+    StudioActivityOption(key: 'fall_recovery', label: 'Chute relevée', emoji: '🔄'),
     StudioActivityOption(key: 'custom', label: 'Autre / Personnalisé', emoji: '🏷️'),
   ];
 

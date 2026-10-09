@@ -73,6 +73,10 @@ void main() {
       await tester.tap(find.byType(DropdownButtonFormField<String>));
       await tester.pumpAndSettle();
 
+      // Scroll dropdown to reveal 'custom' at the bottom of the list
+      await tester.drag(find.byType(Scrollable).last, const Offset(0, -300));
+      await tester.pumpAndSettle();
+
       await tester.tap(find.text('Autre / Personnalisé 🏷️').last);
       await tester.pumpAndSettle();
 
@@ -148,6 +152,37 @@ void main() {
 
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString(StudioSessionDialog.prefLastActivityKey), 'stairs');
+    });
+
+    testWidgets('allows selecting stairs_up and stairs_down', (WidgetTester tester) async {
+      String? triggeredLabel;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StudioSessionDialog(
+              onStartSession: ({
+                required String label,
+                required double durationSec,
+              }) async {
+                triggeredLabel = label;
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Open dropdown and select 'stairs_up'
+      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Escaliers (Montée) ↗️').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text("Démarrer l'enregistrement"));
+      await tester.pumpAndSettle();
+
+      expect(triggeredLabel, 'stairs_up');
     });
 
     testWidgets('restores persisted custom activity and label', (WidgetTester tester) async {
