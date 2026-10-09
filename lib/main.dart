@@ -12,6 +12,7 @@ import 'core/theme/app_theme.dart';
 import 'models/activity_detection_model.dart';
 import 'models/haptic_command_model.dart';
 import 'models/log_entry_model.dart';
+import 'models/studio_command_model.dart';
 import 'models/studio_session_model.dart';
 import 'models/step_data_model.dart';
 import 'services/auth/auth_service.dart';
@@ -196,6 +197,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
   GatewayCoordinator? _coordinator;
   StudioApiService? _studioApiService;
   StreamSubscription<StudioSessionModel>? _studioSavedSub;
+  StreamSubscription<StudioCommandModel>? _remoteStudioCommandSub;
 
   BleConnectionStatus _bleStatus = BleConnectionStatus.disconnected;
   BluetoothDevice? _connectedDevice;
@@ -369,6 +371,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
     _stepSyncService.dispose();
     _stepStorageService.close();
     _studioSavedSub?.cancel();
+    _remoteStudioCommandSub?.cancel();
     _coordinator?.stopRouting();
     _bleClient?.dispose();
     _bleClient = null;
@@ -523,6 +526,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
 
     _coordinator?.stopRouting(notifyOffline: false);
     _studioSavedSub?.cancel();
+    _remoteStudioCommandSub?.cancel();
 
     _studioApiService ??= StudioApiService(
       backendBaseUrl: AppConfig.backendBaseUrl,
@@ -556,6 +560,15 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
             backgroundColor: const Color(0xFF0F766E),
             behavior: SnackBarBehavior.floating,
           ),
+        );
+      }
+    });
+
+    _remoteStudioCommandSub = _coordinator!.remoteStudioCommandStream.listen((command) {
+      if (!_isRecordingDialogVisible && mounted) {
+        _showActiveRecordingDialog(
+          label: command.label,
+          durationSec: command.durationSec,
         );
       }
     });
@@ -746,15 +759,16 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         if ((statusMsg.startsWith('COUNTDOWN') || statusMsg.startsWith('RECORDING')) &&
             !_isRecordingDialogVisible &&
             mounted) {
-          double dur = 5.0;
+          double dur = _coordinator?.currentStudioDurationSec ?? 5.0;
           if (statusMsg.startsWith('RECORDING')) {
             final parts = statusMsg.split(' ');
             if (parts.length >= 2) {
-              dur = double.tryParse(parts[1]) ?? 5.0;
+              dur = double.tryParse(parts[1]) ?? dur;
             }
           }
           _showActiveRecordingDialog(
-            label: _coordinator?.isStudioRecordingActive == true ? 'Activité' : 'Studio',
+            label: _coordinator?.currentStudioLabel ??
+                (_coordinator?.isStudioRecordingActive == true ? 'Activité' : 'Studio'),
             durationSec: dur,
           );
         }

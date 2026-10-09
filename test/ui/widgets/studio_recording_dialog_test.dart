@@ -197,5 +197,39 @@ void main() {
       // Drain dismiss timer
       await tester.pump(const Duration(seconds: 2));
     });
+
+    testWidgets('progresses countdown autonomously if BLE notifications are delayed or dropped', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StudioRecordingDialog(
+              label: 'walk',
+              durationSec: 5.0,
+              studioStatusStream: statusController.stream,
+              sessionSavedStream: sessionSavedController.stream,
+            ),
+          ),
+        ),
+      );
+
+      // Initial state is step 1 -> remaining 3
+      expect(tester.widget<Text>(find.byKey(const Key('countdown_step_text'))).data, '3');
+
+      // 1 second elapses without any BLE packet: should tick to step 2 -> remaining 2
+      await tester.pump(const Duration(seconds: 1));
+      expect(tester.widget<Text>(find.byKey(const Key('countdown_step_text'))).data, '2');
+
+      // 1 second elapses: should tick to step 3 -> remaining 1
+      await tester.pump(const Duration(seconds: 1));
+      expect(tester.widget<Text>(find.byKey(const Key('countdown_step_text'))).data, '1');
+
+      // 1 second elapses: should transition to recording
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('🔴 Enregistrement en cours...'), findsOneWidget);
+
+      // Drain periodic timer
+      statusController.add('CANCELLED');
+      await tester.pump(const Duration(seconds: 2));
+    });
   });
 }

@@ -35,6 +35,13 @@ class GatewayCoordinator {
   Stream<StudioSessionModel> get studioSessionSavedStream =>
       _studioSessionSavedController.stream;
 
+  final _remoteStudioCommandController =
+      StreamController<StudioCommandModel>.broadcast();
+
+  /// Stream notifying incoming remote Studio commands received via MQTT.
+  Stream<StudioCommandModel> get remoteStudioCommandStream =>
+      _remoteStudioCommandController.stream;
+
   String? _currentStudioSessionId;
   String? _activeLocalSessionId;
   bool _isStudioRecordingActive = false;
@@ -43,6 +50,8 @@ class GatewayCoordinator {
   double _currentStudioDurationSec = 5.0;
 
   bool get isStudioRecordingActive => _isStudioRecordingActive;
+  String? get currentStudioLabel => _currentStudioLabel;
+  double get currentStudioDurationSec => _currentStudioDurationSec;
 
   GatewayCoordinator({
     required this.bleClient,
@@ -221,6 +230,8 @@ class GatewayCoordinator {
     _currentStudioStartTimestamp =
         DateTime.now().millisecondsSinceEpoch / 1000.0;
 
+    _remoteStudioCommandController.add(command);
+
     onLog?.call(
       'Triggering BLE capture for remote command (session: ${command.sessionId})...',
       isError: false,
@@ -278,5 +289,6 @@ class GatewayCoordinator {
   void dispose() {
     stopRouting();
     _studioSessionSavedController.close();
+    _remoteStudioCommandController.close();
   }
 }

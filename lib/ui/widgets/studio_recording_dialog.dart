@@ -41,6 +41,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
 
   double _elapsedRecordingSec = 0.0;
   late double _targetDurationSec;
+  Timer? _countdownTimer;
   Timer? _recordingProgressTimer;
   Timer? _autoDismissTimer;
 
@@ -56,17 +57,41 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
     super.initState();
     _targetDurationSec = widget.durationSec > 0 ? widget.durationSec : 5.0;
 
+    _startCountdownTimer();
     _statusSub = widget.studioStatusStream.listen(_handleStatusUpdate);
     _savedSub = widget.sessionSavedStream?.listen(_handleSessionSaved);
   }
 
   @override
   void dispose() {
+    _countdownTimer?.cancel();
     _statusSub?.cancel();
     _savedSub?.cancel();
     _recordingProgressTimer?.cancel();
     _autoDismissTimer?.cancel();
     super.dispose();
+  }
+
+  void _startCountdownTimer() {
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_state != StudioActiveState.countdown) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        if (_countdownStep < _totalCountdownSteps) {
+          _countdownStep++;
+        } else {
+          timer.cancel();
+          _startRecordingProgress();
+        }
+      });
+    });
   }
 
   void _handleStatusUpdate(String status) {
@@ -81,8 +106,10 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
           _state = StudioActiveState.countdown;
           _countdownStep = step;
         });
+        _startCountdownTimer();
       }
     } else if (status.startsWith('RECORDING')) {
+      _countdownTimer?.cancel();
       final parts = status.split(' ');
       if (parts.length >= 2) {
         final parsedDur = double.tryParse(parts[1]);
@@ -92,6 +119,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
       }
       _startRecordingProgress();
     } else if (status.startsWith('FINISHED')) {
+      _countdownTimer?.cancel();
       final parts = status.split(' ');
       if (parts.length >= 2) {
         _samplesCollected = int.tryParse(parts[1]) ?? 0;
@@ -101,6 +129,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
         _state = StudioActiveState.transmitting;
       });
     } else if (status == 'CANCELLED') {
+      _countdownTimer?.cancel();
       _recordingProgressTimer?.cancel();
       setState(() {
         _state = StudioActiveState.cancelled;
@@ -112,6 +141,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
         }
       });
     } else if (status.startsWith('ERROR')) {
+      _countdownTimer?.cancel();
       _recordingProgressTimer?.cancel();
       setState(() {
         _state = StudioActiveState.error;
@@ -121,6 +151,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
   }
 
   void _startRecordingProgress() {
+    _countdownTimer?.cancel();
     _recordingProgressTimer?.cancel();
     setState(() {
       _state = StudioActiveState.recording;
