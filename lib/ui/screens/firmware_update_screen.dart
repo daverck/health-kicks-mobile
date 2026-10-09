@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -36,7 +35,6 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
 
   final TextEditingController _urlController =
       TextEditingController(text: FirmwareUpdateScreen.defaultFirmwareUrl);
-  final TextEditingController _customPathController = TextEditingController();
   bool _isDownloading = false;
 
   BleOtaProgress _progress =
@@ -59,39 +57,10 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
   void dispose() {
     _otaSubscription?.cancel();
     _urlController.dispose();
-    _customPathController.dispose();
     if (widget.otaService == null) {
       _otaService.dispose();
     }
     super.dispose();
-  }
-
-  Future<void> _loadFromLocalPath(String path) async {
-    final file = File(path);
-    if (!await file.exists()) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Fichier introuvable : $path'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    final bytes = await file.readAsBytes();
-    if (!mounted) return;
-    setState(() {
-      _selectedFirmwareBytes = bytes;
-      _selectedFileName = file.uri.pathSegments.last;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Fichier chargé (${(bytes.length / 1024).toStringAsFixed(1)} Ko)'),
-        backgroundColor: Colors.green,
-      ),
-    );
   }
 
   Future<void> _downloadFromUrl(String url) async {
@@ -530,43 +499,6 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
                                 ),
                               )
                             : const Text('Télécharger'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Option B: Local path
-                  Text(
-                    'Ou charger un fichier local (.bin)',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-
-                  // Option C: Local path
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _customPathController,
-                          decoration: InputDecoration(
-                            hintText: 'Chemin local (.bin)...',
-                            isDense: true,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            prefixIcon: const Icon(Icons.folder_open, size: 20),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      OutlinedButton(
-                        onPressed: isUpdating
-                            ? null
-                            : () => _loadFromLocalPath(_customPathController.text),
-                        child: const Text('Charger'),
                       ),
                     ],
                   ),

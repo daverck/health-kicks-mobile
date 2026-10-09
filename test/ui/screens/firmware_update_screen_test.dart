@@ -28,10 +28,6 @@ void main() {
       expect(find.text('Télécharger'), findsOneWidget);
       expect(find.text(FirmwareUpdateScreen.defaultFirmwareUrl), findsOneWidget);
 
-      // Verify Local file section
-      expect(find.text('Ou charger un fichier local (.bin)'), findsOneWidget);
-      expect(find.text('Charger'), findsOneWidget);
-
       // Verify trigger button is initially disabled (no device and no file)
       final flashButton = tester.widget<FilledButton>(
         find.widgetWithText(FilledButton, 'Lancer la Mise à Jour OTA'),
