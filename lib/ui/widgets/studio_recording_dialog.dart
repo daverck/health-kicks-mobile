@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/studio_session_model.dart';
+import '../../services/audio/studio_audio_feedback_service.dart';
 import 'studio_session_dialog.dart';
 
 /// Current lifecycle state of an active Studio recording session.
@@ -20,6 +21,7 @@ class StudioRecordingDialog extends StatefulWidget {
   final Stream<String> studioStatusStream;
   final Stream<dynamic>? sessionSavedStream;
   final Future<void> Function()? onCancel;
+  final StudioAudioFeedbackService? audioService;
 
   const StudioRecordingDialog({
     super.key,
@@ -28,6 +30,7 @@ class StudioRecordingDialog extends StatefulWidget {
     required this.studioStatusStream,
     this.sessionSavedStream,
     this.onCancel,
+    this.audioService,
   });
 
   @override
@@ -52,11 +55,21 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
   StreamSubscription<String>? _statusSub;
   StreamSubscription<dynamic>? _savedSub;
 
+  late final StudioAudioFeedbackService _audioService;
+  bool _ownsAudioService = false;
+
   @override
   void initState() {
     super.initState();
+    if (widget.audioService != null) {
+      _audioService = widget.audioService!;
+    } else {
+      _audioService = StudioAudioFeedbackService();
+      _ownsAudioService = true;
+    }
     _targetDurationSec = widget.durationSec > 0 ? widget.durationSec : 5.0;
 
+    _audioService.playCountdownBeep();
     _startCountdownTimer();
     _statusSub = widget.studioStatusStream.listen(_handleStatusUpdate);
     _savedSub = widget.sessionSavedStream?.listen(_handleSessionSaved);
@@ -69,6 +82,10 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
     _savedSub?.cancel();
     _recordingProgressTimer?.cancel();
     _autoDismissTimer?.cancel();
+    _audioService.stopContinuousTone();
+    if (_ownsAudioService) {
+      _audioService.dispose();
+    }
     super.dispose();
   }
 
@@ -86,6 +103,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
       setState(() {
         if (_countdownStep < _totalCountdownSteps) {
           _countdownStep++;
+          _audioService.playCountdownBeep();
         } else {
           timer.cancel();
           _startRecordingProgress();
@@ -102,6 +120,9 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
       if (parts.length >= 2) {
         final stepParts = parts[1].split('/');
         final step = int.tryParse(stepParts[0]) ?? 1;
+        if (_state != StudioActiveState.countdown || _countdownStep != step) {
+          _audioService.playCountdownBeep();
+        }
         setState(() {
           _state = StudioActiveState.countdown;
           _countdownStep = step;
@@ -120,6 +141,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
       _startRecordingProgress();
     } else if (status.startsWith('FINISHED')) {
       _countdownTimer?.cancel();
+      _audioService.stopContinuousTone();
       final parts = status.split(' ');
       if (parts.length >= 2) {
         _samplesCollected = int.tryParse(parts[1]) ?? 0;
@@ -131,6 +153,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
     } else if (status == 'CANCELLED') {
       _countdownTimer?.cancel();
       _recordingProgressTimer?.cancel();
+      _audioService.stopContinuousTone();
       setState(() {
         _state = StudioActiveState.cancelled;
       });
@@ -143,6 +166,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
     } else if (status.startsWith('ERROR')) {
       _countdownTimer?.cancel();
       _recordingProgressTimer?.cancel();
+      _audioService.stopContinuousTone();
       setState(() {
         _state = StudioActiveState.error;
         _errorMessage = status.replaceFirst('ERROR', '').trim();
@@ -153,6 +177,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
   void _startRecordingProgress() {
     _countdownTimer?.cancel();
     _recordingProgressTimer?.cancel();
+    _audioService.startContinuousRecordingTone();
     setState(() {
       _state = StudioActiveState.recording;
       _elapsedRecordingSec = 0.0;
@@ -176,6 +201,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
   void _handleSessionSaved(dynamic session) {
     if (!mounted) return;
     _recordingProgressTimer?.cancel();
+    _audioService.playFinishedChime();
 
     int readingsCount = _samplesCollected;
     if (session is StudioSessionModel) {
@@ -453,6 +479,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
               : () async {
                   setState(() => _isCancelling = true);
                   _recordingProgressTimer?.cancel();
+                  unawaited(_audioService.stopContinuousTone());
                   if (widget.onCancel != null) {
                     await widget.onCancel!();
                   }

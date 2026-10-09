@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/models/studio_session_model.dart';
+import 'package:healthkicks_mobile/services/audio/studio_audio_feedback_service.dart';
 import 'package:healthkicks_mobile/ui/widgets/studio_recording_dialog.dart';
 
 void main() {
@@ -229,6 +230,58 @@ void main() {
 
       // Drain periodic timer
       statusController.add('CANCELLED');
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('triggers audio feedback service throughout countdown and recording', (WidgetTester tester) async {
+      final audioService = StudioAudioFeedbackService();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StudioRecordingDialog(
+              label: 'walk',
+              durationSec: 5.0,
+              studioStatusStream: statusController.stream,
+              sessionSavedStream: sessionSavedController.stream,
+              audioService: audioService,
+            ),
+          ),
+        ),
+      );
+
+      // On init, first countdown beep is played
+      expect(audioService.countdownBeepsPlayed, 1);
+      expect(audioService.isContinuousPlaying, isFalse);
+
+      // Next countdown step
+      statusController.add('COUNTDOWN 2/3');
+      await tester.pump(const Duration(milliseconds: 10));
+      expect(audioService.countdownBeepsPlayed, 2);
+
+      // Recording starts: continuous tone starts
+      statusController.add('RECORDING 5.0');
+      await tester.pump();
+      expect(audioService.isContinuousPlaying, isTrue);
+
+      // Session finished: continuous tone stops
+      statusController.add('FINISHED 250 test-session-id');
+      await tester.pump();
+      expect(audioService.isContinuousPlaying, isFalse);
+
+      // Session saved: finished chime played
+      const mockSession = StudioSessionModel(
+        sessionId: 'test-session-id',
+        label: 'walk',
+        deviceId: 'HK-2',
+        startTimestampEpoch: 1700000000.0,
+        durationSec: 5.0,
+        readings: [],
+      );
+      sessionSavedController.add(mockSession);
+      await tester.pump();
+      expect(audioService.isContinuousPlaying, isFalse);
+
       await tester.pump(const Duration(seconds: 2));
     });
   });
