@@ -211,6 +211,7 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
             final isError = prog.status == BleOtaStatus.error ||
                 prog.status == BleOtaStatus.aborted;
 
+            final theme = Theme.of(context);
             return PopScope(
               canPop: !isBusy,
               child: AlertDialog(
@@ -228,8 +229,8 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
                       color: isDone
                           ? Colors.green
                           : isError
-                              ? Colors.red
-                              : Theme.of(context).primaryColor,
+                              ? Colors.redAccent
+                              : theme.colorScheme.primary,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -239,7 +240,7 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
                             : isError
                                 ? 'Erreur de mise à jour'
                                 : 'Mise à jour en cours',
-                        style: const TextStyle(fontSize: 18),
+                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
@@ -250,10 +251,13 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
                   children: [
                     Text(
                       prog.message ?? 'Préparation du transfert...',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: isError ? Colors.red.shade700 : Colors.black87,
-                        fontWeight: FontWeight.w500,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: isError
+                            ? Colors.redAccent
+                            : isDone
+                                ? Colors.green
+                                : theme.colorScheme.onSurface,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -263,13 +267,13 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
                           : prog.progress,
                       minHeight: 10,
                       borderRadius: BorderRadius.circular(5),
-                      backgroundColor: Colors.grey.shade200,
+                      backgroundColor: theme.colorScheme.surfaceContainerHighest,
                       valueColor: AlwaysStoppedAnimation<Color>(
                         isDone
                             ? Colors.green
                             : isError
-                                ? Colors.red
-                                : Theme.of(context).primaryColor,
+                                ? Colors.redAccent
+                                : theme.colorScheme.primary,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -278,16 +282,15 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
                       children: [
                         Text(
                           '${(prog.progress * 100).toStringAsFixed(1)} %',
-                          style: const TextStyle(
-                            fontSize: 14,
+                          style: theme.textTheme.bodyMedium?.copyWith(
                             fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onSurface,
                           ),
                         ),
                         Text(
                           '${(prog.bytesSent / 1024).toStringAsFixed(0)} / ${(prog.totalBytes / 1024).toStringAsFixed(0)} Ko',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey.shade700,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -299,17 +302,15 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
                         children: [
                           Text(
                             'Débit : ${prog.speedKbps.toStringAsFixed(1)} Ko/s',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                           if (prog.estimatedTimeRemaining != null)
                             Text(
                               'Restant : ~${prog.estimatedTimeRemaining!.inSeconds} s',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade600,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
                         ],
@@ -320,13 +321,19 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Colors.green.shade50,
+                          color: Colors.green.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.green.shade200),
+                          border: Border.all(color: Colors.green.withValues(alpha: 0.4)),
                         ),
-                        child: const Text(
+                        child: Text(
                           'L\'ESP32-S3 a validé la nouvelle partition et redémarre automatiquement.',
-                          style: TextStyle(fontSize: 12, color: Colors.green),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: theme.brightness == Brightness.dark
+                                ? Colors.green.shade300
+                                : Colors.green.shade800,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ],
@@ -361,6 +368,7 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final hasDevice = widget.device != null;
     final isUpdating = _otaService.isUpdating;
 
@@ -405,9 +413,8 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
                         const SizedBox(height: 4),
                         Text(
                           'Version installée : ${widget.currentFirmwareVersion}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey.shade700,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -428,17 +435,18 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Fichier Binaire Firmware (.bin)',
-                    style: TextStyle(
-                      fontSize: 16,
+                    style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Sélectionnez le binaire compilé (ex. PlatformIO firmware.bin) à injecter dans le slot OTA inactif.',
-                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                   const SizedBox(height: 16),
 
@@ -447,13 +455,13 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
+                        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.25),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue.shade200),
+                        border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.description, color: Colors.blue),
+                          Icon(Icons.description, color: theme.colorScheme.primary),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
@@ -468,9 +476,8 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
                                 ),
                                 Text(
                                   '${(_selectedFirmwareBytes!.length / 1024).toStringAsFixed(1)} Ko · Cible: $_targetFirmwareVersion',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey.shade700,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               ],
@@ -492,14 +499,14 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
+                        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey.shade300),
+                        border: Border.all(color: theme.colorScheme.outlineVariant),
                       ),
-                      child: const Center(
+                      child: Center(
                         child: Text(
                           'Aucun fichier sélectionné',
-                          style: TextStyle(color: Colors.grey),
+                          style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
                         ),
                       ),
                     ),

@@ -305,7 +305,21 @@ class BleOtaService {
       endPayload[0] = BleConstants.otaCmdEnd;
       endPayload.setRange(1, 33, sha256Bytes);
 
-      await controlChar.write(endPayload, withoutResponse: false);
+      // Brief settling delay to allow Android BLE stack TX buffers from the stream to drain
+      await Future.delayed(const Duration(milliseconds: 250));
+
+      try {
+        await controlChar.write(endPayload, withoutResponse: false);
+      } catch (writeErr) {
+        // If write threw 133 / GATT_ERROR because peripheral began restarting, check if success was signaled
+        if (!finalCompleter.isCompleted) {
+          try {
+            await finalCompleter.future.timeout(const Duration(milliseconds: 1500));
+          } catch (_) {
+            rethrow;
+          }
+        }
+      }
 
       // 9. Await OTA_SUCCESS confirmation (timeout 15 seconds)
       try {
