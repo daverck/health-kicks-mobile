@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import 'core/config/app_config.dart';
@@ -206,6 +207,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
   final List<ActivityDetectionModel> _recentActivities = [];
   DateTime? _lastInactivityToastTime;
   bool _isRecordingDialogVisible = false;
+  String _lastStudioActivityKey = 'walk';
+  String _lastStudioCustomLabel = '';
 
   final StepStorageService _stepStorageService = StepStorageService();
   late final StepSyncService _stepSyncService;
@@ -230,6 +233,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
     );
     _stepSyncService.startPeriodicSync(deviceId: _deviceId);
     unawaited(_loadInitialDailySteps());
+    unawaited(_loadLastStudioActivity());
     _surveillanceService = BackgroundSurveillanceService(
       onLog: (tag, msg, {bool isError = false}) {
         _addLog(tag, msg, color: isError ? Colors.red : Colors.cyan);
@@ -828,11 +832,33 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
     }
   }
 
+  Future<void> _loadLastStudioActivity() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = prefs.getString(StudioSessionDialog.prefLastActivityKey);
+      final custom = prefs.getString(StudioSessionDialog.prefLastCustomLabel);
+      if (key != null && StudioSessionDialog.defaultActivities.any((a) => a.key == key)) {
+        if (mounted) {
+          setState(() {
+            _lastStudioActivityKey = key;
+            if (custom != null) _lastStudioCustomLabel = custom;
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
   void _showStudioSessionDialog() {
     showDialog<void>(
       context: context,
       builder: (ctx) => StudioSessionDialog(
-        onStartSession: ({required String label, required double durationSec}) async {
+        initialActivityKey: _lastStudioActivityKey,
+        initialCustomLabel: _lastStudioCustomLabel,
+        onStartSession: ({
+          required String label,
+          required double durationSec,
+        }) async {
+          await _loadLastStudioActivity();
           final isConnected = _bleClient != null &&
               (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected) &&
               _bleClient!.hasStudioControl;

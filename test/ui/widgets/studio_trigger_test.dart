@@ -7,6 +7,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:healthkicks_mobile/main.dart';
 import 'package:healthkicks_mobile/services/auth/auth_service.dart';
 import 'package:healthkicks_mobile/services/auth/token_storage_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:healthkicks_mobile/ui/widgets/studio_session_dialog.dart';
 import '../../services/auth/token_storage_service_test.dart';
 
@@ -14,6 +15,10 @@ void main() {
   setUpAll(() {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
+  });
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
   });
 
   group('Studio Session Dialog Widget Tests', () {
@@ -82,6 +87,100 @@ void main() {
 
       expect(triggeredLabel, 'sprint_incline');
       expect(triggeredDuration, 5.0);
+    });
+
+    testWidgets('remembers and defaults to last used activity from SharedPreferences', (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({
+        StudioSessionDialog.prefLastActivityKey: 'run',
+      });
+
+      String? triggeredLabel;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StudioSessionDialog(
+              onStartSession: ({
+                required String label,
+                required double durationSec,
+              }) async {
+                triggeredLabel = label;
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Tap confirm without selecting anything new
+      await tester.tap(find.text("Démarrer l'enregistrement"));
+      await tester.pumpAndSettle();
+
+      expect(triggeredLabel, 'run');
+    });
+
+    testWidgets('persists newly selected activity into SharedPreferences', (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({});
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StudioSessionDialog(
+              onStartSession: ({
+                required String label,
+                required double durationSec,
+              }) async {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Select 'stairs'
+      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Escaliers 🪜').last);
+      await tester.pumpAndSettle();
+
+      // Confirm
+      await tester.tap(find.text("Démarrer l'enregistrement"));
+      await tester.pumpAndSettle();
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(StudioSessionDialog.prefLastActivityKey), 'stairs');
+    });
+
+    testWidgets('restores persisted custom activity and label', (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({
+        StudioSessionDialog.prefLastActivityKey: 'custom',
+        StudioSessionDialog.prefLastCustomLabel: 'jumping_jacks',
+      });
+
+      String? triggeredLabel;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StudioSessionDialog(
+              onStartSession: ({
+                required String label,
+                required double durationSec,
+              }) async {
+                triggeredLabel = label;
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.text('jumping_jacks'), findsOneWidget);
+
+      await tester.tap(find.text("Démarrer l'enregistrement"));
+      await tester.pumpAndSettle();
+
+      expect(triggeredLabel, 'jumping_jacks');
     });
   });
 

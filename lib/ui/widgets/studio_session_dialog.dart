@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Activity option model for the Studio session configuration.
 class StudioActivityOption {
@@ -17,11 +18,23 @@ class StudioActivityOption {
 
 /// Dialog allowing clinician/admin to configure activity type and duration for Studio recording sessions.
 class StudioSessionDialog extends StatefulWidget {
-  final Future<void> Function({required String label, required double durationSec}) onStartSession;
+  final Future<void> Function({
+    required String label,
+    required double durationSec,
+  }) onStartSession;
+  final String? initialActivityKey;
+  final String? initialCustomLabel;
+  final SharedPreferences? preferences;
+
+  static const String prefLastActivityKey = 'hk_studio_last_activity';
+  static const String prefLastCustomLabel = 'hk_studio_last_custom_label';
 
   const StudioSessionDialog({
     super.key,
     required this.onStartSession,
+    this.initialActivityKey,
+    this.initialCustomLabel,
+    this.preferences,
   });
 
   static const List<StudioActivityOption> defaultActivities = [
@@ -40,8 +53,51 @@ class StudioSessionDialog extends StatefulWidget {
 }
 
 class _StudioSessionDialogState extends State<StudioSessionDialog> {
-  String _selectedActivityKey = 'walk';
-  final TextEditingController _customLabelController = TextEditingController();
+  late String _selectedActivityKey;
+  late final TextEditingController _customLabelController;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedActivityKey = widget.initialActivityKey ?? 'walk';
+    _customLabelController = TextEditingController(text: widget.initialCustomLabel ?? '');
+
+    if (widget.initialActivityKey == null) {
+      _loadSavedPreferences();
+    }
+  }
+
+  Future<void> _loadSavedPreferences() async {
+    try {
+      final prefs = widget.preferences ?? await SharedPreferences.getInstance();
+      final savedKey = prefs.getString(StudioSessionDialog.prefLastActivityKey);
+      final savedCustom = prefs.getString(StudioSessionDialog.prefLastCustomLabel);
+      if (savedKey != null && StudioSessionDialog.defaultActivities.any((a) => a.key == savedKey)) {
+        if (mounted) {
+          setState(() {
+            _selectedActivityKey = savedKey;
+            if (savedCustom != null && savedCustom.isNotEmpty) {
+              _customLabelController.text = savedCustom;
+            }
+          });
+        }
+      }
+    } catch (_) {
+      // Ignore preference read errors
+    }
+  }
+
+  Future<void> _savePreferences(String key, String customLabel) async {
+    try {
+      final prefs = widget.preferences ?? await SharedPreferences.getInstance();
+      await prefs.setString(StudioSessionDialog.prefLastActivityKey, key);
+      if (key == 'custom') {
+        await prefs.setString(StudioSessionDialog.prefLastCustomLabel, customLabel);
+      }
+    } catch (_) {
+      // Ignore preference write errors
+    }
+  }
 
   @override
   void dispose() {
@@ -51,13 +107,18 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
 
   void _onConfirm() {
     String label = _selectedActivityKey;
+    final customText = _customLabelController.text.trim();
     if (_selectedActivityKey == 'custom') {
-      final customText = _customLabelController.text.trim();
       label = customText.isNotEmpty ? customText : 'custom';
     }
 
+    _savePreferences(_selectedActivityKey, customText);
+
     Navigator.of(context).pop();
-    widget.onStartSession(label: label, durationSec: StudioSessionDialog.fixedDurationSec);
+    widget.onStartSession(
+      label: label,
+      durationSec: StudioSessionDialog.fixedDurationSec,
+    );
   }
 
   @override
@@ -91,6 +152,7 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
+              key: ValueKey(_selectedActivityKey),
               initialValue: _selectedActivityKey,
               decoration: InputDecoration(
                 border: OutlineInputBorder(
