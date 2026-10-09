@@ -23,9 +23,14 @@ void main() {
       expect(find.text('Fichier Binaire Firmware (.bin)'), findsOneWidget);
       expect(find.text('Aucun fichier sélectionné'), findsOneWidget);
 
-      // Verify test binary buttons
-      expect(find.text('Binaire Test 64 Ko'), findsOneWidget);
-      expect(find.text('Binaire Test 256 Ko'), findsOneWidget);
+      // Verify Cloud S3 URL section and default URL text field
+      expect(find.text('Télécharger depuis le Cloud (AWS S3) ou une URL'), findsOneWidget);
+      expect(find.text('Télécharger'), findsOneWidget);
+      expect(find.text(FirmwareUpdateScreen.defaultFirmwareUrl), findsOneWidget);
+
+      // Verify Local file section
+      expect(find.text('Ou charger un fichier local (.bin)'), findsOneWidget);
+      expect(find.text('Charger'), findsOneWidget);
 
       // Verify trigger button is initially disabled (no device and no file)
       final flashButton = tester.widget<FilledButton>(
@@ -34,7 +39,7 @@ void main() {
       expect(flashButton.onPressed, isNull);
     });
 
-    testWidgets('Tapping demo test binary loads binary and displays file card', (WidgetTester tester) async {
+    testWidgets('URL field is pre-filled with official default AWS S3 firmware URL', (WidgetTester tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: FirmwareUpdateScreen(
@@ -43,14 +48,12 @@ void main() {
         ),
       );
 
-      // Tap on 64 Ko test binary button
-      await tester.tap(find.text('Binaire Test 64 Ko'));
-      await tester.pumpAndSettle();
-
-      // Verify selected binary card is rendered
-      expect(find.text('demo_firmware_64kb.bin'), findsOneWidget);
-      expect(find.textContaining('64.0 Ko'), findsOneWidget);
-      expect(find.textContaining('v1.2.1-test'), findsOneWidget);
+      final textField = tester.widget<TextField>(
+        find.widgetWithText(TextField, FirmwareUpdateScreen.defaultFirmwareUrl),
+      );
+      expect(textField.controller?.text, equals(FirmwareUpdateScreen.defaultFirmwareUrl));
+      expect(textField.controller?.text, contains('healthkicks-firmware-releases'));
+      expect(textField.controller?.text, endsWith('firmware.bin'));
     });
   });
 }

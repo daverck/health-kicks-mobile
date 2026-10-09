@@ -12,6 +12,9 @@ class FirmwareUpdateScreen extends StatefulWidget {
   final String currentFirmwareVersion;
   final BleOtaService? otaService;
 
+  static const String defaultFirmwareUrl =
+      'https://healthkicks-firmware-releases.s3.eu-north-1.amazonaws.com/firmware/esp32s3/latest/firmware.bin';
+
   const FirmwareUpdateScreen({
     super.key,
     this.device,
@@ -29,9 +32,10 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
 
   Uint8List? _selectedFirmwareBytes;
   String? _selectedFileName;
-  String _targetFirmwareVersion = 'v1.2.1-esp32s3';
+  final String _targetFirmwareVersion = 'v1.2.1-esp32s3';
 
-  final TextEditingController _urlController = TextEditingController();
+  final TextEditingController _urlController =
+      TextEditingController(text: FirmwareUpdateScreen.defaultFirmwareUrl);
   final TextEditingController _customPathController = TextEditingController();
   bool _isDownloading = false;
 
@@ -60,34 +64,6 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
       _otaService.dispose();
     }
     super.dispose();
-  }
-
-  void _generateDemoBinary(int sizeKb) {
-    // Generates a mock ESP32-S3 test binary with valid image header magic 0xE9
-    final size = sizeKb * 1024;
-    final bytes = Uint8List(size);
-    bytes[0] = 0xE9; // ESP32 image magic byte
-    bytes[1] = 0x03; // Segment count
-    bytes[2] = 0x02; // Flash SPI mode
-    bytes[3] = 0x20; // Flash SPI speed / size
-
-    // Fill with pattern
-    for (int i = 4; i < size; i++) {
-      bytes[i] = (i % 256);
-    }
-
-    setState(() {
-      _selectedFirmwareBytes = bytes;
-      _selectedFileName = 'demo_firmware_${sizeKb}kb.bin';
-      _targetFirmwareVersion = 'v1.2.1-test';
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Binaire de test chargé ($sizeKb Ko, magique 0xE9)'),
-        backgroundColor: Colors.blueGrey,
-      ),
-    );
   }
 
   Future<void> _loadFromLocalPath(String path) async {
@@ -513,31 +489,17 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
 
                   const SizedBox(height: 16),
                   const Divider(),
-                  const SizedBox(height: 8),
-
-                  // Option A: Quick Demo Binary
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.flash_on, size: 18),
-                          label: const Text('Binaire Test 64 Ko'),
-                          onPressed: isUpdating ? null : () => _generateDemoBinary(64),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.flash_on, size: 18),
-                          label: const Text('Binaire Test 256 Ko'),
-                          onPressed: isUpdating ? null : () => _generateDemoBinary(256),
-                        ),
-                      ),
-                    ],
-                  ),
                   const SizedBox(height: 12),
 
-                  // Option B: Download from URL
+                  // Option A: Download from Cloud S3 URL (Pre-filled by default)
+                  Text(
+                    'Télécharger depuis le Cloud (AWS S3) ou une URL',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
                   Row(
                     children: [
                       Expanded(
@@ -549,7 +511,7 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            prefixIcon: const Icon(Icons.link, size: 20),
+                            prefixIcon: const Icon(Icons.cloud_download_outlined, size: 20),
                           ),
                         ),
                       ),
@@ -571,7 +533,17 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
+
+                  // Option B: Local path
+                  Text(
+                    'Ou charger un fichier local (.bin)',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
 
                   // Option C: Local path
                   Row(
