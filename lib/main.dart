@@ -35,6 +35,7 @@ import 'ui/screens/steps_history_screen.dart';
 import 'ui/widgets/recent_activities_card.dart';
 import 'ui/widgets/step_counter_card.dart';
 import 'ui/widgets/studio_session_dialog.dart';
+import 'ui/widgets/studio_recording_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -204,6 +205,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
   StepDataModel? _latestStepData;
   final List<ActivityDetectionModel> _recentActivities = [];
   DateTime? _lastInactivityToastTime;
+  bool _isRecordingDialogVisible = false;
 
   final StepStorageService _stepStorageService = StepStorageService();
   late final StepSyncService _stepSyncService;
@@ -737,6 +739,21 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
 
       _bleClient!.studioStatusStream.listen((statusMsg) {
         _addLog('STUDIO', 'Signal d\'état : $statusMsg');
+        if ((statusMsg.startsWith('COUNTDOWN') || statusMsg.startsWith('RECORDING')) &&
+            !_isRecordingDialogVisible &&
+            mounted) {
+          double dur = 5.0;
+          if (statusMsg.startsWith('RECORDING')) {
+            final parts = statusMsg.split(' ');
+            if (parts.length >= 2) {
+              dur = double.tryParse(parts[1]) ?? 5.0;
+            }
+          }
+          _showActiveRecordingDialog(
+            label: _coordinator?.isStudioRecordingActive == true ? 'Activité' : 'Studio',
+            durationSec: dur,
+          );
+        }
       });
 
       _bleClient!.burstResultStream.listen((result) {
@@ -816,10 +833,42 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
       context: context,
       builder: (ctx) => StudioSessionDialog(
         onStartSession: ({required String label, required double durationSec}) async {
+          final isConnected = _bleClient != null &&
+              (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected) &&
+              _bleClient!.hasStudioControl;
+          if (isConnected) {
+            _showActiveRecordingDialog(label: label, durationSec: durationSec);
+          }
           await _triggerStudioSession(label: label, durationSec: durationSec);
         },
       ),
     );
+  }
+
+  void _showActiveRecordingDialog({
+    required String label,
+    required double durationSec,
+  }) {
+    if (_isRecordingDialogVisible || !mounted || _bleClient == null) return;
+    _isRecordingDialogVisible = true;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StudioRecordingDialog(
+        label: label,
+        durationSec: durationSec,
+        studioStatusStream: _bleClient!.studioStatusStream,
+        sessionSavedStream: _coordinator?.studioSessionSavedStream,
+        onCancel: () async {
+          try {
+            await _bleClient?.cancelStudioSession();
+          } catch (_) {}
+        },
+      ),
+    ).then((_) {
+      _isRecordingDialogVisible = false;
+    });
   }
 
   Future<void> _triggerStudioSession({
