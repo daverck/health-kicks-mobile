@@ -136,12 +136,20 @@ class DetectionEvent {
   /// User-friendly localized label for the event type.
   String get formattedTitle {
     switch (eventType.toLowerCase()) {
+      case 'fall_forward':
+        return 'Chute avant';
+      case 'fall_backward':
+        return 'Chute arrière';
+      case 'fall_lateral':
+        return 'Chute latérale';
+      case 'fall_recovery':
+        return 'Chute relevée';
+      case 'stand_up':
+        return 'Relevage après chute';
+      case 'fall_generic':
+        return 'Chute (générique)';
       case 'fall_detected':
       case 'fall':
-      case 'fall_forward':
-      case 'fall_backward':
-      case 'fall_lateral':
-      case 'fall_generic':
         return 'Chute détectée';
       case 'free_fall':
         return 'Chute libre (Impact violent)';
@@ -160,9 +168,13 @@ class DetectionEvent {
       case 'running':
         return 'Course à pied';
       case 'stairs':
+      case 'stairs_up':
+      case 'stairs_down':
         return 'Montée/Descente d\'escaliers';
       case 'idle':
         return 'Repos / Station debout';
+      case 'jump':
+        return 'Saut';
       case 'activity_transition':
         return 'Transition d\'activité';
       default:

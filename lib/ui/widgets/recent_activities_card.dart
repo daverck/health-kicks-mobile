@@ -211,15 +211,51 @@ class _ActivityItemTile extends StatelessWidget {
   }
 
   _ActivityMeta _getActivityMeta(String eventType, {required bool isFall}) {
-    if (isFall || eventType.contains('fall')) {
-      return const _ActivityMeta(
-        label: 'Chute',
-        icon: Icons.warning_amber_rounded,
-        color: Color(0xFFDC2626),
-      );
-    }
-
     switch (eventType.toLowerCase()) {
+      case 'fall_forward':
+        return const _ActivityMeta(
+          label: 'Chute avant',
+          icon: Icons.warning_amber_rounded,
+          color: Color(0xFFDC2626),
+        );
+      case 'fall_backward':
+        return const _ActivityMeta(
+          label: 'Chute arrière',
+          icon: Icons.warning_amber_rounded,
+          color: Color(0xFFDC2626),
+        );
+      case 'fall_lateral':
+        return const _ActivityMeta(
+          label: 'Chute latérale',
+          icon: Icons.warning_amber_rounded,
+          color: Color(0xFFDC2626),
+        );
+      case 'fall_recovery':
+        return const _ActivityMeta(
+          label: 'Chute relevée',
+          icon: Icons.sync_problem_rounded,
+          color: Colors.orange,
+        );
+      case 'stand_up':
+        return const _ActivityMeta(
+          label: 'Relevage',
+          icon: Icons.accessibility_new_rounded,
+          color: Color(0xFF0F766E),
+        );
+      case 'free_fall':
+        return const _ActivityMeta(
+          label: 'Chute libre',
+          icon: Icons.warning_amber_rounded,
+          color: Color(0xFFDC2626),
+        );
+      case 'fall':
+      case 'fall_detected':
+      case 'fall_generic':
+        return const _ActivityMeta(
+          label: 'Chute',
+          icon: Icons.warning_amber_rounded,
+          color: Color(0xFFDC2626),
+        );
       case 'walk':
       case 'walking':
         return const _ActivityMeta(
@@ -235,6 +271,8 @@ class _ActivityItemTile extends StatelessWidget {
           color: Colors.indigo,
         );
       case 'stairs':
+      case 'stairs_up':
+      case 'stairs_down':
         return const _ActivityMeta(
           label: 'Escaliers',
           icon: Icons.stairs_rounded,
@@ -245,6 +283,12 @@ class _ActivityItemTile extends StatelessWidget {
           label: 'Immobile',
           icon: Icons.chair_rounded,
           color: Colors.blueGrey,
+        );
+      case 'jump':
+        return const _ActivityMeta(
+          label: 'Saut',
+          icon: Icons.nordic_walking_rounded,
+          color: Colors.deepPurple,
         );
       case 'stumble_recover':
         return const _ActivityMeta(
@@ -259,6 +303,13 @@ class _ActivityItemTile extends StatelessWidget {
           color: Colors.deepOrange,
         );
       default:
+        if (isFall || eventType.contains('fall')) {
+          return const _ActivityMeta(
+            label: 'Chute',
+            icon: Icons.warning_amber_rounded,
+            color: Color(0xFFDC2626),
+          );
+        }
         return _ActivityMeta(
           label: eventType.replaceAll('_', ' '),
           icon: Icons.directions_walk_rounded,

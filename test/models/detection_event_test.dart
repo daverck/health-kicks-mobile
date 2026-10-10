@@ -26,7 +26,18 @@ void main() {
       expect(event.confidence, 0.94);
       expect(event.isValidated, isTrue);
       expect(event.metadata?['location'], 'hallway');
-      expect(event.formattedTitle, 'Chute détectée');
+      expect(event.formattedTitle, 'Chute avant');
+    });
+
+    test('Formats titles specifically for each fall direction and type', () {
+      expect(DetectionEvent(id: '1', deviceId: 'HK', eventType: 'fall_forward', timestamp: DateTime.now(), severity: EventSeverity.critical, isValidated: false).formattedTitle, 'Chute avant');
+      expect(DetectionEvent(id: '2', deviceId: 'HK', eventType: 'fall_backward', timestamp: DateTime.now(), severity: EventSeverity.critical, isValidated: false).formattedTitle, 'Chute arrière');
+      expect(DetectionEvent(id: '3', deviceId: 'HK', eventType: 'fall_lateral', timestamp: DateTime.now(), severity: EventSeverity.critical, isValidated: false).formattedTitle, 'Chute latérale');
+      expect(DetectionEvent(id: '4', deviceId: 'HK', eventType: 'fall_recovery', timestamp: DateTime.now(), severity: EventSeverity.warning, isValidated: false).formattedTitle, 'Chute relevée');
+      expect(DetectionEvent(id: '5', deviceId: 'HK', eventType: 'stand_up', timestamp: DateTime.now(), severity: EventSeverity.info, isValidated: false).formattedTitle, 'Relevage après chute');
+      expect(DetectionEvent(id: '6', deviceId: 'HK', eventType: 'fall_generic', timestamp: DateTime.now(), severity: EventSeverity.critical, isValidated: false).formattedTitle, 'Chute (générique)');
+      expect(DetectionEvent(id: '7', deviceId: 'HK', eventType: 'fall_detected', timestamp: DateTime.now(), severity: EventSeverity.critical, isValidated: false).formattedTitle, 'Chute détectée');
+      expect(DetectionEvent(id: '8', deviceId: 'HK', eventType: 'free_fall', timestamp: DateTime.now(), severity: EventSeverity.critical, isValidated: false).formattedTitle, 'Chute libre (Impact violent)');
     });
 
     test('Infers severity automatically from event_type if missing', () {

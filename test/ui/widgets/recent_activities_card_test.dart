@@ -38,6 +38,22 @@ void main() {
         isHapticTriggered: true,
       ),
       const ActivityDetectionModel(
+        stateCode: 0x10,
+        eventType: 'fall_forward',
+        confidencePercent: 92,
+        timestampEpochSec: 1726999245,
+        isFall: true,
+        isHapticTriggered: true,
+      ),
+      const ActivityDetectionModel(
+        stateCode: 0x1E,
+        eventType: 'fall_recovery',
+        confidencePercent: 88,
+        timestampEpochSec: 1726999250,
+        isFall: false,
+        isHapticTriggered: false,
+      ),
+      const ActivityDetectionModel(
         stateCode: 0x20,
         eventType: 'inactivity_alert',
         confidencePercent: 100,
@@ -63,7 +79,9 @@ void main() {
     expect(find.text('Marche'), findsOneWidget);
     expect(find.text('95% conf.'), findsOneWidget);
     expect(find.text('Chute'), findsOneWidget);
-    expect(find.text('CHUTE'), findsOneWidget);
+    expect(find.text('Chute avant'), findsOneWidget);
+    expect(find.text('Chute relevée'), findsOneWidget);
+    expect(find.text('CHUTE'), findsNWidgets(2));
     expect(find.text('99% conf.'), findsOneWidget);
     expect(find.text('Rappel inactivité'), findsOneWidget);
 
