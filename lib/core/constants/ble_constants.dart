@@ -56,6 +56,19 @@ class BleConstants {
   /// State code for prolonged inactivity alert (Characteristic 0002)
   static const int stateCodeInactivityAlert = 0x20;
 
+  /// State codes for activities (Characteristic 0002)
+  static const int stateCodeIdle = 0x00;
+  static const int stateCodeWalk = 0x01;
+  static const int stateCodeRun = 0x02;
+  static const int stateCodeStairsUp = 0x03;
+  static const int stateCodeStairsDown = 0x04;
+  static const int stateCodeFallForward = 0x10;
+  static const int stateCodeFallBackward = 0x11;
+  static const int stateCodeFallLateral = 0x12;
+  static const int stateCodeFallRecovery = 0x13;
+  static const int stateCodeStumbleRecover = 0x1E;
+  static const int stateCodeFallGeneric = 0x1F;
+
   // Nominal IMU sampling rate
   static const int sampleRateHz = 50;
   static const int bytesPerFrame = 14;

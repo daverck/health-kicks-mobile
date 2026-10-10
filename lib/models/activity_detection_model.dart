@@ -92,13 +92,17 @@ class ActivityDetectionModel {
       case 0x02:
         return 'run';
       case 0x03:
-        return 'stairs';
+        return 'stairs_up';
+      case 0x04:
+        return 'stairs_down';
       case 0x10:
         return 'fall_forward';
       case 0x11:
         return 'fall_backward';
       case 0x12:
         return 'fall_lateral';
+      case 0x13:
+        return 'fall_recovery';
       case 0x1E:
         return 'stumble_recover';
       case 0x1F:

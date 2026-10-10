@@ -178,10 +178,12 @@ class DetectionEvent {
       case 'run':
       case 'running':
         return 'Course à pied';
-      case 'stairs':
       case 'stairs_up':
+        return 'Escaliers (Montée)';
       case 'stairs_down':
-        return 'Montée/Descente d\'escaliers';
+        return 'Escaliers (Descente)';
+      case 'stairs':
+        return 'Escaliers';
       case 'idle':
         return 'Repos / Station debout';
       case 'jump':

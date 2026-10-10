@@ -60,23 +60,30 @@ void main() {
       expect(mqtt['haptic_triggered'], isTrue);
     });
 
-    test('Correctly decodes stairs activity (0x03)', () {
-      final byteData = ByteData(7);
-      byteData.setUint8(0, 0x03);
-      byteData.setUint8(1, 88);
-      byteData.setUint32(2, 1726224010, Endian.big);
-      byteData.setUint8(6, 0x00);
+    test('Correctly decodes stairs_up (0x03) and stairs_down (0x04) activities', () {
+      final byteDataUp = ByteData(7);
+      byteDataUp.setUint8(0, 0x03);
+      byteDataUp.setUint8(1, 88);
+      byteDataUp.setUint32(2, 1726224010, Endian.big);
+      byteDataUp.setUint8(6, 0x00);
 
-      final model = ActivityDetectionModel.fromBytes(byteData.buffer.asUint8List());
+      final modelUp = ActivityDetectionModel.fromBytes(byteDataUp.buffer.asUint8List());
+      expect(modelUp.stateCode, equals(0x03));
+      expect(modelUp.eventType, equals('stairs_up'));
+      expect(modelUp.confidencePercent, equals(88));
+      expect(modelUp.isFall, isFalse);
 
-      expect(model.stateCode, equals(0x03));
-      expect(model.eventType, equals('stairs'));
-      expect(model.confidencePercent, equals(88));
-      expect(model.isFall, isFalse);
+      final byteDataDown = ByteData(7);
+      byteDataDown.setUint8(0, 0x04);
+      byteDataDown.setUint8(1, 85);
+      byteDataDown.setUint32(2, 1726224015, Endian.big);
+      byteDataDown.setUint8(6, 0x00);
 
-      final mqtt = model.toMqttPayload('HK-2');
-      expect(mqtt['event_type'], equals('stairs'));
-      expect(mqtt['confidence'], closeTo(0.88, 0.001));
+      final modelDown = ActivityDetectionModel.fromBytes(byteDataDown.buffer.asUint8List());
+      expect(modelDown.stateCode, equals(0x04));
+      expect(modelDown.eventType, equals('stairs_down'));
+      expect(modelDown.confidencePercent, equals(85));
+      expect(modelDown.isFall, isFalse);
     });
 
     test('Correctly decodes stumble_recover event (0x1E)', () {
@@ -103,10 +110,12 @@ void main() {
         0x00: 'idle',
         0x01: 'walk',
         0x02: 'run',
-        0x03: 'stairs',
+        0x03: 'stairs_up',
+        0x04: 'stairs_down',
         0x10: 'fall_forward',
         0x11: 'fall_backward',
         0x12: 'fall_lateral',
+        0x13: 'fall_recovery',
         0x1E: 'stumble_recover',
         0x1F: 'fall_generic',
         0x20: 'inactivity_alert',

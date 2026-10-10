@@ -161,9 +161,11 @@ class AppLocalizations {
       case 'run':
       case 'running':
         return translate('evt_run');
-      case 'stairs':
       case 'stairs_up':
+        return translate('evt_stairs_up');
       case 'stairs_down':
+        return translate('evt_stairs_down');
+      case 'stairs':
         return translate('evt_stairs');
       case 'idle':
         return translate('evt_idle');
@@ -285,6 +287,8 @@ class AppLocalizations {
       'evt_walk': 'Marche',
       'evt_run': 'Course',
       'evt_stairs': 'Escaliers',
+      'evt_stairs_up': 'Escaliers (Montée)',
+      'evt_stairs_down': 'Escaliers (Descente)',
       'evt_idle': 'Immobile',
       'evt_jump': 'Saut',
       'evt_activity_transition': 'Transition d\'activité',
@@ -397,6 +401,8 @@ class AppLocalizations {
       'evt_walk': 'Walking',
       'evt_run': 'Running',
       'evt_stairs': 'Stairs',
+      'evt_stairs_up': 'Stairs (Ascent)',
+      'evt_stairs_down': 'Stairs (Descent)',
       'evt_idle': 'Idle',
       'evt_jump': 'Jump',
       'evt_activity_transition': 'Activity transition',
@@ -509,6 +515,8 @@ class AppLocalizations {
       'evt_walk': 'Lopen',
       'evt_run': 'Hardlopen',
       'evt_stairs': 'Trappen',
+      'evt_stairs_up': 'Trappen (Omhoog)',
+      'evt_stairs_down': 'Trappen (Omlaag)',
       'evt_idle': 'Stilstaand / Zittend',
       'evt_jump': 'Sprong',
       'evt_activity_transition': 'Activiteitsovergang',
@@ -621,6 +629,8 @@ class AppLocalizations {
       'evt_walk': 'Caminata',
       'evt_run': 'Carrera',
       'evt_stairs': 'Escaleras',
+      'evt_stairs_up': 'Escaleras (Subida)',
+      'evt_stairs_down': 'Escaleras (Bajada)',
       'evt_idle': 'En reposo / Sentado',
       'evt_jump': 'Salto',
       'evt_activity_transition': 'Transición de actividad',
@@ -733,6 +743,8 @@ class AppLocalizations {
       'evt_walk': 'Gehen',
       'evt_run': 'Laufen',
       'evt_stairs': 'Treppen',
+      'evt_stairs_up': 'Treppen (Aufwärts)',
+      'evt_stairs_down': 'Treppen (Abwärts)',
       'evt_idle': 'Ruhe / Sitzen',
       'evt_jump': 'Sprung',
       'evt_activity_transition': 'Aktivitätsübergang',
@@ -844,6 +856,8 @@ class AppLocalizations {
       'evt_walk': 'مشي',
       'evt_run': 'جري',
       'evt_stairs': 'درج',
+      'evt_stairs_up': 'درج (صعود)',
+      'evt_stairs_down': 'درج (نزول)',
       'evt_idle': 'راحة / جلوس',
       'evt_jump': 'قفز',
       'evt_activity_transition': 'تغير النشاط',
@@ -954,6 +968,8 @@ class AppLocalizations {
       'evt_walk': '日常行走',
       'evt_run': '奔跑',
       'evt_stairs': '爬楼梯',
+      'evt_stairs_up': '上楼梯',
+      'evt_stairs_down': '下楼梯',
       'evt_idle': '静止休息 / 坐姿',
       'evt_jump': '跳跃',
       'evt_activity_transition': '活动状态转换',
