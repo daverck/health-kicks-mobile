@@ -274,13 +274,30 @@ class _ActivityItemTile extends StatelessWidget {
           icon: Icons.directions_run_rounded,
           color: Colors.indigo,
         );
-      case 'stairs':
       case 'stairs_up':
+        return _ActivityMeta(
+          label: l10n.translateEventType('stairs_up'),
+          icon: Icons.stairs_rounded,
+          color: Colors.teal,
+        );
       case 'stairs_down':
+        return _ActivityMeta(
+          label: l10n.translateEventType('stairs_down'),
+          icon: Icons.stairs_rounded,
+          color: Colors.teal.shade700,
+        );
+      case 'stairs':
         return _ActivityMeta(
           label: l10n.translateEventType('stairs'),
           icon: Icons.stairs_rounded,
           color: Colors.teal,
+        );
+      case 'calibration':
+      case 'sensor_calibration':
+        return _ActivityMeta(
+          label: l10n.translateEventType('calibration'),
+          icon: Icons.tune_rounded,
+          color: const Color(0xFF0F766E),
         );
       case 'idle':
         return _ActivityMeta(

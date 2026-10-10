@@ -245,6 +245,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
   bool _isInitializingBleClient = false;
   StepDataModel? _latestStepData;
   final List<ActivityDetectionModel> _recentActivities = [];
+  final StreamController<ActivityDetectionModel> _activityStreamController = StreamController<ActivityDetectionModel>.broadcast();
   DateTime? _lastInactivityToastTime;
   bool _isRecordingDialogVisible = false;
   String _lastStudioActivityKey = 'walk';
@@ -403,6 +404,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
   @override
   void dispose() {
     _isDisposed = true;
+    _activityStreamController.close();
     WidgetsBinding.instance.removeObserver(this);
     _bleManager?.removeListener(_onBleManagerUpdated);
     _inactivitySettingsService.dispose();
@@ -753,11 +755,12 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         if (mounted) {
           setState(() {
             _recentActivities.insert(0, detection);
-            if (_recentActivities.length > 10) {
+            if (_recentActivities.length > 20) {
               _recentActivities.removeLast();
             }
           });
         }
+        _activityStreamController.add(detection);
 
         _addLog(
           'ACTIVITY',
@@ -1097,6 +1100,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
                     ),
                     deviceId: _deviceId,
                     liveActivities: _recentActivities,
+                    activityStream: _activityStreamController.stream,
                   ),
                 ),
               );
@@ -1182,6 +1186,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
                         ),
                         deviceId: _deviceId,
                         liveActivities: _recentActivities,
+                        activityStream: _activityStreamController.stream,
                       ),
                     ),
                   );
@@ -1250,6 +1255,23 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
             if (activeClient != null) {
               _addLog('CONFIG', 'Envoi ordre de calibration d\'assiette (0x05)...');
               await activeClient.sendCalibrateZeroCommand();
+              final activeCalib = ActivityDetectionModel(
+                stateCode: 0xFD,
+                eventType: 'calibration',
+                confidencePercent: 100,
+                timestampEpochSec: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+                isFall: false,
+                isHapticTriggered: false,
+              );
+              if (mounted) {
+                setState(() {
+                  _recentActivities.insert(0, activeCalib);
+                  if (_recentActivities.length > 20) {
+                    _recentActivities.removeLast();
+                  }
+                });
+              }
+              _activityStreamController.add(activeCalib);
             }
           },
         ),

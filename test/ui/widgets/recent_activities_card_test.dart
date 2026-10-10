@@ -89,5 +89,47 @@ void main() {
     await tester.pump();
     expect(viewAllTapped, isTrue);
   });
+
+  testWidgets('RecentActivitiesCard renders stairs_up, stairs_down and calibration correctly', (tester) async {
+    final activities = [
+      const ActivityDetectionModel(
+        stateCode: 0x03,
+        eventType: 'stairs_up',
+        confidencePercent: 91,
+        timestampEpochSec: 1726999300,
+        isFall: false,
+        isHapticTriggered: false,
+      ),
+      const ActivityDetectionModel(
+        stateCode: 0x04,
+        eventType: 'stairs_down',
+        confidencePercent: 89,
+        timestampEpochSec: 1726999310,
+        isFall: false,
+        isHapticTriggered: false,
+      ),
+      const ActivityDetectionModel(
+        stateCode: 0xFD,
+        eventType: 'calibration',
+        confidencePercent: 100,
+        timestampEpochSec: 1726999320,
+        isFall: false,
+        isHapticTriggered: false,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RecentActivitiesCard(activities: activities),
+        ),
+      ),
+    );
+
+    expect(find.text('Escaliers (Montée)'), findsOneWidget);
+    expect(find.text('Escaliers (Descente)'), findsOneWidget);
+    expect(find.text('Calibration des capteurs'), findsOneWidget);
+    expect(find.byIcon(Icons.tune_rounded), findsOneWidget);
+  });
 }
 

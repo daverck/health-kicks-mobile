@@ -167,6 +167,9 @@ class AppLocalizations {
         return translate('evt_stairs_down');
       case 'stairs':
         return translate('evt_stairs');
+      case 'calibration':
+      case 'sensor_calibration':
+        return translate('evt_calibration');
       case 'idle':
         return translate('evt_idle');
       case 'jump':
@@ -289,6 +292,7 @@ class AppLocalizations {
       'evt_stairs': 'Escaliers',
       'evt_stairs_up': 'Escaliers (Montée)',
       'evt_stairs_down': 'Escaliers (Descente)',
+      'evt_calibration': 'Calibration des capteurs',
       'evt_idle': 'Immobile',
       'evt_jump': 'Saut',
       'evt_activity_transition': 'Transition d\'activité',
@@ -403,6 +407,7 @@ class AppLocalizations {
       'evt_stairs': 'Stairs',
       'evt_stairs_up': 'Stairs (Ascent)',
       'evt_stairs_down': 'Stairs (Descent)',
+      'evt_calibration': 'Sensor calibration',
       'evt_idle': 'Idle',
       'evt_jump': 'Jump',
       'evt_activity_transition': 'Activity transition',
@@ -517,6 +522,7 @@ class AppLocalizations {
       'evt_stairs': 'Trappen',
       'evt_stairs_up': 'Trappen (Omhoog)',
       'evt_stairs_down': 'Trappen (Omlaag)',
+      'evt_calibration': 'Sensorkalibratie',
       'evt_idle': 'Stilstaand / Zittend',
       'evt_jump': 'Sprong',
       'evt_activity_transition': 'Activiteitsovergang',
@@ -631,6 +637,7 @@ class AppLocalizations {
       'evt_stairs': 'Escaleras',
       'evt_stairs_up': 'Escaleras (Subida)',
       'evt_stairs_down': 'Escaleras (Bajada)',
+      'evt_calibration': 'Calibración de sensores',
       'evt_idle': 'En reposo / Sentado',
       'evt_jump': 'Salto',
       'evt_activity_transition': 'Transición de actividad',
@@ -745,6 +752,7 @@ class AppLocalizations {
       'evt_stairs': 'Treppen',
       'evt_stairs_up': 'Treppen (Aufwärts)',
       'evt_stairs_down': 'Treppen (Abwärts)',
+      'evt_calibration': 'Sensorkalibrierung',
       'evt_idle': 'Ruhe / Sitzen',
       'evt_jump': 'Sprung',
       'evt_activity_transition': 'Aktivitätsübergang',
@@ -858,6 +866,7 @@ class AppLocalizations {
       'evt_stairs': 'درج',
       'evt_stairs_up': 'درج (صعود)',
       'evt_stairs_down': 'درج (نزول)',
+      'evt_calibration': 'معايرة الحساسات',
       'evt_idle': 'راحة / جلوس',
       'evt_jump': 'قفز',
       'evt_activity_transition': 'تغير النشاط',
@@ -970,6 +979,7 @@ class AppLocalizations {
       'evt_stairs': '爬楼梯',
       'evt_stairs_up': '上楼梯',
       'evt_stairs_down': '下楼梯',
+      'evt_calibration': '传感器校准',
       'evt_idle': '静止休息 / 坐姿',
       'evt_jump': '跳跃',
       'evt_activity_transition': '活动状态转换',

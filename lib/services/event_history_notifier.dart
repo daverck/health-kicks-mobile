@@ -18,17 +18,23 @@ class EventHistoryNotifier extends ChangeNotifier {
   int _currentPage = 1;
   String _selectedCategory = 'all';
 
+  StreamSubscription<ActivityDetectionModel>? _activitySubscription;
+
   static const int pageSize = 20;
 
   EventHistoryNotifier({
     required EventHistoryService service,
     this.deviceId,
     List<ActivityDetectionModel>? liveActivities,
+    Stream<ActivityDetectionModel>? activityStream,
   }) : _service = service {
     if (liveActivities != null && liveActivities.isNotEmpty) {
       _events = liveActivities
           .map((a) => DetectionEvent.fromActivityDetection(a, deviceId: deviceId ?? 'HK-2'))
           .toList();
+    }
+    if (activityStream != null) {
+      _activitySubscription = activityStream.listen(addLiveActivity);
     }
   }
 
@@ -153,6 +159,16 @@ class EventHistoryNotifier extends ChangeNotifier {
     await loadInitial();
   }
 
+  /// Real-time insertion of a live detected activity.
+  void addLiveActivity(ActivityDetectionModel activity) {
+    final event = DetectionEvent.fromActivityDetection(activity, deviceId: deviceId ?? 'HK-2');
+    if (event.matchesCategory(_selectedCategory)) {
+      _events.removeWhere((e) => e.id == event.id);
+      _events.insert(0, event);
+      notifyListeners();
+    }
+  }
+
   void clear() {
     _events = [];
     _isLoading = false;
@@ -161,5 +177,11 @@ class EventHistoryNotifier extends ChangeNotifier {
     _errorMessage = null;
     _currentPage = 1;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _activitySubscription?.cancel();
+    super.dispose();
   }
 }

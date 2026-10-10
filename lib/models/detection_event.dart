@@ -190,15 +190,36 @@ class DetectionEvent {
         return 'Saut';
       case 'activity_transition':
         return 'Transition d\'activité';
+      case 'calibration':
+      case 'sensor_calibration':
+        return 'Calibration des capteurs';
       default:
         return eventType.replaceAll('_', ' ').toUpperCase();
     }
+  }
+
+  /// Checks whether this event belongs to the specified category filter.
+  bool matchesCategory(String category) {
+    if (category == 'all') return true;
+    if (category == 'falls') {
+      return (eventType.contains('fall') && eventType != 'fall_recovery') || severity == EventSeverity.critical;
+    }
+    if (category == 'impacts') {
+      return peakImpactG != null || eventType.contains('impact') || eventType == 'free_fall';
+    }
+    if (category == 'activity') {
+      return !(eventType.contains('fall') && eventType != 'fall_recovery');
+    }
+    return true;
   }
 
   /// Icon corresponding to the event nature.
   IconData get icon {
     if (eventType == 'inactivity_alert') {
       return Icons.alarm_rounded;
+    }
+    if (eventType == 'calibration' || eventType == 'sensor_calibration') {
+      return Icons.tune_rounded;
     }
     switch (severity) {
       case EventSeverity.critical:

@@ -71,6 +71,8 @@ class GatewayCoordinator {
 
     // 1. Upstream relay: BLE Activity Detection -> Cloud MQTT
     _activitySub = bleClient.activityStream.listen((detection) async {
+      // Local calibration events must never be forwarded to cloud MQTT
+      if (detection.eventType == 'calibration') return;
       await mqttService.publishActivityDetection(detection);
     });
 

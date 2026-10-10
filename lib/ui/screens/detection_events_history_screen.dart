@@ -13,6 +13,7 @@ class DetectionEventsHistoryScreen extends StatefulWidget {
   final EventHistoryService? service;
   final String? deviceId;
   final List<ActivityDetectionModel>? liveActivities;
+  final Stream<ActivityDetectionModel>? activityStream;
 
   const DetectionEventsHistoryScreen({
     super.key,
@@ -20,6 +21,7 @@ class DetectionEventsHistoryScreen extends StatefulWidget {
     this.service,
     this.deviceId,
     this.liveActivities,
+    this.activityStream,
   });
 
   @override
@@ -45,6 +47,7 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
           service: widget.service ?? EventHistoryService(),
           deviceId: widget.deviceId,
           liveActivities: widget.liveActivities,
+          activityStream: widget.activityStream,
         );
 
     _scrollController.addListener(_onScroll);
@@ -69,6 +72,9 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    if (widget.notifier == null) {
+      _notifier.dispose();
+    }
     super.dispose();
   }
 
@@ -91,13 +97,6 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
     return Scaffold(
       appBar: AppBar(
         title: const Text('Historique des Événements'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Actualiser',
-            onPressed: () => _notifier.refresh(),
-          ),
-        ],
       ),
       body: ListenableBuilder(
         listenable: _notifier,

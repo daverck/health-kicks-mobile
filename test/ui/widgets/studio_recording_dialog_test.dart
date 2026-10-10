@@ -284,5 +284,69 @@ void main() {
 
       await tester.pump(const Duration(seconds: 2));
     });
+
+    testWidgets('allows abandoning transfer during transmitting state', (WidgetTester tester) async {
+      bool cancelCalled = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StudioRecordingDialog(
+              label: 'walk',
+              durationSec: 5.0,
+              studioStatusStream: statusController.stream,
+              sessionSavedStream: sessionSavedController.stream,
+              onCancel: () async {
+                cancelCalled = true;
+              },
+            ),
+          ),
+        ),
+      );
+
+      statusController.add('FINISHED 250 test-session-id');
+      await tester.pump();
+
+      expect(find.text('⚡ Synchronisation des données biomécaniques...'), findsOneWidget);
+      expect(find.text('Abandonner'), findsOneWidget);
+
+      await tester.tap(find.text('Abandonner'));
+      await tester.pump();
+
+      expect(cancelCalled, isTrue);
+
+      statusController.add('CANCELLED');
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('shows error when transmission times out after 15 seconds', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StudioRecordingDialog(
+              label: 'walk',
+              durationSec: 5.0,
+              studioStatusStream: statusController.stream,
+              sessionSavedStream: sessionSavedController.stream,
+            ),
+          ),
+        ),
+      );
+
+      statusController.add('FINISHED 250 test-session-id');
+      await tester.pump();
+
+      expect(find.text('⚡ Synchronisation des données biomécaniques...'), findsOneWidget);
+
+      // Advance 15 seconds
+      await tester.pump(const Duration(seconds: 15));
+
+      expect(find.text('Erreur Studio'), findsOneWidget);
+      expect(find.textContaining('Délai d\'envoi dépassé'), findsOneWidget);
+      expect(find.text('Fermer'), findsOneWidget);
+
+      statusController.add('CANCELLED');
+      await tester.pump(const Duration(seconds: 2));
+    });
   });
 }

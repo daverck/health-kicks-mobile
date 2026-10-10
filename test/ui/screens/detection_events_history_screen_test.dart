@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:healthkicks_mobile/models/activity_detection_model.dart';
 import 'package:healthkicks_mobile/models/detection_event.dart';
 import 'package:healthkicks_mobile/services/event_history_notifier.dart';
 import 'package:healthkicks_mobile/services/event_history_service.dart';
@@ -154,6 +156,72 @@ void main() {
 
       expect(find.text('Erreur de chargement'), findsOneWidget);
       expect(find.text('Réessayer'), findsOneWidget);
+    });
+
+    testWidgets('Does not display refresh button in AppBar', (tester) async {
+      final fakeService = FakeEventHistoryService(mockedEvents: sampleEvents);
+      final notifier = EventHistoryNotifier(service: fakeService);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DetectionEventsHistoryScreen(notifier: notifier),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.refresh_rounded), findsNothing);
+      expect(find.byTooltip('Actualiser'), findsNothing);
+    });
+
+    testWidgets('Updates in real-time when activityStream emits new detection', (tester) async {
+      final fakeService = FakeEventHistoryService(mockedEvents: []);
+      final streamController = StreamController<ActivityDetectionModel>.broadcast();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DetectionEventsHistoryScreen(
+            service: fakeService,
+            activityStream: streamController.stream,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Initially empty
+      expect(find.text('Aucun événement détecté'), findsOneWidget);
+
+      // Emit new activity
+      streamController.add(
+        const ActivityDetectionModel(
+          stateCode: 0x01,
+          eventType: 'walk',
+          confidencePercent: 92,
+          timestampEpochSec: 1726999400,
+          isFall: false,
+          isHapticTriggered: false,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Should now display Marche
+      expect(find.text('Marche'), findsOneWidget);
+
+      // Emit calibration activity
+      streamController.add(
+        const ActivityDetectionModel(
+          stateCode: 0xFD,
+          eventType: 'calibration',
+          confidencePercent: 100,
+          timestampEpochSec: 1726999410,
+          isFall: false,
+          isHapticTriggered: false,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Calibration des capteurs'), findsOneWidget);
+
+      await streamController.close();
     });
   });
 }

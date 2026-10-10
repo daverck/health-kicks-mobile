@@ -1061,11 +1061,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: Text('Version'),
                 subtitle: Text('HealthKicks Mobile v0.1.0+1 (Gateway BLE-MQTT)'),
               ),
-              const ListTile(
-                leading: Icon(Icons.notifications_active_outlined),
-                title: Text('Canal de Notification'),
-                subtitle: Text(BackgroundSurveillanceService.notificationChannelName),
-              ),
             ],
           );
         },

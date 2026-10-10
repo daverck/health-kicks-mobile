@@ -47,6 +47,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
   Timer? _countdownTimer;
   Timer? _recordingProgressTimer;
   Timer? _autoDismissTimer;
+  Timer? _transmissionTimeoutTimer;
 
   int _samplesCollected = 0;
   String? _errorMessage;
@@ -82,6 +83,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
     _savedSub?.cancel();
     _recordingProgressTimer?.cancel();
     _autoDismissTimer?.cancel();
+    _transmissionTimeoutTimer?.cancel();
     _audioService.stopContinuousTone();
     if (_ownsAudioService) {
       _audioService.dispose();
@@ -150,9 +152,11 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
       setState(() {
         _state = StudioActiveState.transmitting;
       });
+      _startTransmissionTimeout();
     } else if (status == 'CANCELLED') {
       _countdownTimer?.cancel();
       _recordingProgressTimer?.cancel();
+      _transmissionTimeoutTimer?.cancel();
       _audioService.stopContinuousTone();
       setState(() {
         _state = StudioActiveState.cancelled;
@@ -198,9 +202,24 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
     });
   }
 
+  void _startTransmissionTimeout() {
+    _transmissionTimeoutTimer?.cancel();
+    _transmissionTimeoutTimer = Timer(const Duration(seconds: 15), () {
+      if (!mounted) return;
+      if (_state == StudioActiveState.transmitting) {
+        setState(() {
+          _state = StudioActiveState.error;
+          _errorMessage =
+              'Délai d\'envoi dépassé : la connexion au Cloud a échoué. Vérifiez votre réseau.';
+        });
+      }
+    });
+  }
+
   void _handleSessionSaved(dynamic session) {
     if (!mounted) return;
     _recordingProgressTimer?.cancel();
+    _transmissionTimeoutTimer?.cancel();
     _audioService.playFinishedChime();
 
     int readingsCount = _samplesCollected;
@@ -238,7 +257,8 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
     final emoji = _getActivityEmoji(widget.label);
     final canDismiss = _state == StudioActiveState.success ||
         _state == StudioActiveState.cancelled ||
-        _state == StudioActiveState.error;
+        _state == StudioActiveState.error ||
+        _state == StudioActiveState.transmitting;
 
     return PopScope(
       canPop: canDismiss,
@@ -488,6 +508,23 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
                   }
                 },
           child: const Text('Annuler', style: TextStyle(color: Colors.redAccent)),
+        ),
+      ];
+    } else if (_state == StudioActiveState.transmitting) {
+      return [
+        TextButton(
+          onPressed: () async {
+            _recordingProgressTimer?.cancel();
+            _transmissionTimeoutTimer?.cancel();
+            unawaited(_audioService.stopContinuousTone());
+            if (widget.onCancel != null) {
+              await widget.onCancel!();
+            }
+            if (mounted && Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+          },
+          child: const Text('Abandonner', style: TextStyle(color: Colors.redAccent)),
         ),
       ];
     } else if (_state == StudioActiveState.error || _state == StudioActiveState.cancelled) {
