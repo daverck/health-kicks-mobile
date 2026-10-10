@@ -392,7 +392,7 @@ class DetectionEventCard extends StatelessWidget {
                       children: [
                         Flexible(
                           child: Text(
-                            event.formattedTitle,
+                            event.localizedTitle(context),
                             style: theme.textTheme.titleSmall?.copyWith(
                               fontWeight: FontWeight.bold,
                             ),
@@ -512,7 +512,7 @@ class _EventDetailBottomSheet extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      event.formattedTitle,
+                      event.localizedTitle(context),
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),

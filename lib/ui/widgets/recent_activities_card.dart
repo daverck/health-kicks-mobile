@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/localization/app_localizations.dart';
 import '../../models/activity_detection_model.dart';
 
 /// Dashboard card displaying real-time stream of latest detected physical activities.
@@ -15,6 +16,7 @@ class RecentActivitiesCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return Card(
       elevation: 2,
@@ -37,7 +39,7 @@ class RecentActivitiesCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Activités récentes',
+                      l10n.recentActivities,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -52,7 +54,7 @@ class RecentActivitiesCard extends StatelessWidget {
                     ),
                     onPressed: onViewAll,
                     icon: const Icon(Icons.chevron_right, size: 18),
-                    label: const Text('Voir tout'),
+                    label: Text(l10n.viewAll),
                   ),
               ],
             ),
@@ -77,7 +79,7 @@ class RecentActivitiesCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'En attente de détections...',
+                        l10n.waitingDetections,
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -121,7 +123,8 @@ class _ActivityItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final meta = _getActivityMeta(activity.eventType, isFall: activity.isFall);
+    final l10n = AppLocalizations.of(context);
+    final meta = _getActivityMeta(context, activity.eventType, isFall: activity.isFall);
     final formattedTime = _formatTimestamp(activity);
 
     return Row(
@@ -157,9 +160,9 @@ class _ActivityItemTile extends StatelessWidget {
                         color: Colors.red,
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text(
-                        'CHUTE',
-                        style: TextStyle(
+                      child: Text(
+                        l10n.fallBadge,
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 9,
                           fontWeight: FontWeight.bold,
@@ -210,108 +213,109 @@ class _ActivityItemTile extends StatelessWidget {
     return '$h:$m:$s';
   }
 
-  _ActivityMeta _getActivityMeta(String eventType, {required bool isFall}) {
+  _ActivityMeta _getActivityMeta(BuildContext context, String eventType, {required bool isFall}) {
+    final l10n = AppLocalizations.of(context);
     switch (eventType.toLowerCase()) {
       case 'fall_forward':
-        return const _ActivityMeta(
-          label: 'Chute avant',
+        return _ActivityMeta(
+          label: l10n.translateEventType('fall_forward'),
           icon: Icons.warning_amber_rounded,
-          color: Color(0xFFDC2626),
+          color: const Color(0xFFDC2626),
         );
       case 'fall_backward':
-        return const _ActivityMeta(
-          label: 'Chute arrière',
+        return _ActivityMeta(
+          label: l10n.translateEventType('fall_backward'),
           icon: Icons.warning_amber_rounded,
-          color: Color(0xFFDC2626),
+          color: const Color(0xFFDC2626),
         );
       case 'fall_lateral':
-        return const _ActivityMeta(
-          label: 'Chute latérale',
+        return _ActivityMeta(
+          label: l10n.translateEventType('fall_lateral'),
           icon: Icons.warning_amber_rounded,
-          color: Color(0xFFDC2626),
+          color: const Color(0xFFDC2626),
         );
       case 'fall_recovery':
-        return const _ActivityMeta(
-          label: 'Chute relevée',
+        return _ActivityMeta(
+          label: l10n.translateEventType('fall_recovery'),
           icon: Icons.sync_problem_rounded,
           color: Colors.orange,
         );
       case 'stand_up':
-        return const _ActivityMeta(
-          label: 'Relevage',
+        return _ActivityMeta(
+          label: l10n.translateEventType('stand_up'),
           icon: Icons.accessibility_new_rounded,
-          color: Color(0xFF0F766E),
+          color: const Color(0xFF0F766E),
         );
       case 'free_fall':
-        return const _ActivityMeta(
-          label: 'Chute libre',
+        return _ActivityMeta(
+          label: l10n.translateEventType('free_fall'),
           icon: Icons.warning_amber_rounded,
-          color: Color(0xFFDC2626),
+          color: const Color(0xFFDC2626),
         );
       case 'fall':
       case 'fall_detected':
       case 'fall_generic':
-        return const _ActivityMeta(
-          label: 'Chute',
+        return _ActivityMeta(
+          label: l10n.translateEventType('fall_generic'),
           icon: Icons.warning_amber_rounded,
-          color: Color(0xFFDC2626),
+          color: const Color(0xFFDC2626),
         );
       case 'walk':
       case 'walking':
-        return const _ActivityMeta(
-          label: 'Marche',
+        return _ActivityMeta(
+          label: l10n.translateEventType('walk'),
           icon: Icons.directions_walk_rounded,
-          color: Color(0xFF0F766E),
+          color: const Color(0xFF0F766E),
         );
       case 'run':
       case 'running':
-        return const _ActivityMeta(
-          label: 'Course',
+        return _ActivityMeta(
+          label: l10n.translateEventType('run'),
           icon: Icons.directions_run_rounded,
           color: Colors.indigo,
         );
       case 'stairs':
       case 'stairs_up':
       case 'stairs_down':
-        return const _ActivityMeta(
-          label: 'Escaliers',
+        return _ActivityMeta(
+          label: l10n.translateEventType('stairs'),
           icon: Icons.stairs_rounded,
           color: Colors.teal,
         );
       case 'idle':
-        return const _ActivityMeta(
-          label: 'Immobile',
+        return _ActivityMeta(
+          label: l10n.translateEventType('idle'),
           icon: Icons.chair_rounded,
           color: Colors.blueGrey,
         );
       case 'jump':
-        return const _ActivityMeta(
-          label: 'Saut',
+        return _ActivityMeta(
+          label: l10n.translateEventType('jump'),
           icon: Icons.nordic_walking_rounded,
           color: Colors.deepPurple,
         );
       case 'stumble_recover':
-        return const _ActivityMeta(
-          label: 'Trébuchement',
+        return _ActivityMeta(
+          label: l10n.translateEventType('stumble_recover'),
           icon: Icons.sync_problem_rounded,
           color: Colors.amber,
         );
       case 'inactivity_alert':
-        return const _ActivityMeta(
-          label: 'Rappel inactivité',
+        return _ActivityMeta(
+          label: l10n.translateEventType('inactivity_alert'),
           icon: Icons.alarm_rounded,
           color: Colors.deepOrange,
         );
       default:
         if (isFall || eventType.contains('fall')) {
-          return const _ActivityMeta(
-            label: 'Chute',
+          return _ActivityMeta(
+            label: l10n.translateEventType('fall_detected'),
             icon: Icons.warning_amber_rounded,
-            color: Color(0xFFDC2626),
+            color: const Color(0xFFDC2626),
           );
         }
         return _ActivityMeta(
-          label: eventType.replaceAll('_', ' '),
+          label: l10n.translateEventType(eventType),
           icon: Icons.directions_walk_rounded,
           color: Colors.grey,
         );

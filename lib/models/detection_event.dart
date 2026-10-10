@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../core/localization/app_localizations.dart';
 import 'activity_detection_model.dart';
 
 /// Severity classification of a biomechanical detection event.
@@ -133,7 +134,17 @@ class DetectionEvent {
     };
   }
 
-  /// User-friendly localized label for the event type.
+  /// User-friendly localized label for the event type using current BuildContext.
+  String localizedTitle(BuildContext context) {
+    return AppLocalizations.of(context).translateEventType(eventType);
+  }
+
+  /// User-friendly localized label for the event type using given AppLocalizations.
+  String localizedTitleWith(AppLocalizations l10n) {
+    return l10n.translateEventType(eventType);
+  }
+
+  /// User-friendly localized label for the event type (defaults to French).
   String get formattedTitle {
     switch (eventType.toLowerCase()) {
       case 'fall_forward':

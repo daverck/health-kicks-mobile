@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:healthkicks_mobile/core/localization/app_language.dart';
+import 'package:healthkicks_mobile/core/localization/app_localizations.dart';
 import 'package:healthkicks_mobile/services/background_surveillance_service.dart';
 import 'package:healthkicks_mobile/services/ble/ble_connection_manager.dart';
+import 'package:healthkicks_mobile/services/locale_service.dart';
 import 'package:healthkicks_mobile/services/theme_service.dart';
 import 'package:healthkicks_mobile/ui/screens/settings_screen.dart';
 
@@ -425,6 +429,60 @@ void main() {
 
       await tester.tap(find.text("Étalonner l'assiette du capteur (4s)"));
       expect(calibrated, isTrue);
+    });
+
+    testWidgets('Renders LANGUE & RÉGION category and selects a new language', (tester) async {
+      tester.view.physicalSize = const Size(1080, 4000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final surveillance = BackgroundSurveillanceService();
+      addTearDown(surveillance.dispose);
+
+      final localeService = LocaleService();
+      addTearDown(localeService.dispose);
+      await localeService.setLanguageCode('fr');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLanguage.supportedLocales,
+          locale: localeService.currentLocale,
+          home: SettingsScreen(
+            surveillanceService: surveillance,
+            localeService: localeService,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('LANGUE & RÉGION'), findsOneWidget);
+      expect(find.text('Langue de l\'application'), findsOneWidget);
+      expect(find.text('Français'), findsNWidgets(2));
+
+      // Tap on the language selector card to open bottom sheet
+      await tester.tap(find.text('Français').first);
+      await tester.pumpAndSettle();
+
+      // Modal bottom sheet should list all supported languages
+      expect(find.text('English'), findsOneWidget);
+      expect(find.text('Nederlands'), findsOneWidget);
+      expect(find.text('Español'), findsOneWidget);
+      expect(find.text('Deutsch'), findsOneWidget);
+      expect(find.text('العربية'), findsOneWidget);
+      expect(find.text('中文'), findsOneWidget);
+
+      // Select English
+      await tester.tap(find.text('English'));
+      await tester.pumpAndSettle();
+
+      expect(localeService.currentLanguage.code, equals('en'));
     });
   });
 }

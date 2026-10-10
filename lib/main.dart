@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import 'core/config/app_config.dart';
 import 'core/constants/ble_constants.dart';
+import 'core/localization/app_language.dart';
+import 'core/localization/app_localizations.dart';
 import 'core/permissions/permission_service.dart';
 import 'core/theme/app_theme.dart';
 import 'models/activity_detection_model.dart';
@@ -22,6 +25,7 @@ import 'services/background_surveillance_service.dart';
 import 'services/ble/ble_connection_manager.dart';
 import 'services/ble/ble_footwear_client.dart';
 import 'services/gateway_coordinator.dart';
+import 'services/locale_service.dart';
 import 'services/mqtt/mqtt_gateway_service.dart';
 import 'services/studio/studio_api_service.dart';
 import 'services/event_history_service.dart';
@@ -43,14 +47,25 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final themeService = ThemeService();
   await themeService.loadTheme();
-  runApp(HealthKicksApp(themeService: themeService));
+  final localeService = LocaleService();
+  await localeService.loadLocale();
+  runApp(HealthKicksApp(
+    themeService: themeService,
+    localeService: localeService,
+  ));
 }
 
 class HealthKicksApp extends StatefulWidget {
   final AuthService? authService;
   final ThemeService? themeService;
+  final LocaleService? localeService;
 
-  const HealthKicksApp({super.key, this.authService, this.themeService});
+  const HealthKicksApp({
+    super.key,
+    this.authService,
+    this.themeService,
+    this.localeService,
+  });
 
   @override
   State<HealthKicksApp> createState() => _HealthKicksAppState();
@@ -58,6 +73,7 @@ class HealthKicksApp extends StatefulWidget {
 
 class _HealthKicksAppState extends State<HealthKicksApp> {
   late final ThemeService _themeService;
+  late final LocaleService _localeService;
 
   @override
   void initState() {
@@ -66,12 +82,16 @@ class _HealthKicksAppState extends State<HealthKicksApp> {
     if (widget.themeService == null) {
       _themeService.loadTheme();
     }
+    _localeService = widget.localeService ?? LocaleService();
+    if (widget.localeService == null) {
+      _localeService.loadLocale();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: _themeService,
+      listenable: Listenable.merge([_themeService, _localeService]),
       builder: (context, _) {
         return MaterialApp(
           title: 'HealthKicks Mobile',
@@ -79,9 +99,18 @@ class _HealthKicksAppState extends State<HealthKicksApp> {
           themeMode: _themeService.themeMode,
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
+          locale: _localeService.currentLocale,
+          supportedLocales: AppLanguage.supportedLocales,
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
           home: AuthGate(
             authService: widget.authService,
             themeService: _themeService,
+            localeService: _localeService,
           ),
         );
       },
@@ -93,8 +122,14 @@ class _HealthKicksAppState extends State<HealthKicksApp> {
 class AuthGate extends StatefulWidget {
   final AuthService? authService;
   final ThemeService? themeService;
+  final LocaleService? localeService;
 
-  const AuthGate({super.key, this.authService, this.themeService});
+  const AuthGate({
+    super.key,
+    this.authService,
+    this.themeService,
+    this.localeService,
+  });
 
   @override
   State<AuthGate> createState() => _AuthGateState();
@@ -150,6 +185,7 @@ class _AuthGateState extends State<AuthGate> {
           return GatewayDashboardScreen(
             authService: _authService,
             themeService: widget.themeService,
+            localeService: widget.localeService,
             onLogout: () async {
               await _authService.logout();
             },
@@ -170,12 +206,14 @@ class _AuthGateState extends State<AuthGate> {
 class GatewayDashboardScreen extends StatefulWidget {
   final AuthService? authService;
   final ThemeService? themeService;
+  final LocaleService? localeService;
   final VoidCallback? onLogout;
 
   const GatewayDashboardScreen({
     super.key,
     this.authService,
     this.themeService,
+    this.localeService,
     this.onLogout,
   });
 
@@ -1190,6 +1228,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           surveillanceService: _surveillanceService,
           inactivitySettingsService: _inactivitySettingsService,
           themeService: widget.themeService,
+          localeService: widget.localeService,
           bleManager: _bleManager,
           bleClient: _bleClient,
           bleClientNotifier: _bleClientNotifier,

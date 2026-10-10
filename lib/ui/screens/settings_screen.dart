@@ -1,18 +1,22 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../core/localization/app_language.dart';
+import '../../core/localization/app_localizations.dart';
 import '../../services/background_surveillance_service.dart';
 import '../../services/inactivity_settings_service.dart';
 import '../../services/ble/ble_connection_manager.dart';
 import '../../services/ble/ble_footwear_client.dart';
+import '../../services/locale_service.dart';
 import '../../services/theme_service.dart';
 import 'firmware_update_screen.dart';
 
 /// Screen allowing the user to configure mobile gateway settings,
-/// BLE/MQTT connectivity actions, background surveillance, inactivity reminders, appearance/theme, and tilt calibration.
+/// BLE/MQTT connectivity actions, background surveillance, inactivity reminders, appearance/theme, language/region, and tilt calibration.
 class SettingsScreen extends StatefulWidget {
   final BackgroundSurveillanceService surveillanceService;
   final InactivitySettingsService? inactivitySettingsService;
   final ThemeService? themeService;
+  final LocaleService? localeService;
   final BleFootwearClient? bleClient;
   final ValueNotifier<BleFootwearClient?>? bleClientNotifier;
   final Future<void> Function()? onCalibrateSensor;
@@ -36,6 +40,7 @@ class SettingsScreen extends StatefulWidget {
     required this.surveillanceService,
     this.inactivitySettingsService,
     this.themeService,
+    this.localeService,
     this.bleManager,
     this.bleClient,
     this.bleClientNotifier,
@@ -62,6 +67,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _ownsInactivityService = false;
   late final ThemeService _themeService;
   bool _ownsThemeService = false;
+  late final LocaleService _localeService;
+  bool _ownsLocaleService = false;
 
   bool _isLocallyDisconnected = false;
   BleConnectionStatus? _previousBleStatus;
@@ -84,6 +91,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _ownsThemeService = true;
       unawaited(_themeService.loadTheme());
     }
+
+    if (widget.localeService != null) {
+      _localeService = widget.localeService!;
+    } else {
+      _localeService = LocaleService();
+      _ownsLocaleService = true;
+      unawaited(_localeService.loadLocale());
+    }
   }
 
   @override
@@ -93,6 +108,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     if (_ownsThemeService) {
       _themeService.dispose();
+    }
+    if (_ownsLocaleService) {
+      _localeService.dispose();
     }
     super.dispose();
   }
@@ -112,11 +130,83 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _showLanguageSelector(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (modalContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.language_rounded,
+                      size: 24,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      l10n.languageTitle,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.languageDesc,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ...AppLanguage.supported.map((lang) {
+                  final isSelected = _localeService.currentLanguage.code == lang.code;
+                  return ListTile(
+                    leading: Text(lang.flag, style: const TextStyle(fontSize: 24)),
+                    title: Text(
+                      lang.nativeName,
+                      style: TextStyle(
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                    subtitle: Text(lang.name),
+                    trailing: isSelected
+                        ? const Icon(Icons.check_circle_rounded, color: Colors.teal)
+                        : null,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    selected: isSelected,
+                    selectedTileColor:
+                        Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                    onTap: () {
+                      _localeService.setLanguageCode(lang.code);
+                      Navigator.of(modalContext).pop();
+                    },
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Paramètres'),
+        title: Text(l10n.settingsTitle),
       ),
       body: ListenableBuilder(
         listenable: Listenable.merge([
@@ -822,21 +912,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             return SizedBox(
                               width: double.infinity,
                               child: SegmentedButton<AppThemeMode>(
-                                segments: const [
+                                segments: [
                                   ButtonSegment<AppThemeMode>(
                                     value: AppThemeMode.system,
-                                    label: Text('Système'),
-                                    icon: Icon(Icons.brightness_auto, size: 18),
+                                    label: Text(l10n.themeSystem),
+                                    icon: const Icon(Icons.brightness_auto, size: 18),
                                   ),
                                   ButtonSegment<AppThemeMode>(
                                     value: AppThemeMode.light,
-                                    label: Text('Clair'),
-                                    icon: Icon(Icons.light_mode, size: 18),
+                                    label: Text(l10n.themeLight),
+                                    icon: const Icon(Icons.light_mode, size: 18),
                                   ),
                                   ButtonSegment<AppThemeMode>(
                                     value: AppThemeMode.dark,
-                                    label: Text('Sombre'),
-                                    icon: Icon(Icons.dark_mode, size: 18),
+                                    label: Text(l10n.themeDark),
+                                    icon: const Icon(Icons.dark_mode, size: 18),
                                   ),
                                 ],
                                 selected: {_themeService.currentMode},
@@ -845,6 +935,103 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     _themeService.setThemeMode(selected.first);
                                   }
                                 },
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              // 5b. Language & Region
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Text(
+                  l10n.languageRegion,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.1,
+                      ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(
+                      color: Theme.of(context).dividerColor.withValues(alpha: 0.15),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.languageTitle,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          l10n.languageDesc,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        ListenableBuilder(
+                          listenable: _localeService,
+                          builder: (context, _) {
+                            final current = _localeService.currentLanguage;
+                            return InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () => _showLanguageSelector(context),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Theme.of(context).dividerColor.withValues(alpha: 0.25),
+                                  ),
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest
+                                      .withValues(alpha: 0.3),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Text(current.flag, style: const TextStyle(fontSize: 22)),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            current.nativeName,
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold, fontSize: 14),
+                                          ),
+                                          Text(
+                                            current.name,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(Icons.arrow_drop_down_rounded, size: 28),
+                                  ],
+                                ),
                               ),
                             );
                           },
