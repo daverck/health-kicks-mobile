@@ -30,6 +30,11 @@ class BleConstants {
   /// OTA Characteristic 2: OTA Data (WRITE, WRITE WITHOUT RESPONSE)
   static const String otaDataCharUuid = '7a5a0012-c529-4d64-8848-18e5904de22a';
 
+  /// Standard Bluetooth SIG Device Information Service (DIS 0x180A)
+  static const String disServiceUuid = '180a';
+  static const String firmwareRevisionCharUuid = '2a26';
+  static const String softwareRevisionCharUuid = '2a28';
+
   // OTA Commands (Phone -> ESP32)
   static const int otaCmdBegin = 0x01;
   static const int otaCmdEnd = 0x02;

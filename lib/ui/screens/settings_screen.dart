@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/localization/app_language.dart';
 import '../../core/localization/app_localizations.dart';
+import '../../services/auth/auth_service.dart';
 import '../../services/background_surveillance_service.dart';
 import '../../services/inactivity_settings_service.dart';
 import '../../services/ble/ble_connection_manager.dart';
@@ -13,6 +14,7 @@ import 'firmware_update_screen.dart';
 /// Screen allowing the user to configure mobile gateway settings,
 /// BLE/MQTT connectivity actions, background surveillance, inactivity reminders, appearance/theme, language/region, and tilt calibration.
 class SettingsScreen extends StatefulWidget {
+  final AuthService? authService;
   final BackgroundSurveillanceService surveillanceService;
   final InactivitySettingsService? inactivitySettingsService;
   final ThemeService? themeService;
@@ -37,6 +39,7 @@ class SettingsScreen extends StatefulWidget {
 
   const SettingsScreen({
     super.key,
+    this.authService,
     required this.surveillanceService,
     this.inactivitySettingsService,
     this.themeService,
@@ -858,6 +861,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     MaterialPageRoute(
                       builder: (ctx) => FirmwareUpdateScreen(
                         device: widget.bleClient?.device ?? widget.bleManager?.connectedDevice,
+                        authService: widget.authService,
                       ),
                     ),
                   );

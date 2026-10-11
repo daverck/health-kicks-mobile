@@ -82,6 +82,12 @@ class AuthService extends ChangeNotifier {
         _launchUrl = urlLauncher ?? launchUrl;
 
   String get backendBaseUrl => _backendBaseUrl;
+  TokenStorageService get tokenStorage => _tokenStorage;
+
+  /// Retrieves the current access token from secure storage.
+  Future<String?> getValidAccessToken() async {
+    return _tokenStorage.getAccessToken();
+  }
 
   void updateBackendBaseUrl(String newUrl) {
     _backendBaseUrl = newUrl.trim().replaceAll(RegExp(r'/+$'), '');

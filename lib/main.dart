@@ -1230,6 +1230,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => SettingsScreen(
+          authService: widget.authService,
           surveillanceService: _surveillanceService,
           inactivitySettingsService: _inactivitySettingsService,
           themeService: widget.themeService,
