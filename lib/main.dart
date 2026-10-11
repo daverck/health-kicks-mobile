@@ -33,6 +33,7 @@ import 'services/inactivity_settings_service.dart';
 import 'services/local_storage/step_storage_service.dart';
 import 'services/step_sync_service.dart';
 import 'services/theme_service.dart';
+import 'services/firmware/firmware_service.dart';
 import 'ui/screens/detection_events_history_screen.dart';
 import 'ui/screens/event_logs_screen.dart';
 import 'ui/screens/login_screen.dart';
@@ -228,6 +229,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
 
   final PermissionService _permissionService = PermissionService();
   late final BackgroundSurveillanceService _surveillanceService;
+  late final FirmwareService _firmwareService = FirmwareService();
   BleConnectionManager? _bleManager;
   BleFootwearClient? _bleClient;
   final ValueNotifier<BleFootwearClient?> _bleClientNotifier = ValueNotifier<BleFootwearClient?>(null);
@@ -750,6 +752,17 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         'Souscription active : Activity (0002), Studio Control (0004), Burst (0005) | Haptique (0003) ${_bleClient!.hasHaptic ? "prêt" : "non trouvé"}',
       );
 
+      // Query DIS firmware info in background and cache locally
+      unawaited(_firmwareService.readDeviceFirmwareInfo(device).then((info) {
+        if (info.version != null && info.version!.isNotEmpty) {
+          _addLog('BLE', 'Firmware détecté : ${info.version} (${info.rawBuildString ?? ""})');
+          _firmwareService.saveLocalInstalledFirmware(
+            installedDate: info.buildDate ?? DateTime.now().toUtc(),
+            version: info.version!,
+          );
+        }
+      }));
+
       // Listen to BLE streams for live event logging and recent activity history
       _bleClient!.activityStream.listen((detection) {
         if (mounted) {
@@ -1235,6 +1248,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           inactivitySettingsService: _inactivitySettingsService,
           themeService: widget.themeService,
           localeService: widget.localeService,
+          firmwareService: _firmwareService,
           bleManager: _bleManager,
           bleClient: _bleClient,
           bleClientNotifier: _bleClientNotifier,

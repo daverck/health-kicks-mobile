@@ -5,6 +5,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:http/http.dart' as http;
 import '../../models/firmware_release_model.dart';
 import '../../services/auth/auth_service.dart';
+import '../../services/ble/ble_connection_manager.dart';
 import '../../services/ble/ble_ota_service.dart';
 import '../../services/firmware/firmware_service.dart';
 
@@ -16,6 +17,9 @@ class FirmwareUpdateScreen extends StatefulWidget {
   final BleOtaService? otaService;
   final FirmwareService? firmwareService;
   final AuthService? authService;
+  final BleConnectionManager? bleManager;
+  final String? targetDeviceId;
+  final Future<void> Function()? onReconnect;
 
   static const String defaultFirmwareUrl =
       'https://healthkicks-firmware-releases.s3.eu-north-1.amazonaws.com/firmware/esp32s3/latest/firmware.bin';
@@ -27,6 +31,9 @@ class FirmwareUpdateScreen extends StatefulWidget {
     this.otaService,
     this.firmwareService,
     this.authService,
+    this.bleManager,
+    this.targetDeviceId,
+    this.onReconnect,
   });
 
   @override
@@ -37,6 +44,10 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
   late final BleOtaService _otaService;
   late final FirmwareService _firmwareService;
   StreamSubscription<BleOtaProgress>? _otaSubscription;
+  StreamSubscription<BleConnectionStatus>? _bleStatusSub;
+  bool _isReconnecting = false;
+  bool _reconnectSuccess = false;
+  String? _reconnectMessage;
 
   Uint8List? _selectedFirmwareBytes;
   String? _selectedFileName;
@@ -181,10 +192,83 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
         _isCloudReleaseNewer = false;
       });
     }
+
+    // Trigger auto-reconnection sequence after ESP32-S3 reboot
+    unawaited(_triggerAutoReconnectAfterReboot());
+  }
+
+  Future<void> _triggerAutoReconnectAfterReboot() async {
+    if (widget.onReconnect == null && widget.bleManager == null) return;
+
+    if (mounted) {
+      setState(() {
+        _isReconnecting = true;
+        _reconnectSuccess = false;
+        _reconnectMessage = 'Attente du redémarrage de la chaussure (3s)...';
+      });
+    }
+
+    // Wait 3 seconds for footwear hardware reboot
+    await Future.delayed(const Duration(seconds: 3));
+    if (!mounted) return;
+
+    setState(() {
+      _reconnectMessage = 'Recherche et reconnexion Bluetooth en cours...';
+    });
+
+    final manager = widget.bleManager;
+    if (manager != null) {
+      await _bleStatusSub?.cancel();
+      _bleStatusSub = manager.statusStream.listen((status) async {
+        if (status == BleConnectionStatus.ready ||
+            (status == BleConnectionStatus.connected && manager.connectedDevice != null)) {
+          if (manager.connectedDevice != null) {
+            try {
+              final info = await _firmwareService.readDeviceFirmwareInfo(manager.connectedDevice!);
+              if (info.version != null && info.version!.isNotEmpty && mounted) {
+                setState(() {
+                  _installedFirmwareVersion = info.version!;
+                  _installedFirmwareDate = info.buildDate ?? _installedFirmwareDate;
+                });
+              }
+            } catch (_) {}
+          }
+          if (mounted) {
+            setState(() {
+              _isReconnecting = false;
+              _reconnectSuccess = true;
+              _reconnectMessage =
+                  'Chaussure reconnectée avec succès ! (version ${_installedFirmwareVersion.isNotEmpty ? _installedFirmwareVersion : "active"})';
+            });
+          }
+          await _bleStatusSub?.cancel();
+          _bleStatusSub = null;
+        }
+      });
+    }
+
+    try {
+      if (widget.onReconnect != null) {
+        await widget.onReconnect!();
+      } else if (manager != null) {
+        await manager.startAutoConnect(
+          targetDeviceId: widget.targetDeviceId,
+          timeout: const Duration(seconds: 45),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isReconnecting = false;
+          _reconnectMessage = 'Reconnexion manuelle requise : $e';
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
+    _bleStatusSub?.cancel();
     _otaSubscription?.cancel();
     _urlController.dispose();
     if (widget.otaService == null) {
@@ -527,6 +611,56 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
                           ),
                         ),
                       ),
+                      if (_isReconnecting || _reconnectSuccess || _reconnectMessage != null) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: _reconnectSuccess
+                                ? Colors.teal.withValues(alpha: 0.12)
+                                : _isReconnecting
+                                    ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4)
+                                    : Colors.orange.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _reconnectSuccess
+                                  ? Colors.teal
+                                  : _isReconnecting
+                                      ? theme.colorScheme.primary.withValues(alpha: 0.3)
+                                      : Colors.orange,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              if (_isReconnecting)
+                                const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              else if (_reconnectSuccess)
+                                const Icon(Icons.check_circle, color: Colors.teal, size: 18)
+                              else
+                                const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _reconnectMessage ?? '',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: _reconnectSuccess
+                                        ? Colors.teal.shade800
+                                        : _isReconnecting
+                                            ? theme.colorScheme.onSurface
+                                            : Colors.orange.shade900,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ],
                 ),
@@ -570,6 +704,57 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // 0. Auto-reconnection status banner if active
+          if (_isReconnecting || _reconnectSuccess || (_reconnectMessage != null && _reconnectMessage!.isNotEmpty))
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: _reconnectSuccess
+                    ? Colors.teal.withValues(alpha: 0.15)
+                    : _isReconnecting
+                        ? theme.colorScheme.primaryContainer.withValues(alpha: 0.5)
+                        : Colors.orange.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: _reconnectSuccess
+                      ? Colors.teal
+                      : _isReconnecting
+                          ? theme.colorScheme.primary
+                          : Colors.orange,
+                ),
+              ),
+              child: Row(
+                children: [
+                  if (_isReconnecting)
+                    const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2.2),
+                    )
+                  else if (_reconnectSuccess)
+                    const Icon(Icons.check_circle, color: Colors.teal, size: 20)
+                  else
+                    const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _reconnectMessage ?? '',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _reconnectSuccess
+                            ? Colors.teal.shade800
+                            : _isReconnecting
+                                ? theme.colorScheme.onSurface
+                                : Colors.orange.shade900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // 1. Device Info Card (Installed Version & Build/Install Date)
           Card(
             elevation: 1,

@@ -9,6 +9,7 @@ import '../../services/ble/ble_connection_manager.dart';
 import '../../services/ble/ble_footwear_client.dart';
 import '../../services/locale_service.dart';
 import '../../services/theme_service.dart';
+import '../../services/firmware/firmware_service.dart';
 import 'firmware_update_screen.dart';
 
 /// Screen allowing the user to configure mobile gateway settings,
@@ -19,6 +20,7 @@ class SettingsScreen extends StatefulWidget {
   final InactivitySettingsService? inactivitySettingsService;
   final ThemeService? themeService;
   final LocaleService? localeService;
+  final FirmwareService? firmwareService;
   final BleFootwearClient? bleClient;
   final ValueNotifier<BleFootwearClient?>? bleClientNotifier;
   final Future<void> Function()? onCalibrateSensor;
@@ -44,6 +46,7 @@ class SettingsScreen extends StatefulWidget {
     this.inactivitySettingsService,
     this.themeService,
     this.localeService,
+    this.firmwareService,
     this.bleManager,
     this.bleClient,
     this.bleClientNotifier,
@@ -73,12 +76,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final LocaleService _localeService;
   bool _ownsLocaleService = false;
 
+  late final FirmwareService _firmwareService;
+  String? _installedFirmwareVersion;
+  DateTime? _installedFirmwareDate;
+
   bool _isLocallyDisconnected = false;
   BleConnectionStatus? _previousBleStatus;
 
   @override
   void initState() {
     super.initState();
+    _firmwareService = widget.firmwareService ?? FirmwareService();
+    unawaited(_loadFirmwareInfo());
+
     if (widget.inactivitySettingsService != null) {
       _inactivityService = widget.inactivitySettingsService!;
     } else {
@@ -102,6 +112,79 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _ownsLocaleService = true;
       unawaited(_localeService.loadLocale());
     }
+  }
+
+  Future<void> _loadFirmwareInfo() async {
+    try {
+      final savedVer = await _firmwareService.getLocalInstalledVersion();
+      final savedDate = await _firmwareService.getLocalInstalledDate();
+      if (mounted) {
+        setState(() {
+          _installedFirmwareVersion = savedVer;
+          _installedFirmwareDate = savedDate;
+        });
+      }
+
+      final activeDevice = widget.bleClient?.device ?? widget.bleManager?.connectedDevice;
+      if (activeDevice != null) {
+        final info = await _firmwareService.readDeviceFirmwareInfo(activeDevice);
+        if (info.version != null && info.version!.isNotEmpty) {
+          if (mounted) {
+            setState(() {
+              _installedFirmwareVersion = info.version;
+              if (info.buildDate != null) {
+                _installedFirmwareDate = info.buildDate;
+              }
+            });
+          }
+          await _firmwareService.saveLocalInstalledFirmware(
+            installedDate: info.buildDate ?? _installedFirmwareDate ?? DateTime.now().toUtc(),
+            version: info.version!,
+          );
+        }
+      }
+    } catch (_) {}
+  }
+
+  String _formatFirmwareDate(DateTime? dt) {
+    if (dt == null) return '';
+    final local = dt.toLocal();
+    final d = local.day.toString().padLeft(2, '0');
+    final m = local.month.toString().padLeft(2, '0');
+    final y = local.year;
+    final h = local.hour.toString().padLeft(2, '0');
+    final min = local.minute.toString().padLeft(2, '0');
+    return '$d/$m/$y $h:$min';
+  }
+
+  String _getFirmwareSubtitle(bool isConnected) {
+    if (_installedFirmwareVersion != null && _installedFirmwareVersion!.isNotEmpty) {
+      final dateSuffix = _installedFirmwareDate != null ? ' (${_formatFirmwareDate(_installedFirmwareDate)})' : '';
+      final stateSuffix = isConnected ? ' (Connecté)' : ' (Dernière version mémorisée)';
+      return '$_installedFirmwareVersion$dateSuffix$stateSuffix';
+    }
+    return isConnected ? 'Lecture de la version en cours...' : 'Non disponible (connectez la chaussure)';
+  }
+
+  void _openFirmwareUpdateScreen() {
+    final activeDevice = widget.bleClient?.device ?? widget.bleManager?.connectedDevice;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => FirmwareUpdateScreen(
+          device: activeDevice,
+          currentFirmwareVersion: _installedFirmwareVersion ?? 'v1.2.0-esp32s3',
+          firmwareService: _firmwareService,
+          authService: widget.authService,
+          bleManager: widget.bleManager,
+          targetDeviceId: widget.targetDeviceId,
+          onReconnect: widget.onStartBleScan,
+        ),
+      ),
+    ).then((_) {
+      if (mounted) {
+        _loadFirmwareInfo();
+      }
+    });
   }
 
   @override
@@ -856,16 +939,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   'Transférer un nouveau binaire .bin vers la chaussure connectée',
                 ),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (ctx) => FirmwareUpdateScreen(
-                        device: widget.bleClient?.device ?? widget.bleManager?.connectedDevice,
-                        authService: widget.authService,
-                      ),
-                    ),
-                  );
-                },
+                onTap: _openFirmwareUpdateScreen,
               ),
 
               const Divider(height: 32),
@@ -1061,9 +1135,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               const ListTile(
-                leading: Icon(Icons.info_outline),
-                title: Text('Version'),
+                leading: Icon(Icons.phone_android_outlined),
+                title: Text('Application mobile'),
                 subtitle: Text('HealthKicks Mobile v0.1.0+1 (Gateway BLE-MQTT)'),
+              ),
+              ListTile(
+                leading: Icon(Icons.memory_outlined, color: isBleReady ? Colors.teal : null),
+                title: const Text('Firmware chaussure connectée (ESP32-S3)'),
+                subtitle: Text(_getFirmwareSubtitle(isBleReady)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _openFirmwareUpdateScreen,
               ),
             ],
           );

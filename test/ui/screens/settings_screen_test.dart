@@ -484,5 +484,37 @@ void main() {
 
       expect(localeService.currentLanguage.code, equals('en'));
     });
+
+    testWidgets('Renders INFORMATIONS SYSTÈME section with mobile app and firmware version tiles', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final service = BackgroundSurveillanceService();
+      addTearDown(service.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SettingsScreen(
+            surveillanceService: service,
+            isFootwearConnected: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('INFORMATIONS SYSTÈME'),
+        500,
+        scrollable: find.byType(Scrollable),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('INFORMATIONS SYSTÈME'), findsOneWidget);
+      expect(find.text('Application mobile'), findsOneWidget);
+      expect(find.text('HealthKicks Mobile v0.1.0+1 (Gateway BLE-MQTT)'), findsOneWidget);
+      expect(find.text('Firmware chaussure connectée (ESP32-S3)'), findsOneWidget);
+    });
   });
 }

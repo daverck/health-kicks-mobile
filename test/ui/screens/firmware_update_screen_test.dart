@@ -140,5 +140,24 @@ void main() {
       expect(textField.controller?.text, contains('healthkicks-firmware-releases'));
       expect(textField.controller?.text, endsWith('firmware.bin'));
     });
+
+    testWidgets('Accepts auto-reconnection parameters and renders without errors', (WidgetTester tester) async {
+      final mockFirmwareService = MockFirmwareService(stubIsNewer: true);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: FirmwareUpdateScreen(
+            currentFirmwareVersion: 'v1.2.0-esp32s3',
+            firmwareService: mockFirmwareService,
+            targetDeviceId: 'HealthKicks-HK-2',
+            onReconnect: () async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Mise à jour Firmware OTA'), findsOneWidget);
+      expect(find.text('Version installée : v1.2.0-esp32s3'), findsOneWidget);
+    });
   });
 }
