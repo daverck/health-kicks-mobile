@@ -172,6 +172,9 @@ class AppLocalizations {
         return translate('evt_calibration');
       case 'idle':
         return translate('evt_idle');
+      case 'sit_down':
+      case 'sit':
+        return translate('evt_sit_down');
       case 'jump':
         return translate('evt_jump');
       case 'activity_transition':
@@ -294,6 +297,7 @@ class AppLocalizations {
       'evt_stairs_down': 'Escaliers (Descente)',
       'evt_calibration': 'Calibration des capteurs',
       'evt_idle': 'Immobile',
+      'evt_sit_down': 'S\'asseoir (Transition)',
       'evt_jump': 'Saut',
       'evt_activity_transition': 'Transition d\'activité',
     },
@@ -409,6 +413,7 @@ class AppLocalizations {
       'evt_stairs_down': 'Stairs (Descent)',
       'evt_calibration': 'Sensor calibration',
       'evt_idle': 'Idle',
+      'evt_sit_down': 'Sitting down (Transition)',
       'evt_jump': 'Jump',
       'evt_activity_transition': 'Activity transition',
     },
@@ -524,6 +529,7 @@ class AppLocalizations {
       'evt_stairs_down': 'Trappen (Omlaag)',
       'evt_calibration': 'Sensorkalibratie',
       'evt_idle': 'Stilstaand / Zittend',
+      'evt_sit_down': 'Gaan zitten (Overgang)',
       'evt_jump': 'Sprong',
       'evt_activity_transition': 'Activiteitsovergang',
     },
@@ -639,6 +645,7 @@ class AppLocalizations {
       'evt_stairs_down': 'Escaleras (Bajada)',
       'evt_calibration': 'Calibración de sensores',
       'evt_idle': 'En reposo / Sentado',
+      'evt_sit_down': 'Sentarse (Transición)',
       'evt_jump': 'Salto',
       'evt_activity_transition': 'Transición de actividad',
     },
@@ -754,6 +761,7 @@ class AppLocalizations {
       'evt_stairs_down': 'Treppen (Abwärts)',
       'evt_calibration': 'Sensorkalibrierung',
       'evt_idle': 'Ruhe / Sitzen',
+      'evt_sit_down': 'Hinsetzen (Übergang)',
       'evt_jump': 'Sprung',
       'evt_activity_transition': 'Aktivitätsübergang',
     },
@@ -868,6 +876,7 @@ class AppLocalizations {
       'evt_stairs_down': 'درج (نزول)',
       'evt_calibration': 'معايرة الحساسات',
       'evt_idle': 'راحة / جلوس',
+      'evt_sit_down': 'الجلوس (انتقال)',
       'evt_jump': 'قفز',
       'evt_activity_transition': 'تغير النشاط',
     },
@@ -981,6 +990,7 @@ class AppLocalizations {
       'evt_stairs_down': '下楼梯',
       'evt_calibration': '传感器校准',
       'evt_idle': '静止休息 / 坐姿',
+      'evt_sit_down': '坐下 (姿态转换)',
       'evt_jump': '跳跃',
       'evt_activity_transition': '活动状态转换',
     },

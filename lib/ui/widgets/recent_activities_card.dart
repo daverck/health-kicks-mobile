@@ -305,6 +305,13 @@ class _ActivityItemTile extends StatelessWidget {
           icon: Icons.chair_rounded,
           color: Colors.blueGrey,
         );
+      case 'sit_down':
+      case 'sit':
+        return _ActivityMeta(
+          label: l10n.translateEventType('sit_down'),
+          icon: Icons.chair_rounded,
+          color: Colors.indigo,
+        );
       case 'jump':
         return _ActivityMeta(
           label: l10n.translateEventType('jump'),
