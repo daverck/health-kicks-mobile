@@ -77,8 +77,12 @@ class FirmwareService {
       ).timeout(const Duration(seconds: 8));
 
       final lastModHeader = headRes.headers['last-modified'];
+      final metaBuiltAt = headRes.headers['x-amz-meta-built_at'];
       DateTime releaseDate = DateTime.now().toUtc();
-      if (lastModHeader != null) {
+
+      if (metaBuiltAt != null && metaBuiltAt.trim().isNotEmpty) {
+        releaseDate = FirmwareReleaseModel.parseUtcDateTime(metaBuiltAt);
+      } else if (lastModHeader != null) {
         try {
           releaseDate = HttpDate.parse(lastModHeader).toUtc();
         } catch (_) {}
@@ -159,7 +163,8 @@ class FirmwareService {
       final hour = int.parse(match.group(4)!);
       final min = int.parse(match.group(5)!);
       final sec = int.parse(match.group(6)!);
-      return DateTime.utc(year, month, day, hour, min, sec);
+      // __DATE__ and __TIME__ is compilation time generated on the host machine in local wall-clock time
+      return DateTime(year, month, day, hour, min, sec).toUtc();
     }
     return null;
   }

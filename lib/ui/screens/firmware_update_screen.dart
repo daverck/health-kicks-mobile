@@ -201,7 +201,7 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
     final y = local.year;
     final h = local.hour.toString().padLeft(2, '0');
     final min = local.minute.toString().padLeft(2, '0');
-    return '$d/$m/$y à $h:$min';
+    return '$d/$m/$y à $h:$min (heure locale)';
   }
 
   Future<bool> _showForceDownloadConfirmationDialog() async {

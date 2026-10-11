@@ -63,8 +63,8 @@ void main() {
       expect(parsedC!.year, equals(2026));
       expect(parsedC.month, equals(10));
       expect(parsedC.day, equals(11));
-      expect(parsedC.hour, equals(10));
-      expect(parsedC.minute, equals(40));
+      expect(parsedC.toLocal().hour, equals(10));
+      expect(parsedC.toLocal().minute, equals(40));
 
       // ISO 8601
       final parsedIso = FirmwareService.parseBuildTimestamp('2026-10-11T10:40:00Z');
@@ -76,6 +76,23 @@ void main() {
       // Invalid string -> null
       expect(FirmwareService.parseBuildTimestamp('invalid_date'), isNull);
       expect(FirmwareService.parseBuildTimestamp(null), isNull);
+    });
+
+    test('FirmwareReleaseModel.parseUtcDateTime correctly enforces UTC timezone interpretation', () {
+      // String with trailing Z
+      final utc1 = FirmwareReleaseModel.parseUtcDateTime('2026-10-11T08:24:36Z');
+      expect(utc1.isUtc, isTrue);
+      expect(utc1.hour, equals(8));
+
+      // Naive string without Z (must be parsed as UTC, not local)
+      final utc2 = FirmwareReleaseModel.parseUtcDateTime('2026-10-11T08:24:36');
+      expect(utc2.isUtc, isTrue);
+      expect(utc2.hour, equals(8));
+
+      // String with space
+      final utc3 = FirmwareReleaseModel.parseUtcDateTime('2026-10-11 08:24:36');
+      expect(utc3.isUtc, isTrue);
+      expect(utc3.hour, equals(8));
     });
 
     test('computeSha256 and verifySha256 validates cryptographic digest', () {
