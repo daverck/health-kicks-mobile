@@ -64,9 +64,8 @@ class BleFootwearClient {
 
   /// Discovers services and subscribes to notifications for characteristics 0002, 0004, and 0005.
   Future<void> initializeServices() async {
-    final services = device.servicesList.isNotEmpty
-        ? device.servicesList
-        : await device.discoverServices();
+    // Always discover services freshly on initialization to prevent stale GATT handles across reconnections
+    final services = await device.discoverServices();
     final serviceGuid = Guid(BleConstants.footwearServiceUuid);
 
     final targetService = services.firstWhere(
@@ -83,12 +82,12 @@ class BleFootwearClient {
           if (cUuid == BleConstants.firmwareRevisionCharUuid || cUuid.contains('2a26')) {
             try {
               final bytes = await char.read();
-              _firmwareVersion = utf8.decode(bytes).trim();
+              _firmwareVersion = utf8.decode(bytes).replaceAll('\u0000', '').trim();
             } catch (_) {}
           } else if (cUuid == BleConstants.softwareRevisionCharUuid || cUuid.contains('2a28')) {
             try {
               final bytes = await char.read();
-              _rawBuildString = utf8.decode(bytes).trim();
+              _rawBuildString = utf8.decode(bytes).replaceAll('\u0000', '').trim();
               _firmwareBuildDate = FirmwareService.parseBuildTimestamp(_rawBuildString);
             } catch (_) {}
           }

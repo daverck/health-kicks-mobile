@@ -78,7 +78,9 @@ class BleConnectionManager extends ChangeNotifier {
       throw Exception(reason);
     }
 
-    // Cancel any prior scan and timer before restarting
+    // Cancel any prior scan, timer and reset connected device before restarting
+    _connectedDevice = null;
+    _negotiatedMtu = 23;
     _scanTimeoutTimer?.cancel();
     _scanTimeoutTimer = null;
     try {

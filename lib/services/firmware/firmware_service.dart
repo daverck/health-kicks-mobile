@@ -112,9 +112,7 @@ class FirmwareService {
     String? rawBuildStr;
 
     try {
-      final services = device.servicesList.isNotEmpty
-          ? device.servicesList
-          : await device.discoverServices();
+      final services = await device.discoverServices();
       for (final service in services) {
         final sUuid = service.uuid.toString().toLowerCase();
         if (sUuid == BleConstants.disServiceUuid || sUuid.contains('180a')) {
@@ -123,12 +121,12 @@ class FirmwareService {
             if (cUuid == BleConstants.firmwareRevisionCharUuid || cUuid.contains('2a26')) {
               try {
                 final bytes = await char.read();
-                version = utf8.decode(bytes).trim();
+                version = utf8.decode(bytes).replaceAll('\u0000', '').trim();
               } catch (_) {}
             } else if (cUuid == BleConstants.softwareRevisionCharUuid || cUuid.contains('2a28')) {
               try {
                 final bytes = await char.read();
-                rawBuildStr = utf8.decode(bytes).trim();
+                rawBuildStr = utf8.decode(bytes).replaceAll('\u0000', '').trim();
                 buildDate = parseBuildTimestamp(rawBuildStr);
               } catch (_) {}
             }

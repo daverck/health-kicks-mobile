@@ -682,9 +682,9 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
     _bleClient = null;
     _bleClientNotifier.value = null;
 
-    // Cancel any active scan before restarting
+    // Disconnect any active connection before scanning
     try {
-      await FlutterBluePlus.stopScan();
+      await _bleManager?.disconnect();
     } catch (_) {}
 
     _addLog('BLE', 'Démarrage du scan large pour "$_targetDeviceId" ou Service GATT...');
@@ -1300,7 +1300,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
     ).then((_) {
       if (mounted) {
         setState(() {});
-        if (_bleManager?.connectedDevice != null &&
+        if ((_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected) &&
+            _bleManager?.connectedDevice != null &&
             (_bleClient == null || !_bleClient!.isReady)) {
           _onBleDeviceReady(_bleManager!.connectedDevice!);
         }
