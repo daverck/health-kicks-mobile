@@ -95,6 +95,8 @@ class ActivityDetectionModel {
         return 'stairs_up';
       case 0x04:
         return 'stairs_down';
+      case 0x05:
+        return 'sit_down';
       case 0x10:
         return 'fall_forward';
       case 0x11:
