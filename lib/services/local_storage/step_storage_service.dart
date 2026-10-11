@@ -70,22 +70,37 @@ class StepStorageService {
 
   Future<Database> _initDatabase() async {
     final inMem = _inMemoryDbName;
+    final Database db;
     if (inMem != null) {
-      return await openDatabase(
+      db = await openDatabase(
         inMem,
+        version: 1,
+        onCreate: _onCreate,
+      );
+    } else {
+      final dbPath = await getDatabasesPath();
+      final path = p.join(dbPath, 'healthkicks_steps.db');
+      db = await openDatabase(
+        path,
         version: 1,
         onCreate: _onCreate,
       );
     }
 
-    final dbPath = await getDatabasesPath();
-    final path = p.join(dbPath, 'healthkicks_steps.db');
+    // Ensure device_odometer_state exists for databases created before this migration
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS device_odometer_state (
+        device_id TEXT PRIMARY KEY,
+        last_date TEXT NOT NULL,
+        raw_walk INTEGER NOT NULL,
+        raw_run INTEGER NOT NULL,
+        raw_stairs INTEGER NOT NULL,
+        raw_unclassified INTEGER NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    ''');
 
-    return await openDatabase(
-      path,
-      version: 1,
-      onCreate: _onCreate,
-    );
+    return db;
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -98,10 +113,195 @@ class StepStorageService {
         PRIMARY KEY ($columnDate, $columnActivityType)
       );
     ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS device_odometer_state (
+        device_id TEXT PRIMARY KEY,
+        last_date TEXT NOT NULL,
+        raw_walk INTEGER NOT NULL,
+        raw_run INTEGER NOT NULL,
+        raw_stairs INTEGER NOT NULL,
+        raw_unclassified INTEGER NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    ''');
   }
 
   String _formatDate(DateTime dt) {
     return DateFormat('yyyy-MM-dd').format(dt);
+  }
+
+  /// Records a raw monotonic hardware odometer snapshot and calculates/accumulates net daily steps.
+  /// Prevents monotonic hardware counters from bleeding across midnight or after device reboots.
+  Future<DailyStepRecord> recordOdometerSnapshot({
+    required String deviceId,
+    required DateTime date,
+    required StepDataModel rawModel,
+  }) async {
+    final db = await database;
+    final dateStr = _formatDate(date);
+
+    final rawActivities = <String, int>{
+      'walk': rawModel.walkSteps,
+      'run': rawModel.runSteps,
+      'stairs': rawModel.stairsSteps,
+      'unclassified': rawModel.unclassifiedSteps,
+    };
+
+    await db.transaction((txn) async {
+      final existingStateRows = await txn.query(
+        'device_odometer_state',
+        where: 'device_id = ?',
+        whereArgs: [deviceId],
+      );
+
+      final Map<String, int> deltas = {};
+
+      if (existingStateRows.isEmpty) {
+        // No prior odometer state stored for this device
+        final todayRows = await txn.query(
+          tableName,
+          columns: [columnActivityType, columnStepCount],
+          where: '$columnDate = ?',
+          whereArgs: [dateStr],
+        );
+
+        final prevRows = await txn.query(
+          tableName,
+          columns: [columnDate, columnActivityType, columnStepCount],
+          where: '$columnDate < ?',
+          whereArgs: [dateStr],
+          orderBy: '$columnDate DESC',
+        );
+
+        if (todayRows.isNotEmpty) {
+          // Today already has recorded steps (e.g. restored from cloud),
+          // establish baseline without adding duplicate delta.
+          for (final entry in rawActivities.entries) {
+            deltas[entry.key] = 0;
+          }
+        } else if (prevRows.isNotEmpty) {
+          // Previous day exists. Use the most recent day's step counts as baseline.
+          final mostRecentDate = prevRows.first[columnDate] as String;
+          final prevDayRows = prevRows.where((r) => r[columnDate] == mostRecentDate).toList();
+          final prevDayTotals = <String, int>{};
+          for (final row in prevDayRows) {
+            prevDayTotals[row[columnActivityType] as String] = row[columnStepCount] as int;
+          }
+
+          for (final entry in rawActivities.entries) {
+            final prevVal = prevDayTotals[entry.key] ?? 0;
+            final diff = entry.value - prevVal;
+            deltas[entry.key] = diff > 0 ? diff : 0;
+          }
+        } else {
+          // Fresh device / first use on day 1: delta is full raw count
+          for (final entry in rawActivities.entries) {
+            deltas[entry.key] = entry.value;
+          }
+        }
+      } else {
+        // Existing odometer state found
+        final row = existingStateRows.first;
+        final existingRaw = <String, int>{
+          'walk': row['raw_walk'] as int,
+          'run': row['raw_run'] as int,
+          'stairs': row['raw_stairs'] as int,
+          'unclassified': row['raw_unclassified'] as int,
+        };
+
+        for (final entry in rawActivities.entries) {
+          final prev = existingRaw[entry.key] ?? 0;
+          final current = entry.value;
+          if (current < prev) {
+            // Hardware device was rebooted or counter reset
+            deltas[entry.key] = current;
+          } else {
+            deltas[entry.key] = current - prev;
+          }
+        }
+      }
+
+      // Apply deltas to local_daily_steps
+      for (final entry in deltas.entries) {
+        final delta = entry.value;
+        if (delta > 0) {
+          final existing = await txn.query(
+            tableName,
+            columns: [columnStepCount, columnSyncStatus],
+            where: '$columnDate = ? AND $columnActivityType = ?',
+            whereArgs: [dateStr, entry.key],
+          );
+
+          if (existing.isEmpty) {
+            await txn.insert(
+              tableName,
+              {
+                columnDate: dateStr,
+                columnActivityType: entry.key,
+                columnStepCount: delta,
+                columnSyncStatus: 0,
+              },
+            );
+          } else {
+            final currentCount = existing.first[columnStepCount] as int;
+            await txn.update(
+              tableName,
+              {
+                columnStepCount: currentCount + delta,
+                columnSyncStatus: 0, // Reset to unsynced
+              },
+              where: '$columnDate = ? AND $columnActivityType = ?',
+              whereArgs: [dateStr, entry.key],
+            );
+          }
+        }
+      }
+
+      // Upsert device_odometer_state
+      final nowIso = DateTime.now().toUtc().toIso8601String();
+      if (existingStateRows.isEmpty) {
+        await txn.insert(
+          'device_odometer_state',
+          {
+            'device_id': deviceId,
+            'last_date': dateStr,
+            'raw_walk': rawModel.walkSteps,
+            'raw_run': rawModel.runSteps,
+            'raw_stairs': rawModel.stairsSteps,
+            'raw_unclassified': rawModel.unclassifiedSteps,
+            'updated_at': nowIso,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      } else {
+        await txn.update(
+          'device_odometer_state',
+          {
+            'last_date': dateStr,
+            'raw_walk': rawModel.walkSteps,
+            'raw_run': rawModel.runSteps,
+            'raw_stairs': rawModel.stairsSteps,
+            'raw_unclassified': rawModel.unclassifiedSteps,
+            'updated_at': nowIso,
+          },
+          where: 'device_id = ?',
+          whereArgs: [deviceId],
+        );
+      }
+    });
+
+    final record = await getDailySteps(date);
+    return record ??
+        DailyStepRecord(
+          date: dateStr,
+          totalSteps: 0,
+          walkSteps: 0,
+          runSteps: 0,
+          stairsSteps: 0,
+          unclassifiedSteps: 0,
+          isSynced: true,
+        );
   }
 
   /// Records a snapshot of steps broken down by activity type.

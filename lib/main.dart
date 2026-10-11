@@ -843,12 +843,25 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
       });
 
       _bleClient!.stepDataStream.listen((stepData) async {
+        final dailyRecord = await _stepStorageService.recordOdometerSnapshot(
+          deviceId: _deviceId,
+          date: DateTime.now(),
+          rawModel: stepData,
+        );
         if (mounted) {
           setState(() {
-            _latestStepData = stepData;
+            _latestStepData = StepDataModel(
+              totalSteps: dailyRecord.totalSteps,
+              walkSteps: dailyRecord.walkSteps,
+              runSteps: dailyRecord.runSteps,
+              stairsSteps: dailyRecord.stairsSteps,
+              unclassifiedSteps: dailyRecord.unclassifiedSteps,
+              cadenceSpm: stepData.cadenceSpm,
+              gctMs: stepData.gctMs,
+              timestamp: stepData.timestamp,
+            );
           });
         }
-        await _stepStorageService.recordStepSnapshot(DateTime.now(), stepData);
       });
 
       // Synchronize stored inactivity preferences to footwear (isolated)
