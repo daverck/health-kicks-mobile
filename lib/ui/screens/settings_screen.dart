@@ -914,36 +914,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               const Divider(height: 32),
 
-              // 4. Firmware OTA Update Category
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Text(
-                  'MISE À JOUR MATÉRIELLE (FIRMWARE OTA)',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.1,
-                      ),
-                ),
-              ),
-              ListTile(
-                leading: Icon(
-                  Icons.system_update_outlined,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                title: const Text(
-                  'Mise à jour du firmware (BLE)',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: const Text(
-                  'Transférer un nouveau binaire .bin vers la chaussure connectée',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: _openFirmwareUpdateScreen,
-              ),
-
-              const Divider(height: 32),
-
               // 5. App Theme Category
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
