@@ -112,7 +112,9 @@ class FirmwareService {
     String? rawBuildStr;
 
     try {
-      final services = await device.discoverServices();
+      final services = device.servicesList.isNotEmpty
+          ? device.servicesList
+          : await device.discoverServices();
       for (final service in services) {
         final sUuid = service.uuid.toString().toLowerCase();
         if (sUuid == BleConstants.disServiceUuid || sUuid.contains('180a')) {

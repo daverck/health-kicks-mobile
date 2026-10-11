@@ -168,10 +168,20 @@ class BleConnectionManager extends ChangeNotifier {
           await _scanSubscription?.cancel();
           _scanSubscription = null;
 
+          bool connected = false;
           try {
             await connectToDevice(r.device, onLog: log);
+            connected = true;
           } catch (e) {
             log?.call('Auto-connect attempt failed: $e');
+          }
+
+          if (!connected && _status != BleConnectionStatus.ready && _status != BleConnectionStatus.connected) {
+            log?.call('Auto-connect attempt failed. Re-initiating scan in 2s...');
+            await Future.delayed(const Duration(seconds: 2));
+            if (_status != BleConnectionStatus.ready && _status != BleConnectionStatus.connected) {
+              unawaited(startAutoConnect(targetDeviceId: targetDeviceId, timeout: timeout, onLog: log));
+            }
           }
           break;
         }

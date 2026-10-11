@@ -384,9 +384,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         if (status == BleConnectionStatus.disconnected) {
           unawaited(_stepSyncService.flushImmediateSync(deviceId: _deviceId));
         }
-      } else if ((status == BleConnectionStatus.ready ||
-              (status == BleConnectionStatus.connected && _bleClient == null)) &&
-          _bleManager?.connectedDevice != null) {
+      } else if (status == BleConnectionStatus.ready && _bleManager?.connectedDevice != null) {
         _onBleDeviceReady(_bleManager!.connectedDevice!);
       }
     });
@@ -752,16 +750,24 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         'Souscription active : Activity (0002), Studio Control (0004), Burst (0005) | Haptique (0003) ${_bleClient!.hasHaptic ? "prêt" : "non trouvé"}',
       );
 
-      // Query DIS firmware info in background and cache locally
-      unawaited(_firmwareService.readDeviceFirmwareInfo(device).then((info) {
-        if (info.version != null && info.version!.isNotEmpty) {
-          _addLog('BLE', 'Firmware détecté : ${info.version} (${info.rawBuildString ?? ""})');
-          _firmwareService.saveLocalInstalledFirmware(
-            installedDate: info.buildDate ?? DateTime.now().toUtc(),
-            version: info.version!,
-          );
-        }
-      }));
+      // Save detected DIS firmware info locally
+      if (_bleClient?.firmwareVersion != null && _bleClient!.firmwareVersion!.isNotEmpty) {
+        _addLog('BLE', 'Firmware détecté : ${_bleClient!.firmwareVersion} (${_bleClient!.rawBuildString ?? ""})');
+        _firmwareService.saveLocalInstalledFirmware(
+          installedDate: _bleClient!.firmwareBuildDate ?? DateTime.now().toUtc(),
+          version: _bleClient!.firmwareVersion!,
+        );
+      } else {
+        unawaited(_firmwareService.readDeviceFirmwareInfo(device).then((info) {
+          if (info.version != null && info.version!.isNotEmpty) {
+            _addLog('BLE', 'Firmware détecté : ${info.version} (${info.rawBuildString ?? ""})');
+            _firmwareService.saveLocalInstalledFirmware(
+              installedDate: info.buildDate ?? DateTime.now().toUtc(),
+              version: info.version!,
+            );
+          }
+        }));
+      }
 
       // Listen to BLE streams for live event logging and recent activity history
       _bleClient!.activityStream.listen((detection) {
@@ -1291,7 +1297,15 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           },
         ),
       ),
-    );
+    ).then((_) {
+      if (mounted) {
+        setState(() {});
+        if (_bleManager?.connectedDevice != null &&
+            (_bleClient == null || !_bleClient!.isReady)) {
+          _onBleDeviceReady(_bleManager!.connectedDevice!);
+        }
+      }
+    });
   }
 
   Widget _buildDiscreetStatusRow() {

@@ -204,12 +204,12 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
       setState(() {
         _isReconnecting = true;
         _reconnectSuccess = false;
-        _reconnectMessage = 'Attente du redémarrage de la chaussure (3s)...';
+        _reconnectMessage = 'Attente du redémarrage de la chaussure (4s)...';
       });
     }
 
-    // Wait 3 seconds for footwear hardware reboot
-    await Future.delayed(const Duration(seconds: 3));
+    // Wait 4 seconds for footwear hardware reboot (boot, CDC delay, IMU self-test, NimBLE startup)
+    await Future.delayed(const Duration(seconds: 4));
     if (!mounted) return;
 
     setState(() {
@@ -220,8 +220,9 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
     if (manager != null) {
       await _bleStatusSub?.cancel();
       _bleStatusSub = manager.statusStream.listen((status) async {
-        if (status == BleConnectionStatus.ready ||
-            (status == BleConnectionStatus.connected && manager.connectedDevice != null)) {
+        if (status == BleConnectionStatus.ready && manager.connectedDevice != null) {
+          // Wait briefly to allow main client service initialization to complete cleanly without GATT collision
+          await Future.delayed(const Duration(milliseconds: 400));
           if (manager.connectedDevice != null) {
             try {
               final info = await _firmwareService.readDeviceFirmwareInfo(manager.connectedDevice!);

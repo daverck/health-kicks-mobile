@@ -125,7 +125,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
         });
       }
 
-      final activeDevice = widget.bleClient?.device ?? widget.bleManager?.connectedDevice;
+      final activeClient = widget.bleClientNotifier?.value ?? widget.bleClient;
+      if (activeClient?.firmwareVersion != null && activeClient!.firmwareVersion!.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _installedFirmwareVersion = activeClient.firmwareVersion;
+            if (activeClient.firmwareBuildDate != null) {
+              _installedFirmwareDate = activeClient.firmwareBuildDate;
+            }
+          });
+        }
+        return;
+      }
+
+      final activeDevice = activeClient?.device ?? widget.bleManager?.connectedDevice;
       if (activeDevice != null) {
         final info = await _firmwareService.readDeviceFirmwareInfo(activeDevice);
         if (info.version != null && info.version!.isNotEmpty) {

@@ -6,6 +6,7 @@ import '../../core/constants/ble_constants.dart';
 import '../../models/activity_detection_model.dart';
 import '../../models/haptic_command_model.dart';
 import '../../models/step_data_model.dart';
+import '../firmware/firmware_service.dart';
 import 'burst_reassembler.dart';
 
 typedef BleLogCallback = void Function(String message, {bool isError});
@@ -22,6 +23,14 @@ class BleFootwearClient {
   BluetoothCharacteristic? _studioControlChar;
   BluetoothCharacteristic? _studioBurstChar;
   BluetoothCharacteristic? _stepCounterChar;
+
+  String? _firmwareVersion;
+  DateTime? _firmwareBuildDate;
+  String? _rawBuildString;
+
+  String? get firmwareVersion => _firmwareVersion;
+  DateTime? get firmwareBuildDate => _firmwareBuildDate;
+  String? get rawBuildString => _rawBuildString;
 
   BluetoothCharacteristic? get activityCharacteristic => _activityChar;
   BluetoothCharacteristic? get hapticCharacteristic => _hapticChar;
@@ -55,13 +64,37 @@ class BleFootwearClient {
 
   /// Discovers services and subscribes to notifications for characteristics 0002, 0004, and 0005.
   Future<void> initializeServices() async {
-    final services = await device.discoverServices();
+    final services = device.servicesList.isNotEmpty
+        ? device.servicesList
+        : await device.discoverServices();
     final serviceGuid = Guid(BleConstants.footwearServiceUuid);
 
     final targetService = services.firstWhere(
       (s) => s.uuid == serviceGuid,
       orElse: () => throw StateError('Service HealthKicks Footwear ($serviceGuid) not found.'),
     );
+
+    // Read DIS (Device Information Service 0x180A) in the same GATT pass if available
+    for (final service in services) {
+      final sUuid = service.uuid.toString().toLowerCase();
+      if (sUuid == BleConstants.disServiceUuid || sUuid.contains('180a')) {
+        for (final char in service.characteristics) {
+          final cUuid = char.uuid.toString().toLowerCase();
+          if (cUuid == BleConstants.firmwareRevisionCharUuid || cUuid.contains('2a26')) {
+            try {
+              final bytes = await char.read();
+              _firmwareVersion = utf8.decode(bytes).trim();
+            } catch (_) {}
+          } else if (cUuid == BleConstants.softwareRevisionCharUuid || cUuid.contains('2a28')) {
+            try {
+              final bytes = await char.read();
+              _rawBuildString = utf8.decode(bytes).trim();
+              _firmwareBuildDate = FirmwareService.parseBuildTimestamp(_rawBuildString);
+            } catch (_) {}
+          }
+        }
+      }
+    }
 
     for (final char in targetService.characteristics) {
       final uuidStr = char.uuid.toString().toLowerCase();
