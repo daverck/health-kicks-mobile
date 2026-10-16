@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:app_links/app_links.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -68,6 +70,30 @@ class AuthService extends ChangeNotifier {
 
   String? _lastError;
   String? get lastError => _lastError;
+
+  String? _pendingCodeVerifier;
+  String? get pendingCodeVerifier => _pendingCodeVerifier;
+
+  static const String _pkceCharset =
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+
+  /// Generates a 64-character URL-safe PKCE code_verifier, stores it in
+  /// [_pendingCodeVerifier], and returns it.
+  String generatePkceVerifier() {
+    final random = Random.secure();
+    final verifier = List.generate(
+      64,
+      (_) => _pkceCharset[random.nextInt(_pkceCharset.length)],
+    ).join();
+    _pendingCodeVerifier = verifier;
+    return verifier;
+  }
+
+  /// Computes the S256 PKCE code_challenge from [verifier].
+  static String computePkceChallenge(String verifier) {
+    return base64UrlEncode(sha256.convert(utf8.encode(verifier)).bytes)
+        .replaceAll('=', '');
+  }
 
   AuthService({
     String? backendBaseUrl,
@@ -195,18 +221,24 @@ class AuthService extends ChangeNotifier {
   }
 
   /// Triggers Google SSO flow by opening the external browser
-  /// to the backend OAuth initiation endpoint:
-  /// `<backendUrl>/api/v1/auth/google/login?redirect=true`.
+  /// to the backend OAuth initiation endpoint with PKCE S256:
+  /// `<backendUrl>/api/v1/auth/google/login?redirect=true&code_challenge=...&code_challenge_method=S256`.
   Future<bool> signInWithGoogle({String? backendUrl}) async {
-    final fullUrl = buildApiUrl(googleLoginPath, customBackendUrl: backendUrl);
+    final verifier = generatePkceVerifier();
+    final challenge = computePkceChallenge(verifier);
+    final baseUrl = buildApiUrl(googleLoginPath, customBackendUrl: backendUrl);
+    final fullUrl = '$baseUrl&code_challenge=$challenge&code_challenge_method=S256';
     return _openSsoBrowser(fullUrl);
   }
 
   /// Triggers Microsoft / Azure SSO flow by opening the external browser
-  /// to the backend OAuth initiation endpoint:
-  /// `<backendUrl>/api/v1/auth/azure/login?redirect=true`.
+  /// to the backend OAuth initiation endpoint with PKCE S256:
+  /// `<backendUrl>/api/v1/auth/azure/login?redirect=true&code_challenge=...&code_challenge_method=S256`.
   Future<bool> signInWithAzure({String? backendUrl}) async {
-    final fullUrl = buildApiUrl(azureLoginPath, customBackendUrl: backendUrl);
+    final verifier = generatePkceVerifier();
+    final challenge = computePkceChallenge(verifier);
+    final baseUrl = buildApiUrl(azureLoginPath, customBackendUrl: backendUrl);
+    final fullUrl = '$baseUrl&code_challenge=$challenge&code_challenge_method=S256';
     return _openSsoBrowser(fullUrl);
   }
 
@@ -231,8 +263,98 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  /// Exchanges a one-time authorization [ticket] and PKCE [codeVerifier]
+  /// for access and refresh tokens via `POST /api/v1/auth/token/exchange`.
+  Future<bool> exchangeTicketForTokens({
+    required String ticket,
+    String? codeVerifier,
+  }) async {
+    final resolvedVerifier = codeVerifier ?? _pendingCodeVerifier;
+    _pendingCodeVerifier = null;
+
+    _state = AuthState.loading;
+    _lastError = null;
+    notifyListeners();
+
+    final uri = Uri.parse('$_sanitizedBaseUrl/api/v1/auth/token/exchange');
+    final payload = <String, dynamic>{
+      'ticket': ticket,
+      if (resolvedVerifier != null) 'code_verifier': resolvedVerifier,
+    };
+
+    try {
+      final response = await _httpClient.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode(payload),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final accessToken = data['access_token'] as String?;
+        final refreshToken = data['refresh_token'] as String?;
+
+        if (accessToken == null || accessToken.isEmpty) {
+          _lastError = 'Access token missing from token exchange response';
+          _state = AuthState.unauthenticated;
+          notifyListeners();
+          return false;
+        }
+
+        await _tokenStorage.saveTokens(
+          accessToken: accessToken,
+          refreshToken: refreshToken,
+        );
+        _tokenUserId = TokenStorageService.parseUserId(accessToken);
+
+        if (data['user'] is Map<String, dynamic>) {
+          _currentUser = AuthUser.fromJson(data['user'] as Map<String, dynamic>);
+        } else {
+          await _fetchUserProfile(accessToken);
+        }
+
+        _state = AuthState.authenticated;
+        notifyListeners();
+        return true;
+      } else {
+        _lastError = 'Token exchange failed (${response.statusCode})';
+        _state = AuthState.unauthenticated;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      _lastError = 'Error exchanging authorization ticket: $e';
+      _state = AuthState.unauthenticated;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<void> _fetchUserProfile(String accessToken) async {
+    try {
+      final meUri = Uri.parse('$_sanitizedBaseUrl/api/v1/auth/me');
+      final res = await _httpClient.get(
+        meUri,
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Accept': 'application/json',
+        },
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        _currentUser = AuthUser.fromJson(data);
+      }
+    } catch (_) {
+      // Ignore transient network errors for profile loading
+    }
+  }
+
   /// Processes URI received via Deep Link (scheme: healthkicks, host: auth, path: /callback).
-  /// Extracts `access_token` and `refresh_token`, updates secure storage
+  /// Exchanges one-time `ticket` (with PKCE `code_verifier`) or falls back to
+  /// extracting `access_token` and `refresh_token`, updates secure storage
   /// and loads the user profile `/api/v1/auth/me`.
   Future<bool> handleDeepLink(Uri uri) async {
     if (uri.scheme != 'healthkicks' || uri.host != 'auth') {
@@ -246,6 +368,14 @@ class AuthService extends ChangeNotifier {
       _state = AuthState.unauthenticated;
       notifyListeners();
       return false;
+    }
+
+    final ticket = uri.queryParameters['ticket'];
+    if (ticket != null && ticket.isNotEmpty) {
+      return await exchangeTicketForTokens(
+        ticket: ticket,
+        codeVerifier: _pendingCodeVerifier,
+      );
     }
 
     final accessToken = uri.queryParameters['access_token'];
@@ -268,23 +398,7 @@ class AuthService extends ChangeNotifier {
     );
     _tokenUserId = TokenStorageService.parseUserId(accessToken);
 
-    // Attempt to load user profile
-    try {
-      final meUri = Uri.parse('$_sanitizedBaseUrl/api/v1/auth/me');
-      final res = await _httpClient.get(
-        meUri,
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-          'Accept': 'application/json',
-        },
-      );
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
-        _currentUser = AuthUser.fromJson(data);
-      }
-    } catch (_) {
-      // Ignore transient network errors for profile loading
-    }
+    await _fetchUserProfile(accessToken);
 
     _state = AuthState.authenticated;
     notifyListeners();
