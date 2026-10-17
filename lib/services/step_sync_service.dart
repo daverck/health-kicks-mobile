@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../core/config/app_config.dart';
 import '../models/step_data_model.dart';
+import 'api/api_headers.dart';
 import 'auth/auth_service.dart';
 import 'auth/token_storage_service.dart';
 import 'local_storage/step_storage_service.dart';
@@ -107,10 +108,10 @@ class StepSyncService {
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final uri = Uri.parse('$_backendBaseUrl/api/v1/steps/history?device_id=$deviceId&days=1');
 
-    Map<String, String> buildHeaders(String? currentToken) => {
-          'Accept': 'application/json',
-          if (currentToken != null && currentToken.isNotEmpty) 'Authorization': 'Bearer $currentToken',
-        };
+    Map<String, String> buildHeaders(String? currentToken) => buildApiHeaders(
+          currentToken,
+          extraHeaders: const {'Accept': 'application/json'},
+        );
 
     try {
       String? token = await _tokenStorage.getAccessToken();
@@ -213,11 +214,10 @@ class StepSyncService {
         };
 
         final uri = Uri.parse('$_backendBaseUrl/api/v1/steps/sync');
-        Map<String, String> buildHeaders(String? currentToken) => {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              if (currentToken != null && currentToken.isNotEmpty) 'Authorization': 'Bearer $currentToken',
-            };
+        Map<String, String> buildHeaders(String? currentToken) => buildApiHeaders(
+              currentToken,
+              extraHeaders: const {'Accept': 'application/json'},
+            );
 
         try {
           var response = await _httpClient

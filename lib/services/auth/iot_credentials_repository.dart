@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import '../api/api_headers.dart';
 import 'auth_service.dart';
 import 'iot_credentials_model.dart';
 import 'token_storage_service.dart';
@@ -84,11 +85,10 @@ class IotCredentialsRepository {
         : backendBaseUrl;
     final uri = Uri.parse('$sanitizedBase/api/v1/auth/iot-credentials');
 
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': 'Bearer $token',
-    };
+    final headers = buildApiHeaders(
+      token,
+      extraHeaders: const {'Accept': 'application/json'},
+    );
 
     final body = jsonEncode({
       if (deviceId != null && deviceId.isNotEmpty) 'device_id': deviceId,

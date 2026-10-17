@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../core/config/app_config.dart';
 import '../models/detection_event.dart';
+import 'api/api_headers.dart';
 import 'auth/auth_service.dart';
 import 'auth/token_storage_service.dart';
 
@@ -54,10 +55,10 @@ class EventHistoryService {
       queryParameters: queryParams,
     );
 
-    Map<String, String> buildHeaders(String? currentToken) => {
-          'Accept': 'application/json',
-          if (currentToken != null && currentToken.isNotEmpty) 'Authorization': 'Bearer $currentToken',
-        };
+    Map<String, String> buildHeaders(String? currentToken) => buildApiHeaders(
+          currentToken,
+          extraHeaders: const {'Accept': 'application/json'},
+        );
 
     try {
       var response = await _httpClient
