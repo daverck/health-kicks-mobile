@@ -154,6 +154,8 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
       final isNewer = _firmwareService.isCloudReleaseNewer(
         cloudReleaseDate: release.releaseDate,
         installedDate: _installedFirmwareDate,
+        cloudVersion: release.version,
+        installedVersion: _installedFirmwareVersion,
       );
 
       setState(() {
@@ -306,9 +308,9 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
           children: [
             Text(
               'Le firmware actuellement installé sur la chaussure '
-              '(${_installedFirmwareDate != null ? _formatDateTime(_installedFirmwareDate) : _installedFirmwareVersion}) '
+              '(${_installedFirmwareVersion.isNotEmpty ? _installedFirmwareVersion : (_installedFirmwareDate != null ? _formatDateTime(_installedFirmwareDate) : "inconnu")}) '
               'est déjà identique ou plus récent que la release Cloud '
-              '(${_cloudRelease != null ? _formatDateTime(_cloudRelease!.releaseDate) : "inconnue"}).',
+              '(${_cloudRelease != null ? "${_cloudRelease!.version} (${_formatDateTime(_cloudRelease!.releaseDate)})" : "inconnue"}).',
             ),
             const SizedBox(height: 12),
             const Text(

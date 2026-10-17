@@ -163,8 +163,9 @@ class FirmwareService {
       final hour = int.parse(match.group(4)!);
       final min = int.parse(match.group(5)!);
       final sec = int.parse(match.group(6)!);
-      // __DATE__ and __TIME__ is compilation time generated on the host machine in local wall-clock time
-      return DateTime(year, month, day, hour, min, sec).toUtc();
+      // In embedded toolchains (GCC / PlatformIO), __TIME__ is emitted in UTC (or naive clock).
+      // Construct as UTC to avoid local timezone offset drift against cloud S3 metadata.
+      return DateTime.utc(year, month, day, hour, min, sec);
     }
     return null;
   }
@@ -193,18 +194,67 @@ class FirmwareService {
     await prefs.setString(keyInstalledVersion, version);
   }
 
-  /// Compares cloud release publication date with installed firmware date.
-  /// Returns `true` if the cloud release is strictly more recent than the installed version.
+  /// Compares cloud release version and publication date with installed firmware.
+  /// Returns `true` if the cloud release is strictly newer than the installed version.
   bool isCloudReleaseNewer({
     required DateTime cloudReleaseDate,
     DateTime? installedDate,
+    String? cloudVersion,
+    String? installedVersion,
   }) {
+    // 1. Strict version comparison if both versions are provided
+    if (cloudVersion != null && installedVersion != null) {
+      final cleanCloud = cloudVersion.trim();
+      final cleanInstalled = installedVersion.trim();
+
+      // If identical version strings, definitely NOT newer
+      if (cleanCloud.isNotEmpty &&
+          cleanInstalled.isNotEmpty &&
+          cleanCloud.toLowerCase() == cleanInstalled.toLowerCase()) {
+        return false;
+      }
+
+      // Try semantic version comparison (e.g. "v1.2.3-esp32s3" -> [1, 2, 3])
+      final semverRegex = RegExp(r'(\d+)\.(\d+)(?:\.(\d+))?');
+      final cloudMatch = semverRegex.firstMatch(cleanCloud);
+      final installedMatch = semverRegex.firstMatch(cleanInstalled);
+
+      if (cloudMatch != null && installedMatch != null) {
+        final cloudMajor = int.parse(cloudMatch.group(1)!);
+        final cloudMinor = int.parse(cloudMatch.group(2)!);
+        final cloudPatch = int.parse(cloudMatch.group(3) ?? '0');
+
+        final instMajor = int.parse(installedMatch.group(1)!);
+        final instMinor = int.parse(installedMatch.group(2)!);
+        final instPatch = int.parse(installedMatch.group(3) ?? '0');
+
+        if (cloudMajor != instMajor) return cloudMajor > instMajor;
+        if (cloudMinor != instMinor) return cloudMinor > instMinor;
+        if (cloudPatch != instPatch) return cloudPatch > instPatch;
+
+        // Semantic version numbers are completely identical
+        return false;
+      }
+    }
+
+    // 2. If no installed date found, assume update is available
     if (installedDate == null) {
-      // No local/device date found: assume update is available
       return true;
     }
-    // Return true only if cloud release is after installed date (ignoring sub-second drift)
-    return cloudReleaseDate.difference(installedDate).inSeconds > 2;
+
+    // 3. Fallback to release date comparison if versions couldn't be compared
+    final diffSeconds = cloudReleaseDate.difference(installedDate).inSeconds;
+
+    // Ignore differences within 2 hours on the same calendar day (UTC vs local timezone drift)
+    if (diffSeconds > 0 && diffSeconds <= 7200) {
+      if (cloudReleaseDate.year == installedDate.year &&
+          cloudReleaseDate.month == installedDate.month &&
+          cloudReleaseDate.day == installedDate.day) {
+        return false;
+      }
+    }
+
+    return diffSeconds > 2;
   }
 
   /// Verifies SHA-256 cryptographic digest of downloaded binary bytes.

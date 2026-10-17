@@ -47,6 +47,8 @@ class MockFirmwareService extends FirmwareService {
   bool isCloudReleaseNewer({
     required DateTime cloudReleaseDate,
     DateTime? installedDate,
+    String? cloudVersion,
+    String? installedVersion,
   }) {
     return stubIsNewer;
   }

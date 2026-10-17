@@ -15,11 +15,11 @@ void main() {
       final service = FirmwareService();
 
       final installedDate = DateTime.utc(2026, 10, 11, 8, 0, 0);
-      final newerCloudDate = DateTime.utc(2026, 10, 11, 10, 0, 0);
-      final olderCloudDate = DateTime.utc(2026, 10, 11, 7, 0, 0);
+      final newerCloudDate = DateTime.utc(2026, 10, 12, 8, 0, 0);
+      final olderCloudDate = DateTime.utc(2026, 10, 10, 8, 0, 0);
       final identicalCloudDate = DateTime.utc(2026, 10, 11, 8, 0, 0);
 
-      // Newer cloud release -> true
+      // Newer cloud release by date -> true
       expect(
         service.isCloudReleaseNewer(
           cloudReleaseDate: newerCloudDate,
@@ -28,7 +28,7 @@ void main() {
         isTrue,
       );
 
-      // Older cloud release -> false
+      // Older cloud release by date -> false
       expect(
         service.isCloudReleaseNewer(
           cloudReleaseDate: olderCloudDate,
@@ -41,6 +41,50 @@ void main() {
       expect(
         service.isCloudReleaseNewer(
           cloudReleaseDate: identicalCloudDate,
+          installedDate: installedDate,
+        ),
+        isFalse,
+      );
+
+      // Same calendar day with 2h timezone offset skew without version -> false
+      final tzSkewCloudDate = DateTime.utc(2026, 10, 11, 10, 0, 0);
+      expect(
+        service.isCloudReleaseNewer(
+          cloudReleaseDate: tzSkewCloudDate,
+          installedDate: installedDate,
+        ),
+        isFalse,
+      );
+
+      // Semantic version check takes precedence:
+      // 1. Identical version with timezone skew (14h52 vs 16h52) -> false
+      expect(
+        service.isCloudReleaseNewer(
+          cloudVersion: 'v1.2.3-esp32s3',
+          cloudReleaseDate: tzSkewCloudDate,
+          installedVersion: 'v1.2.3-esp32s3',
+          installedDate: installedDate,
+        ),
+        isFalse,
+      );
+
+      // 2. Higher semver in cloud -> true
+      expect(
+        service.isCloudReleaseNewer(
+          cloudVersion: 'v1.2.4-esp32s3',
+          cloudReleaseDate: tzSkewCloudDate,
+          installedVersion: 'v1.2.3-esp32s3',
+          installedDate: installedDate,
+        ),
+        isTrue,
+      );
+
+      // 3. Lower semver in cloud -> false
+      expect(
+        service.isCloudReleaseNewer(
+          cloudVersion: 'v1.2.0-esp32s3',
+          cloudReleaseDate: newerCloudDate,
+          installedVersion: 'v1.2.3-esp32s3',
           installedDate: installedDate,
         ),
         isFalse,
@@ -63,8 +107,9 @@ void main() {
       expect(parsedC!.year, equals(2026));
       expect(parsedC.month, equals(10));
       expect(parsedC.day, equals(11));
-      expect(parsedC.toLocal().hour, equals(10));
-      expect(parsedC.toLocal().minute, equals(40));
+      expect(parsedC.hour, equals(10));
+      expect(parsedC.minute, equals(40));
+      expect(parsedC.isUtc, isTrue);
 
       // ISO 8601
       final parsedIso = FirmwareService.parseBuildTimestamp('2026-10-11T10:40:00Z');
