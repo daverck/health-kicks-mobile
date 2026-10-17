@@ -29,7 +29,7 @@ class FakeCredentialsRepository implements IotCredentialsRepository {
 
 void main() {
   group('MqttGatewayService - Hybrid Presence Mechanism & LWT', () {
-    test('Constructor properly stores userId and deviceId', () {
+    test('Constructor properly stores userId and deviceId with randomized session nonce', () {
       final fakeRepo = FakeCredentialsRepository();
       final service = MqttGatewayService(
         deviceId: 'HK-2',
@@ -39,7 +39,22 @@ void main() {
 
       expect(service.deviceId, equals('HK-2'));
       expect(service.userId, equals('42'));
-      expect(service.clientId, equals('healthkicks-mobile-42'));
+      expect(service.clientId, startsWith('healthkicks-mobile-42-'));
+      expect(service.clientId.length, equals('healthkicks-mobile-42-'.length + 8));
+
+      // Test explicit clientId preservation
+      final explicitService = MqttGatewayService(
+        deviceId: 'HK-2',
+        userId: '42',
+        credentialsRepository: fakeRepo,
+        clientId: 'healthkicks-mobile-42-custom',
+      );
+      expect(explicitService.clientId, equals('healthkicks-mobile-42-custom'));
+
+      // Test session nonce format (8 hex characters)
+      final nonce = MqttGatewayService.generateSessionNonce();
+      expect(nonce.length, equals(8));
+      expect(RegExp(r'^[0-9a-f]{8}$').hasMatch(nonce), isTrue);
     });
 
     test('LWT topic and payload target user gateway (user_id)', () {

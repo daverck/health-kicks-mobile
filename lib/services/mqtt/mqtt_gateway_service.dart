@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
@@ -38,6 +39,13 @@ class MqttGatewayService {
 
   StreamSubscription? _updatesSub;
 
+  /// Generates a cryptographically random 8-character hexadecimal nonce for MQTT session scoping.
+  static String generateSessionNonce() {
+    final rand = Random.secure();
+    final bytes = List<int>.generate(4, (_) => rand.nextInt(256));
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
   MqttGatewayService({
     required this.deviceId,
     this.userId,
@@ -47,7 +55,7 @@ class MqttGatewayService {
     this.onConnectionRestored,
   }) : clientId = clientId ??
             (userId != null && userId.isNotEmpty
-                ? 'healthkicks-mobile-$userId'
+                ? 'healthkicks-mobile-$userId-${generateSessionNonce()}'
                 : '');
 
   /// Establishes secure MQTT connection to AWS IoT Core via WebSockets SigV4 on port 443.
@@ -103,10 +111,10 @@ class MqttGatewayService {
       }
 
       final effectiveClientId = (clientId.isNotEmpty &&
-              (clientId == 'healthkicks-mobile-$effectiveUserId' ||
-                  clientId == 'healthkicks-session-$effectiveUserId'))
+              (clientId.startsWith('healthkicks-mobile-$effectiveUserId') ||
+                  clientId.startsWith('healthkicks-session-$effectiveUserId')))
           ? clientId
-          : 'healthkicks-mobile-$effectiveUserId';
+          : 'healthkicks-mobile-$effectiveUserId-${generateSessionNonce()}';
 
       final lwtTopic = 'healthkicks/v1/users/$effectiveUserId/gateway-status';
       final lwtPayload = jsonEncode({
