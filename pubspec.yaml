@@ -13,13 +13,11 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   # Bluetooth Low Energy Client
-  flutter_blue_plus: ^1.34.0
+  flutter_blue_plus: ^2.3.14
   # AWS IoT Core MQTT Client
   mqtt_client: ^10.4.0
   # Permissions management (Bluetooth, Location, Notifications)
   permission_handler: ^11.3.1
-  # State management & Dependency Injection
-  flutter_riverpod: ^2.5.1
   # Serialization & Helpers
   crypto: ^3.0.3
   uuid: ^4.4.0

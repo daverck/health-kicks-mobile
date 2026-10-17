@@ -371,38 +371,17 @@ class AuthService extends ChangeNotifier {
     }
 
     final ticket = uri.queryParameters['ticket'];
-    if (ticket != null && ticket.isNotEmpty) {
-      return await exchangeTicketForTokens(
-        ticket: ticket,
-        codeVerifier: _pendingCodeVerifier,
-      );
-    }
-
-    final accessToken = uri.queryParameters['access_token'];
-    final refreshToken = uri.queryParameters['refresh_token'];
-
-    if (accessToken == null || accessToken.isEmpty) {
-      _lastError = 'Access token missing from SSO response';
+    if (ticket == null || ticket.isEmpty) {
+      _lastError = 'Authorization ticket missing from SSO response';
       _state = AuthState.unauthenticated;
       notifyListeners();
       return false;
     }
 
-    _state = AuthState.loading;
-    _lastError = null;
-    notifyListeners();
-
-    await _tokenStorage.saveTokens(
-      accessToken: accessToken,
-      refreshToken: refreshToken,
+    return await exchangeTicketForTokens(
+      ticket: ticket,
+      codeVerifier: _pendingCodeVerifier,
     );
-    _tokenUserId = TokenStorageService.parseUserId(accessToken);
-
-    await _fetchUserProfile(accessToken);
-
-    _state = AuthState.authenticated;
-    notifyListeners();
-    return true;
   }
 
   /// Automatic session refresh via `/api/v1/auth/refresh`.

@@ -192,8 +192,18 @@ void main() {
       expect(await tokenStorage.getRefreshToken(), equals('jwt_pkce_refresh_456'));
     });
 
-    test('handleDeepLink - Success: extracts tokens, queries /me, and transitions to authenticated', () async {
+    test('handleDeepLink - Success: exchanges ticket without user payload, queries /me, and transitions to authenticated', () async {
       final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/v1/auth/token/exchange') {
+          return http.Response(
+            jsonEncode({
+              'access_token': 'jwt_access_abc',
+              'refresh_token': 'jwt_refresh_xyz',
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
         if (request.url.path == '/api/v1/auth/me') {
           expect(request.headers['Authorization'], equals('Bearer jwt_access_abc'));
           return http.Response(
@@ -218,7 +228,7 @@ void main() {
       );
 
       final callbackUri = Uri.parse(
-        'healthkicks://auth/callback?access_token=jwt_access_abc&refresh_token=jwt_refresh_xyz',
+        'healthkicks://auth/callback?ticket=valid_ticket_123&state=test_state',
       );
 
       final result = await authService.handleDeepLink(callbackUri);
@@ -229,6 +239,23 @@ void main() {
       expect(authService.currentUser?.email, equals('sso_user@example.com'));
       expect(await tokenStorage.getAccessToken(), equals('jwt_access_abc'));
       expect(await tokenStorage.getRefreshToken(), equals('jwt_refresh_xyz'));
+    });
+
+    test('handleDeepLink - Missing ticket: fails with unauthenticated and captures error message', () async {
+      final authService = AuthService(
+        backendBaseUrl: 'http://127.0.0.1:8000',
+        tokenStorage: tokenStorage,
+      );
+
+      final callbackUri = Uri.parse(
+        'healthkicks://auth/callback?state=no_ticket_present',
+      );
+
+      final result = await authService.handleDeepLink(callbackUri);
+
+      expect(result, isFalse);
+      expect(authService.state, equals(AuthState.unauthenticated));
+      expect(authService.lastError, contains('ticket missing'));
     });
 
     test('handleDeepLink - OAuth error: captures error message and transitions to unauthenticated', () async {

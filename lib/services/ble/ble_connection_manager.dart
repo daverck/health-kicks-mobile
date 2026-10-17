@@ -200,6 +200,7 @@ class BleConnectionManager extends ChangeNotifier {
 
     try {
       await device.connect(
+        license: License.nonprofit,
         autoConnect: false,
         timeout: const Duration(seconds: 15),
       );
