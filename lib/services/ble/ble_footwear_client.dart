@@ -216,7 +216,7 @@ class BleFootwearClient {
     );
   }
 
-  /// Triggers a Studio recording session (START <label> <sec> <id>).
+  /// Triggers a Studio recording session (`START <label> <sec> <id>`).
   Future<void> startStudioSession({
     required String label,
     required double durationSec,

@@ -17,7 +17,7 @@ dependencies:
   # AWS IoT Core MQTT Client
   mqtt_client: ^10.4.0
   # Permissions management (Bluetooth, Location, Notifications)
-  permission_handler: ^11.3.1
+  permission_handler: ^13.0.2
   # Serialization & Helpers
   crypto: ^3.0.3
   uuid: ^4.4.0
@@ -36,7 +36,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^4.0.0
+  flutter_lints: ^6.0.0
   sqflite_common_ffi: ^2.3.3
 
 flutter:
