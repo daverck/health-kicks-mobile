@@ -9,6 +9,7 @@ import '../models/step_data_model.dart';
 import 'api/api_headers.dart';
 import 'auth/auth_service.dart';
 import 'auth/token_storage_service.dart';
+import 'integrations/health_connect_service.dart';
 import 'local_storage/step_storage_service.dart';
 
 typedef StepSyncLogCallback = void Function(String message, {bool isError});
@@ -19,6 +20,7 @@ class StepSyncService {
   final StepStorageService _storageService;
   final TokenStorageService _tokenStorage;
   final AuthService? _authService;
+  final HealthConnectService? healthConnectService;
   final String _backendBaseUrl;
   final http.Client _httpClient;
   final StepSyncLogCallback? onLog;
@@ -42,6 +44,7 @@ class StepSyncService {
     required StepStorageService storageService,
     TokenStorageService? tokenStorage,
     AuthService? authService,
+    this.healthConnectService,
     String? backendBaseUrl,
     http.Client? httpClient,
     this.onLog,
@@ -270,6 +273,25 @@ class StepSyncService {
 
       if (syncedDates.isNotEmpty) {
         await _storageService.markDaysSynced(syncedDates);
+
+        // Forward export to Google Health Connect if enabled
+        if (healthConnectService != null && healthConnectService!.isEnabled) {
+          for (final dateStr in syncedDates) {
+            try {
+              final parsedDate = DateTime.parse(dateStr);
+              final dailyRecord = await _storageService.getDailySteps(parsedDate);
+              if (dailyRecord != null && dailyRecord.totalSteps > 0) {
+                unawaited(healthConnectService!.syncDailySteps(
+                  steps: dailyRecord.totalSteps,
+                  date: parsedDate,
+                  deviceId: deviceId,
+                ));
+              }
+            } catch (e) {
+              onLog?.call('Health Connect export exception for $dateStr: $e', isError: false);
+            }
+          }
+        }
       }
 
       // Automatically clean up locally stored steps older than 90 days that have already synced

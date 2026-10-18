@@ -99,7 +99,11 @@ void main() {
         find.widgetWithText(SwitchListTile, 'Répéter les alertes'),
         findsOneWidget,
       );
-      expect(find.byType(SwitchListTile), findsNWidgets(3));
+      expect(
+        find.widgetWithText(SwitchListTile, 'Google Health Connect'),
+        findsOneWidget,
+      );
+      expect(find.byType(SwitchListTile), findsNWidgets(4));
     });
 
     testWidgets('Reflects active state when service state changes', (tester) async {

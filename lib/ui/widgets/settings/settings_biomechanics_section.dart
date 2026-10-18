@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import '../../../services/background_surveillance_service.dart';
 import '../../../services/ble/ble_footwear_client.dart';
 import '../../../services/inactivity_settings_service.dart';
+import '../../../services/integrations/health_connect_service.dart';
 import '../../../services/locale_service.dart';
 import '../../../services/theme_service.dart';
 import 'settings_appearance_section.dart';
+import 'settings_health_connect_card.dart';
 import 'settings_inactivity_card.dart';
 
 export 'settings_appearance_section.dart';
+export 'settings_health_connect_card.dart';
 export 'settings_inactivity_card.dart';
 
 /// Section widget bundling surveillance mode, inactivity alerts, sensor calibration, appearance/theme, and language settings.
@@ -20,6 +23,7 @@ class SettingsBiomechanicsSection extends StatelessWidget {
   final bool isBleReady;
   final VoidCallback onOpenCalibrationDialog;
   final VoidCallback onOpenLanguageSelector;
+  final HealthConnectService? healthConnectService;
 
   const SettingsBiomechanicsSection({
     super.key,
@@ -31,6 +35,7 @@ class SettingsBiomechanicsSection extends StatelessWidget {
     required this.isBleReady,
     required this.onOpenCalibrationDialog,
     required this.onOpenLanguageSelector,
+    this.healthConnectService,
   });
 
   @override
@@ -189,6 +194,22 @@ class SettingsBiomechanicsSection extends StatelessWidget {
           trailing: const Icon(Icons.chevron_right),
           onTap: onOpenCalibrationDialog,
         ),
+
+        if (healthConnectService != null) ...[
+          const Divider(height: 32),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Text(
+              'INTÉGRATIONS SANTÉ (CONNECTIVITY)',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.1,
+              ),
+            ),
+          ),
+          SettingsHealthConnectCard(healthConnectService: healthConnectService!),
+        ],
 
         const Divider(height: 32),
 

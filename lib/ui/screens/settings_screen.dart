@@ -10,6 +10,7 @@ import '../../services/ble/ble_footwear_client.dart';
 import '../../services/locale_service.dart';
 import '../../services/theme_service.dart';
 import '../../services/firmware/firmware_service.dart';
+import '../../services/integrations/health_connect_service.dart';
 import '../widgets/imu_calibration_dialog.dart';
 import '../widgets/settings/settings_connection_status_card.dart';
 import '../widgets/settings/settings_biomechanics_section.dart';
@@ -26,6 +27,7 @@ class SettingsScreen extends StatefulWidget {
   final ThemeService? themeService;
   final LocaleService? localeService;
   final FirmwareService? firmwareService;
+  final HealthConnectService? healthConnectService;
   final BleFootwearClient? bleClient;
   final ValueNotifier<BleFootwearClient?>? bleClientNotifier;
   final Future<void> Function()? onCalibrateSensor;
@@ -51,6 +53,7 @@ class SettingsScreen extends StatefulWidget {
     this.themeService,
     this.localeService,
     this.firmwareService,
+    this.healthConnectService,
     this.bleManager,
     this.bleClient,
     this.bleClientNotifier,
@@ -79,6 +82,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _ownsThemeService = false;
   late final LocaleService _localeService;
   bool _ownsLocaleService = false;
+  late final HealthConnectService _healthConnectService;
 
   late final FirmwareService _firmwareService;
   String? _installedFirmwareVersion;
@@ -116,6 +120,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _ownsLocaleService = true;
       unawaited(_localeService.loadLocale());
     }
+
+    _healthConnectService = widget.healthConnectService ?? HealthConnectService();
+    unawaited(_healthConnectService.init());
   }
 
   Future<void> _loadFirmwareInfo() async {
@@ -394,6 +401,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 isBleReady: isBleReady,
                 onOpenCalibrationDialog: () => _showCalibrationDialog(context, isBleReady),
                 onOpenLanguageSelector: () => _showLanguageSelector(context),
+                healthConnectService: _healthConnectService,
               ),
               SettingsAccountSection(
                 authService: widget.authService,
