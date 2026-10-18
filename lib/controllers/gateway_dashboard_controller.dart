@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -28,6 +27,7 @@ import '../services/mqtt/mqtt_gateway_service.dart';
 import '../services/step_sync_service.dart';
 import '../services/studio/studio_api_service.dart';
 import '../ui/widgets/studio_session_dialog.dart';
+import 'dashboard_odometer_coordinator.dart';
 
 /// Business controller managing the background lifecycle, BLE connection,
 /// MQTT synchronization, and Studio motion capture routing for the Gateway Dashboard.
@@ -39,8 +39,7 @@ class GatewayDashboardController extends ChangeNotifier {
   final PermissionService _permissionService = PermissionService();
   late final BackgroundSurveillanceService _surveillanceService;
   late final FirmwareService _firmwareService = FirmwareService();
-  late final StepStorageService _stepStorageService = StepStorageService();
-  late final StepSyncService _stepSyncService;
+  late final DashboardOdometerCoordinator _odometerCoordinator;
   late final InactivitySettingsService _inactivitySettingsService;
 
   IotCredentialsRepository? _credentialsRepo;
@@ -59,7 +58,6 @@ class GatewayDashboardController extends ChangeNotifier {
   bool _mqttConnected = false;
   final ValueNotifier<bool> _mqttConnectedNotifier = ValueNotifier<bool>(false);
   bool _isInitializingBleClient = false;
-  StepDataModel? _latestStepData;
   final List<ActivityDetectionModel> _recentActivities = [];
   final StreamController<ActivityDetectionModel> _activityStreamController =
       StreamController<ActivityDetectionModel>.broadcast();
@@ -93,7 +91,7 @@ class GatewayDashboardController extends ChangeNotifier {
   BleConnectionManager? get bleManager => _bleManager;
   BleFootwearClient? get bleClient => _bleClient;
   ValueNotifier<BleFootwearClient?> get bleClientNotifier => _bleClientNotifier;
-  StepDataModel? get latestStepData => _latestStepData;
+  StepDataModel? get latestStepData => _odometerCoordinator.latestStepData;
   List<ActivityDetectionModel> get recentActivities => List.unmodifiable(_recentActivities);
   Stream<ActivityDetectionModel> get activityStream => _activityStreamController.stream;
   List<LogEntry> get logs => _logs;
@@ -101,8 +99,9 @@ class GatewayDashboardController extends ChangeNotifier {
   String get lastStudioCustomLabel => _lastStudioCustomLabel;
   GatewayCoordinator? get coordinator => _coordinator;
   FirmwareService get firmwareService => _firmwareService;
-  StepStorageService get stepStorageService => _stepStorageService;
-  StepSyncService get stepSyncService => _stepSyncService;
+  StepStorageService get stepStorageService => _odometerCoordinator.storageService;
+  StepSyncService get stepSyncService => _odometerCoordinator.syncService;
+  DashboardOdometerCoordinator get odometerCoordinator => _odometerCoordinator;
   InactivitySettingsService get inactivitySettingsService => _inactivitySettingsService;
   BackgroundSurveillanceService get surveillanceService => _surveillanceService;
 
@@ -110,17 +109,15 @@ class GatewayDashboardController extends ChangeNotifier {
     _inactivitySettingsService = InactivitySettingsService();
     unawaited(_inactivitySettingsService.loadSettings());
 
-    _stepSyncService = StepSyncService(
-      storageService: _stepStorageService,
-      tokenStorage: TokenStorageService(),
+    _odometerCoordinator = DashboardOdometerCoordinator(
+      deviceId: deviceId,
       authService: authService,
-      backendBaseUrl: AppConfig.backendBaseUrl,
-      onLog: (msg, {bool isError = false}) {
-        addLog('SYNC', msg, color: isError ? Colors.red : Colors.cyan);
+      onLog: (tag, msg, {Color? color}) => addLog(tag, msg, color: color),
+      onStepDataUpdated: () {
+        if (!_isDisposed) notifyListeners();
       },
     );
-    _stepSyncService.startPeriodicSync(deviceId: deviceId);
-    unawaited(_loadInitialDailySteps());
+    _odometerCoordinator.initialize();
     unawaited(loadLastStudioActivity());
 
     _surveillanceService = BackgroundSurveillanceService(
@@ -135,44 +132,11 @@ class GatewayDashboardController extends ChangeNotifier {
   }
 
   void setForegroundState(bool isForeground) {
-    _stepSyncService.setForegroundState(isForeground);
+    _odometerCoordinator.setForegroundState(isForeground);
   }
 
   void flushSteps() {
-    unawaited(_stepSyncService.flushImmediateSync(deviceId: deviceId));
-  }
-
-  Future<void> _loadInitialDailySteps() async {
-    try {
-      final now = DateTime.now();
-      final localRecord = await _stepStorageService.getDailySteps(now);
-      if (localRecord != null && !_isDisposed) {
-        _latestStepData = StepDataModel(
-          totalSteps: localRecord.totalSteps,
-          walkSteps: localRecord.walkSteps,
-          runSteps: localRecord.runSteps,
-          stairsSteps: localRecord.stairsSteps,
-          unclassifiedSteps: localRecord.unclassifiedSteps,
-          cadenceSpm: 0,
-          timestamp: now,
-        );
-        notifyListeners();
-      }
-
-      final cloudSteps = await _stepSyncService.fetchTodaySteps(deviceId: deviceId);
-      if (cloudSteps != null && !_isDisposed) {
-        final currentTotal = _latestStepData?.totalSteps ?? 0;
-        if (cloudSteps.totalSteps >= currentTotal) {
-          _latestStepData = cloudSteps;
-          notifyListeners();
-          await _stepStorageService.recordStepSnapshot(DateTime.now(), cloudSteps);
-          final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
-          await _stepStorageService.markDaysSynced([todayStr]);
-        }
-      }
-    } catch (e) {
-      addLog('SYNC', 'Erreur chargement initial des pas : $e', color: Colors.orange);
-    }
+    _odometerCoordinator.flushSteps();
   }
 
   void _ensureBleManager() {
@@ -220,7 +184,7 @@ class GatewayDashboardController extends ChangeNotifier {
         _bleClient = null;
         _bleClientNotifier.value = null;
         if (status == BleConnectionStatus.disconnected) {
-          unawaited(_stepSyncService.flushImmediateSync(deviceId: deviceId));
+          _odometerCoordinator.flushSteps();
         }
       } else if (status == BleConnectionStatus.ready && _bleManager?.connectedDevice != null) {
         onBleDeviceReady(_bleManager!.connectedDevice!);
@@ -544,23 +508,8 @@ class GatewayDashboardController extends ChangeNotifier {
         );
       });
 
-      _bleClient!.stepDataStream.listen((stepData) async {
-        final dailyRecord = await _stepStorageService.recordOdometerSnapshot(
-          deviceId: deviceId,
-          date: DateTime.now(),
-          rawModel: stepData,
-        );
-        _latestStepData = StepDataModel(
-          totalSteps: dailyRecord.totalSteps,
-          walkSteps: dailyRecord.walkSteps,
-          runSteps: dailyRecord.runSteps,
-          stairsSteps: dailyRecord.stairsSteps,
-          unclassifiedSteps: dailyRecord.unclassifiedSteps,
-          cadenceSpm: stepData.cadenceSpm,
-          gctMs: stepData.gctMs,
-          timestamp: stepData.timestamp,
-        );
-        notifyListeners();
+      _bleClient!.stepDataStream.listen((stepData) {
+        _odometerCoordinator.handleOdometerReading(stepData);
       });
 
       try {
@@ -570,7 +519,7 @@ class GatewayDashboardController extends ChangeNotifier {
       }
 
       try {
-        unawaited(_stepSyncService.flushImmediateSync(deviceId: deviceId));
+        _odometerCoordinator.flushSteps();
       } catch (e) {
         addLog('SYNC', 'Erreur synchronisation pas cloud : $e', color: Colors.orange);
       }
@@ -764,7 +713,7 @@ class GatewayDashboardController extends ChangeNotifier {
   }
 
   Future<void> flushImmediateSync() async {
-    await _stepSyncService.flushImmediateSync(deviceId: deviceId);
+    await _odometerCoordinator.syncService.flushImmediateSync(deviceId: deviceId);
   }
 
   Future<void> disconnectBle() async {
@@ -777,8 +726,7 @@ class GatewayDashboardController extends ChangeNotifier {
     _activityStreamController.close();
     _bleManager?.removeListener(_onBleManagerUpdated);
     _inactivitySettingsService.dispose();
-    _stepSyncService.dispose();
-    _stepStorageService.close();
+    _odometerCoordinator.dispose();
     _studioSavedSub?.cancel();
     _remoteStudioCommandSub?.cancel();
     _coordinator?.stopRouting();
