@@ -69,16 +69,70 @@ void main() {
       );
 
       await outbox.markFailed(id, 'Network timeout');
-      final items = await outbox.getPendingItems();
-      expect(items.length, equals(1));
-      expect(items[0].retryCount, equals(1));
-      expect(items[0].lastError, equals('Network timeout'));
+      final item = await outbox.getItem(id);
+      expect(item, isNotNull);
+      expect(item!.retryCount, equals(1));
+      expect(item.lastError, equals('Network timeout'));
+      expect(item.nextRetryAt, isNotNull);
 
       // Exceed threshold
       for (int i = 0; i < 4; i++) {
         await outbox.markFailed(id, 'Fail');
       }
-      expect(await outbox.getPendingCount(), equals(0)); // retry_count >= 5 excluded
+      expect(await outbox.getPendingCount(includeScheduled: true), equals(0)); // retry_count >= 5 excluded
+    });
+
+    test('calculateBackoffDelay scales exponentially and respects maxBackoff cap', () {
+      expect(outbox.calculateBackoffDelay(0), equals(const Duration(seconds: 2)));
+      expect(outbox.calculateBackoffDelay(1), equals(const Duration(seconds: 4)));
+      expect(outbox.calculateBackoffDelay(2), equals(const Duration(seconds: 8)));
+      expect(outbox.calculateBackoffDelay(3), equals(const Duration(seconds: 16)));
+      expect(outbox.calculateBackoffDelay(4), equals(const Duration(seconds: 32)));
+      expect(outbox.calculateBackoffDelay(10), equals(const Duration(minutes: 5)));
+    });
+
+    test('markFailed schedules next_retry_at and hides items until scheduled time', () async {
+      final now = DateTime.utc(2026, 10, 18, 12, 0, 0);
+      final id = await outbox.enqueue(
+        endpoint: '/api/v1/telemetry/burst',
+        method: 'POST',
+        payload: {'burst_id': 42},
+      );
+
+      // Initially pending
+      expect(await outbox.getPendingCount(now: now), equals(1));
+
+      // Mark failed at 12:00:00 -> retry 1 scheduled for 12:00:02 (2s backoff)
+      await outbox.markFailed(id, 'Connection reset', now: now);
+
+      // 1 second later: item is in backoff cooldown, should NOT be returned
+      final at1Sec = now.add(const Duration(seconds: 1));
+      expect(await outbox.getPendingCount(now: at1Sec), equals(0));
+      expect(await outbox.getPendingItems(now: at1Sec), isEmpty);
+
+      // 2 seconds later: item is eligible for retry
+      final at2Sec = now.add(const Duration(seconds: 2));
+      expect(await outbox.getPendingCount(now: at2Sec), equals(1));
+      final pending = await outbox.getPendingItems(now: at2Sec);
+      expect(pending.length, equals(1));
+      expect(pending.first.id, equals(id));
+      expect(pending.first.retryCount, equals(1));
+      expect(pending.first.nextRetryAt, equals(now.add(const Duration(seconds: 2))));
+    });
+
+    test('pruneExpired deletes expired and poisoned items', () async {
+      final id1 = await outbox.enqueue(
+        endpoint: '/api/v1/old',
+        method: 'POST',
+        payload: {'old': true},
+      );
+      // Mark as poisoned (5 retries)
+      for (int i = 0; i < 5; i++) {
+        await outbox.markFailed(id1, 'Permanent failure');
+      }
+
+      final pruned = await outbox.pruneExpired(maxAge: const Duration(days: 1));
+      expect(pruned, equals(1));
     });
 
     test('processQueue delivers items and tracks success count', () async {
@@ -103,9 +157,14 @@ void main() {
       );
 
       expect(processed, equals(1));
-      expect(await outbox.getPendingCount(), equals(1));
+      // At this exact moment, item 2 failed and was scheduled for retry in 2s
+      // Without `now` advancing, it is in backoff so pending count is 0
+      expect(await outbox.getPendingCount(), equals(0));
+      // But 3 seconds later, item 2 is ready to retry
+      final futureTime = DateTime.now().toUtc().add(const Duration(seconds: 3));
+      expect(await outbox.getPendingCount(now: futureTime), equals(1));
 
-      final remaining = await outbox.getPendingItems();
+      final remaining = await outbox.getPendingItems(now: futureTime);
       expect(remaining.first.endpoint, equals('/api/v1/event/2'));
       expect(remaining.first.retryCount, equals(1));
     });
