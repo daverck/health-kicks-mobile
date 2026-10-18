@@ -51,6 +51,7 @@ class BleConstants {
   static const int packetTypeStartOfBurst = 0x01;
   static const int packetTypeDataChunk = 0x02;
   static const int packetTypeEndOfBurst = 0x03;
+  static const int packetTypeDeltaChunk = 0x04;
 
   /// Command opcode to trigger level/tilt zero calibration (Characteristic 0003 & 0004)
   static const int commandCalibrateZero = 0x05;

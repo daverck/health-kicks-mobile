@@ -124,6 +124,86 @@ class BurstReassembler {
         }
         return null;
 
+      case BleConstants.packetTypeDeltaChunk:
+        if (!_receivedStart) {
+          _receivedStart = true;
+        }
+        if (payload.length < 15) {
+          return null;
+        }
+
+        final deltaUint8Payload = Uint8List.fromList(payload);
+        final pData = ByteData.sublistView(deltaUint8Payload);
+        final frameCount = pData.getUint8(0);
+
+        final expectedMinLen = 1 + BleConstants.bytesPerFrame + (frameCount - 1) * 7;
+        if (deltaUint8Payload.length < expectedMinLen) {
+          return null;
+        }
+
+        // 1. Decode Keyframe (14 bytes starting at offset 1)
+        int runningDeltaMs = pData.getUint16(1, Endian.big);
+        int runningAx = pData.getInt16(3, Endian.big);
+        int runningAy = pData.getInt16(5, Endian.big);
+        int runningAz = pData.getInt16(7, Endian.big);
+        int runningGx = pData.getInt16(9, Endian.big);
+        int runningGy = pData.getInt16(11, Endian.big);
+        int runningGz = pData.getInt16(13, Endian.big);
+
+        _collectedReadings.add(ImuReadingModel(
+          deltaMs: runningDeltaMs,
+          ax: runningAx / 1000.0,
+          ay: runningAy / 1000.0,
+          az: runningAz / 1000.0,
+          gx: runningGx / 10.0,
+          gy: runningGy / 10.0,
+          gz: runningGz / 10.0,
+        ));
+        _rawPayloadBytes.addAll(deltaUint8Payload.sublist(1, 15));
+
+        // 2. Decode subsequent (frameCount - 1) delta frames (7 bytes each)
+        int deltaOffset = 15;
+        for (int i = 1; i < frameCount; i++) {
+          final dMs = pData.getUint8(deltaOffset);
+          final dAx = pData.getInt8(deltaOffset + 1);
+          final dAy = pData.getInt8(deltaOffset + 2);
+          final dAz = pData.getInt8(deltaOffset + 3);
+          final dGx = pData.getInt8(deltaOffset + 4);
+          final dGy = pData.getInt8(deltaOffset + 5);
+          final dGz = pData.getInt8(deltaOffset + 6);
+
+          runningDeltaMs += dMs;
+          runningAx += dAx;
+          runningAy += dAy;
+          runningAz += dAz;
+          runningGx += dGx;
+          runningGy += dGy;
+          runningGz += dGz;
+
+          _collectedReadings.add(ImuReadingModel(
+            deltaMs: runningDeltaMs,
+            ax: runningAx / 1000.0,
+            ay: runningAy / 1000.0,
+            az: runningAz / 1000.0,
+            gx: runningGx / 10.0,
+            gy: runningGy / 10.0,
+            gz: runningGz / 10.0,
+          ));
+
+          final reconstructed = ByteData(14);
+          reconstructed.setUint16(0, runningDeltaMs, Endian.big);
+          reconstructed.setInt16(2, runningAx, Endian.big);
+          reconstructed.setInt16(4, runningAy, Endian.big);
+          reconstructed.setInt16(6, runningAz, Endian.big);
+          reconstructed.setInt16(8, runningGx, Endian.big);
+          reconstructed.setInt16(10, runningGy, Endian.big);
+          reconstructed.setInt16(12, runningGz, Endian.big);
+          _rawPayloadBytes.addAll(reconstructed.buffer.asUint8List());
+
+          deltaOffset += 7;
+        }
+        return null;
+
       case BleConstants.packetTypeEndOfBurst:
         _receivedEnd = true;
         if (payload.length >= 8) {
