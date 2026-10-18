@@ -320,5 +320,217 @@ void main() {
       expect(result.isCrcValid, isTrue);
       expect(result.readings.length, equals(30));
     });
+
+    test('Accurate decoding of an RLE_CHUNK packet with repeated static frames', () {
+      final reassembler = BurstReassembler();
+      const runCount = 10;
+      const startDeltaMs = 500;
+      const stepMs = 20;
+
+      // 1. Send RLE_CHUNK packet (4 bytes header + 16 bytes payload = 20 bytes)
+      final rlePacket = ByteData(20);
+      rlePacket.setUint8(0, BleConstants.packetTypeRleChunk);
+      rlePacket.setUint16(1, 0, Endian.big);
+      rlePacket.setUint8(3, 16); // payload length
+
+      rlePacket.setUint8(4, runCount);
+      rlePacket.setUint16(5, startDeltaMs, Endian.big);
+      rlePacket.setUint8(7, stepMs);
+      rlePacket.setInt16(8, 0, Endian.big);    // ax = 0 mg
+      rlePacket.setInt16(10, 0, Endian.big);   // ay = 0 mg
+      rlePacket.setInt16(12, 1000, Endian.big); // az = 1000 mg (1.0g vertical)
+      rlePacket.setInt16(14, 0, Endian.big);   // gx = 0 dps
+      rlePacket.setInt16(16, 0, Endian.big);   // gy = 0 dps
+      rlePacket.setInt16(18, 0, Endian.big);   // gz = 0 dps
+
+      expect(reassembler.processPacket(rlePacket.buffer.asUint8List()), isNull);
+      expect(reassembler.samplesCount, equals(runCount));
+
+      // 2. Build expected 10 raw frames (140 bytes) to compute expected CRC32
+      final rawBytes = <int>[];
+      for (int i = 0; i < runCount; i++) {
+        final b = ByteData(14);
+        b.setUint16(0, startDeltaMs + i * stepMs, Endian.big);
+        b.setInt16(2, 0, Endian.big);
+        b.setInt16(4, 0, Endian.big);
+        b.setInt16(6, 1000, Endian.big);
+        b.setInt16(8, 0, Endian.big);
+        b.setInt16(10, 0, Endian.big);
+        b.setInt16(12, 0, Endian.big);
+        rawBytes.addAll(b.buffer.asUint8List());
+      }
+      final expectedCrc = Crc32.compute(rawBytes);
+
+      // 3. Send END_OF_BURST
+      final endPacket = ByteData(12);
+      endPacket.setUint8(0, BleConstants.packetTypeEndOfBurst);
+      endPacket.setUint16(1, 1, Endian.big);
+      endPacket.setUint32(4, runCount, Endian.big);
+      endPacket.setUint32(8, expectedCrc, Endian.big);
+
+      final result = reassembler.processPacket(endPacket.buffer.asUint8List());
+      expect(result, isNotNull);
+      expect(result!.isSuccess, isTrue);
+      expect(result.framesRecovered, equals(runCount));
+      expect(result.isCrcValid, isTrue);
+      expect(result.readings.length, equals(runCount));
+      expect(result.readings.first.deltaMs, equals(500));
+      expect(result.readings.first.az, closeTo(1.0, 0.0001));
+      expect(result.readings.last.deltaMs, equals(500 + 9 * 20));
+      expect(result.readings.last.az, closeTo(1.0, 0.0001));
+    });
+
+    test('Mixed multi-packet stream with RLE_CHUNK, DELTA_CHUNK and DATA_CHUNK validated by CRC32', () {
+      final reassembler = BurstReassembler();
+      final allRawBytes = <int>[];
+
+      // Phase 1: 5 identical frames (RLE) from t=0 to t=80ms
+      for (int i = 0; i < 5; i++) {
+        final b = ByteData(14);
+        b.setUint16(0, i * 20, Endian.big);
+        b.setInt16(2, 10, Endian.big);
+        b.setInt16(4, 20, Endian.big);
+        b.setInt16(6, 980, Endian.big);
+        b.setInt16(8, 0, Endian.big);
+        b.setInt16(10, 0, Endian.big);
+        b.setInt16(12, 0, Endian.big);
+        allRawBytes.addAll(b.buffer.asUint8List());
+      }
+
+      // Phase 2: 3 delta frames from t=100ms
+      // Frame 5 (keyframe): t=100, ax=10, ay=20, az=980, gx=0, gy=0, gz=0
+      // Frame 6: t=120, ax=15 (+5), ay=18 (-2), az=983 (+3), gx=2 (+2), gy=0, gz=-1 (-1)
+      // Frame 7: t=140, ax=18 (+3), ay=16 (-2), az=985 (+2), gx=4 (+2), gy=1 (+1), gz=-1 (0)
+      final f5 = ByteData(14);
+      f5.setUint16(0, 100, Endian.big);
+      f5.setInt16(2, 10, Endian.big);
+      f5.setInt16(4, 20, Endian.big);
+      f5.setInt16(6, 980, Endian.big);
+      f5.setInt16(8, 0, Endian.big);
+      f5.setInt16(10, 0, Endian.big);
+      f5.setInt16(12, 0, Endian.big);
+      allRawBytes.addAll(f5.buffer.asUint8List());
+
+      final f6 = ByteData(14);
+      f6.setUint16(0, 120, Endian.big);
+      f6.setInt16(2, 15, Endian.big);
+      f6.setInt16(4, 18, Endian.big);
+      f6.setInt16(6, 983, Endian.big);
+      f6.setInt16(8, 2, Endian.big);
+      f6.setInt16(10, 0, Endian.big);
+      f6.setInt16(12, -1, Endian.big);
+      allRawBytes.addAll(f6.buffer.asUint8List());
+
+      final f7 = ByteData(14);
+      f7.setUint16(0, 140, Endian.big);
+      f7.setInt16(2, 18, Endian.big);
+      f7.setInt16(4, 16, Endian.big);
+      f7.setInt16(6, 985, Endian.big);
+      f7.setInt16(8, 4, Endian.big);
+      f7.setInt16(10, 1, Endian.big);
+      f7.setInt16(12, -1, Endian.big);
+      allRawBytes.addAll(f7.buffer.asUint8List());
+
+      // Phase 3: 2 raw frames (DATA_CHUNK)
+      final f8 = ByteData(14);
+      f8.setUint16(0, 200, Endian.big);
+      f8.setInt16(2, 300, Endian.big);
+      f8.setInt16(4, -400, Endian.big);
+      f8.setInt16(6, 1500, Endian.big);
+      f8.setInt16(8, 250, Endian.big);
+      f8.setInt16(10, -120, Endian.big);
+      f8.setInt16(12, 80, Endian.big);
+      allRawBytes.addAll(f8.buffer.asUint8List());
+
+      final f9 = ByteData(14);
+      f9.setUint16(0, 220, Endian.big);
+      f9.setInt16(2, 310, Endian.big);
+      f9.setInt16(4, -390, Endian.big);
+      f9.setInt16(6, 1490, Endian.big);
+      f9.setInt16(8, 240, Endian.big);
+      f9.setInt16(10, -115, Endian.big);
+      f9.setInt16(12, 75, Endian.big);
+      allRawBytes.addAll(f9.buffer.asUint8List());
+
+      const totalFrames = 10;
+      final expectedCrc = Crc32.compute(allRawBytes);
+
+      // Packet 1: RLE_CHUNK (5 frames)
+      final pRle = ByteData(20);
+      pRle.setUint8(0, BleConstants.packetTypeRleChunk);
+      pRle.setUint16(1, 0, Endian.big);
+      pRle.setUint8(3, 16);
+      pRle.setUint8(4, 5); // 5 frames
+      pRle.setUint16(5, 0, Endian.big);
+      pRle.setUint8(7, 20); // 20ms step
+      pRle.setInt16(8, 10, Endian.big);
+      pRle.setInt16(10, 20, Endian.big);
+      pRle.setInt16(12, 980, Endian.big);
+      pRle.setInt16(14, 0, Endian.big);
+      pRle.setInt16(16, 0, Endian.big);
+      pRle.setInt16(18, 0, Endian.big);
+      expect(reassembler.processPacket(pRle.buffer.asUint8List()), isNull);
+      expect(reassembler.samplesCount, equals(5));
+
+      // Packet 2: DELTA_CHUNK (1 keyframe + 2 deltas = 3 frames)
+      // payload = 1 + 14 + 2 * 7 = 29 bytes
+      final pDelta = ByteData(4 + 29);
+      pDelta.setUint8(0, BleConstants.packetTypeDeltaChunk);
+      pDelta.setUint16(1, 1, Endian.big);
+      pDelta.setUint8(3, 29);
+      pDelta.setUint8(4, 3); // 3 frames
+      // Keyframe (f5)
+      pDelta.setUint16(5, 100, Endian.big);
+      pDelta.setInt16(7, 10, Endian.big);
+      pDelta.setInt16(9, 20, Endian.big);
+      pDelta.setInt16(11, 980, Endian.big);
+      pDelta.setInt16(13, 0, Endian.big);
+      pDelta.setInt16(15, 0, Endian.big);
+      pDelta.setInt16(17, 0, Endian.big);
+      // Delta 1 (f6 - f5)
+      pDelta.setUint8(19, 20); // diff_ms
+      pDelta.setInt8(20, 5);   // diff_ax
+      pDelta.setInt8(21, -2);  // diff_ay
+      pDelta.setInt8(22, 3);   // diff_az
+      pDelta.setInt8(23, 2);   // diff_gx
+      pDelta.setInt8(24, 0);   // diff_gy
+      pDelta.setInt8(25, -1);  // diff_gz
+      // Delta 2 (f7 - f6)
+      pDelta.setUint8(26, 20); // diff_ms
+      pDelta.setInt8(27, 3);   // diff_ax
+      pDelta.setInt8(28, -2);  // diff_ay
+      pDelta.setInt8(29, 2);   // diff_az
+      pDelta.setInt8(30, 2);   // diff_gx
+      pDelta.setInt8(31, 1);   // diff_gy
+      pDelta.setInt8(32, 0);   // diff_gz
+      expect(reassembler.processPacket(pDelta.buffer.asUint8List()), isNull);
+      expect(reassembler.samplesCount, equals(8));
+
+      // Packet 3: DATA_CHUNK (2 raw frames = 28 bytes)
+      final pData = ByteData(4 + 28);
+      pData.setUint8(0, BleConstants.packetTypeDataChunk);
+      pData.setUint16(1, 2, Endian.big);
+      pData.setUint8(3, 28);
+      for (int i = 0; i < 14; i++) {
+        pData.setUint8(4 + i, f8.getUint8(i));
+        pData.setUint8(18 + i, f9.getUint8(i));
+      }
+      expect(reassembler.processPacket(pData.buffer.asUint8List()), isNull);
+      expect(reassembler.samplesCount, equals(10));
+
+      // Packet 4: END_OF_BURST
+      final pEnd = ByteData(12);
+      pEnd.setUint8(0, BleConstants.packetTypeEndOfBurst);
+      pEnd.setUint16(1, 3, Endian.big);
+      pEnd.setUint32(4, totalFrames, Endian.big);
+      pEnd.setUint32(8, expectedCrc, Endian.big);
+
+      final result = reassembler.processPacket(pEnd.buffer.asUint8List());
+      expect(result, isNotNull);
+      expect(result!.isSuccess, isTrue);
+      expect(result.framesRecovered, equals(10));
+      expect(result.isCrcValid, isTrue);
+      expect(result.readings.length, equals(10));
+    });
   });
 }

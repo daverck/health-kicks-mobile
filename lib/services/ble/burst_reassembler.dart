@@ -204,6 +204,50 @@ class BurstReassembler {
         }
         return null;
 
+      case BleConstants.packetTypeRleChunk:
+        if (!_receivedStart) {
+          _receivedStart = true;
+        }
+        if (payload.length < 16) {
+          return null;
+        }
+
+        final rleUint8Payload = Uint8List.fromList(payload);
+        final rleData = ByteData.sublistView(rleUint8Payload);
+        final runCount = rleData.getUint8(0);
+        final startDeltaMs = rleData.getUint16(1, Endian.big);
+        final stepMs = rleData.getUint8(3);
+        final rleAx = rleData.getInt16(4, Endian.big);
+        final rleAy = rleData.getInt16(6, Endian.big);
+        final rleAz = rleData.getInt16(8, Endian.big);
+        final rleGx = rleData.getInt16(10, Endian.big);
+        final rleGy = rleData.getInt16(12, Endian.big);
+        final rleGz = rleData.getInt16(14, Endian.big);
+
+        for (int i = 0; i < runCount; i++) {
+          final curDeltaMs = startDeltaMs + i * stepMs;
+          _collectedReadings.add(ImuReadingModel(
+            deltaMs: curDeltaMs,
+            ax: rleAx / 1000.0,
+            ay: rleAy / 1000.0,
+            az: rleAz / 1000.0,
+            gx: rleGx / 10.0,
+            gy: rleGy / 10.0,
+            gz: rleGz / 10.0,
+          ));
+
+          final reconstructed = ByteData(14);
+          reconstructed.setUint16(0, curDeltaMs, Endian.big);
+          reconstructed.setInt16(2, rleAx, Endian.big);
+          reconstructed.setInt16(4, rleAy, Endian.big);
+          reconstructed.setInt16(6, rleAz, Endian.big);
+          reconstructed.setInt16(8, rleGx, Endian.big);
+          reconstructed.setInt16(10, rleGy, Endian.big);
+          reconstructed.setInt16(12, rleGz, Endian.big);
+          _rawPayloadBytes.addAll(reconstructed.buffer.asUint8List());
+        }
+        return null;
+
       case BleConstants.packetTypeEndOfBurst:
         _receivedEnd = true;
         if (payload.length >= 8) {
