@@ -16,6 +16,29 @@ enum BleConnectionStatus {
 typedef BleLogCallback = void Function(String message);
 
 /// Bluetooth Low Energy connection lifecycle manager for the HealthKicks footwear device.
+///
+/// ### Connection State Machine
+/// ```text
+///  [ disconnected ]
+///         │  startAutoConnect()
+///         ▼
+///    [ scanning ] ──(timeout / not found)──► [ disconnected ]
+///         │  (matched HealthKicks advert)
+///         ▼
+///   [ connecting ] ──(GATT failure / timeout)──► [ disconnected ]
+///         │  (device.connect() OK)
+///         ▼
+///   [ connected ] ──(discover services & negotiate MTU)
+///         │
+///         ▼
+///     [ ready ] ──(unexpected disconnect / link drop)──► [ disconnected ]
+/// ```
+///
+/// Responsibilities:
+/// - Verifies runtime BLE and location permissions before scanning.
+/// - Scans advertising packets for devices matching `HealthKicks-` or target device ID.
+/// - Connects to the peripheral and requests MTU expansion (up to 512 bytes).
+/// - Monitors peripheral connection states to emit status notifications across the app.
 class BleConnectionManager extends ChangeNotifier {
   final PermissionService _permissionService;
   final BleLogCallback? onLog;
