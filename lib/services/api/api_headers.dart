@@ -12,6 +12,7 @@ String generateCorrelationId() {
 Map<String, String> buildApiHeaders(String? token, {Map<String, String>? extraHeaders}) {
   final headers = <String, String>{
     'Content-Type': 'application/json',
+    'Accept': 'application/json',
     'X-Correlation-ID': generateCorrelationId(),
   };
   if (token != null && token.isNotEmpty) {

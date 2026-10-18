@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/config/app_config.dart';
+import '../api/api_headers.dart';
 import 'token_storage_service.dart';
 
 enum AuthState {
@@ -166,10 +167,7 @@ class AuthService extends ChangeNotifier {
       final uri = Uri.parse('$_sanitizedBaseUrl/api/v1/auth/me');
       final response = await _httpClient.get(
         uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
+        headers: buildApiHeaders(token),
       );
 
       if (response.statusCode == 200) {
@@ -285,10 +283,7 @@ class AuthService extends ChangeNotifier {
     try {
       final response = await _httpClient.post(
         uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
+        headers: buildApiHeaders(null),
         body: jsonEncode(payload),
       );
 
@@ -338,10 +333,7 @@ class AuthService extends ChangeNotifier {
       final meUri = Uri.parse('$_sanitizedBaseUrl/api/v1/auth/me');
       final res = await _httpClient.get(
         meUri,
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-          'Accept': 'application/json',
-        },
+        headers: buildApiHeaders(accessToken),
       );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -394,10 +386,7 @@ class AuthService extends ChangeNotifier {
     try {
       final response = await _httpClient.post(
         uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
+        headers: buildApiHeaders(null),
         body: jsonEncode({'refresh_token': rToken}),
       );
 

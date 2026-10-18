@@ -8,6 +8,7 @@ import '../../services/auth/auth_service.dart';
 import '../../services/ble/ble_connection_manager.dart';
 import '../../services/ble/ble_ota_service.dart';
 import '../../services/firmware/firmware_service.dart';
+import '../../services/api/api_headers.dart';
 
 /// Screen managing firmware discovery, release date & SHA-256 validation,
 /// and Over-The-Air (OTA) flashing over BLE GATT.
@@ -352,7 +353,10 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
     });
 
     try {
-      final response = await http.get(Uri.parse(url.trim()));
+      final response = await http.get(
+        Uri.parse(url.trim()),
+        headers: {'X-Correlation-ID': generateCorrelationId()},
+      );
       if (response.statusCode == 200) {
         if (!mounted) return;
         final downloadedBytes = response.bodyBytes;

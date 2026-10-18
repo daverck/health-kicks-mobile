@@ -12,9 +12,10 @@ void main() {
       expect(RegExp(r'^[0-9a-f]{32}$').hasMatch(id1), isTrue);
     });
 
-    test('buildApiHeaders attaches X-Correlation-ID and Content-Type', () {
+    test('buildApiHeaders attaches X-Correlation-ID, Content-Type, and Accept', () {
       final headers = buildApiHeaders(null);
       expect(headers['Content-Type'], equals('application/json'));
+      expect(headers['Accept'], equals('application/json'));
       expect(headers['X-Correlation-ID'], isNotNull);
       expect(headers.containsKey('Authorization'), isFalse);
     });

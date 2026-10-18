@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/config/app_config.dart';
 import '../../core/constants/ble_constants.dart';
 import '../../models/firmware_release_model.dart';
+import '../api/api_headers.dart';
 
 /// Hardware device firmware info retrieved over BLE GATT standard DIS (0x180A).
 class DeviceFirmwareInfo {
@@ -48,12 +49,7 @@ class FirmwareService {
     final endpoint = '$base/api/v1/firmware/latest';
 
     try {
-      final headers = <String, String>{
-        'Accept': 'application/json',
-      };
-      if (token != null && token.trim().isNotEmpty) {
-        headers['Authorization'] = 'Bearer $token';
-      }
+      final headers = buildApiHeaders(token?.trim());
 
       final response = await _httpClient.get(
         Uri.parse(endpoint),

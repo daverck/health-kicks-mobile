@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../../core/config/app_config.dart';
 import '../auth/auth_service.dart';
 import '../auth/token_storage_service.dart';
+import '../api/api_headers.dart';
 
 typedef StudioLogCallback = void Function(String message, {bool isError});
 
@@ -107,11 +108,7 @@ class StudioApiService {
     };
     final body = jsonEncode(payload);
 
-    Map<String, String> buildHeaders(String currentToken) => {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $currentToken',
-        };
+    Map<String, String> buildHeaders(String currentToken) => buildApiHeaders(currentToken);
 
     try {
       var response = await _httpClient.post(
