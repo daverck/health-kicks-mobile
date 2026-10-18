@@ -4,14 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:http/http.dart' as http;
 import '../../models/firmware_release_model.dart';
+import '../../services/api/api_headers.dart';
 import '../../services/auth/auth_service.dart';
 import '../../services/ble/ble_connection_manager.dart';
 import '../../services/ble/ble_ota_service.dart';
 import '../../services/firmware/firmware_service.dart';
-import '../../services/api/api_headers.dart';
+import '../widgets/firmware/firmware_binary_picker_card.dart';
+import '../widgets/firmware/firmware_cloud_release_card.dart';
+import '../widgets/firmware/firmware_device_info_card.dart';
+import '../widgets/firmware/ota_progress_dialog.dart';
+import '../widgets/firmware/reconnection_banner.dart';
 
-/// Screen managing firmware discovery, release date & SHA-256 validation,
-/// and Over-The-Air (OTA) flashing over BLE GATT.
+/// Screen allowing the user to select or download an ESP32-S3 firmware binary,
+/// verify its cryptographic SHA-256 fingerprint, and flash it over BLE OTA.
 class FirmwareUpdateScreen extends StatefulWidget {
   final BluetoothDevice? device;
   final String currentFirmwareVersion;
@@ -44,33 +49,30 @@ class FirmwareUpdateScreen extends StatefulWidget {
 class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
   late final BleOtaService _otaService;
   late final FirmwareService _firmwareService;
+  late final TextEditingController _urlController;
+
+  BleOtaProgress _progress = BleOtaProgress(status: BleOtaStatus.idle);
   StreamSubscription<BleOtaProgress>? _otaSubscription;
   StreamSubscription<BleConnectionStatus>? _bleStatusSub;
-  bool _isReconnecting = false;
-  bool _reconnectSuccess = false;
-  String? _reconnectMessage;
 
   Uint8List? _selectedFirmwareBytes;
   String? _selectedFileName;
-  String _targetFirmwareVersion = 'v1.2.1-esp32s3';
-
-  late String _installedFirmwareVersion;
-  DateTime? _installedFirmwareDate;
-
-  FirmwareReleaseModel? _cloudRelease;
-  bool _isCheckingCloud = false;
-  String? _cloudCheckError;
-  bool _isCloudReleaseNewer = false;
-
   String? _computedSha256;
   bool? _isSha256Valid;
 
-  final TextEditingController _urlController =
-      TextEditingController(text: FirmwareUpdateScreen.defaultFirmwareUrl);
+  bool _isCheckingCloud = false;
+  String? _cloudCheckError;
+  FirmwareReleaseModel? _cloudRelease;
+  bool _isCloudReleaseNewer = false;
   bool _isDownloading = false;
 
-  BleOtaProgress _progress =
-      const BleOtaProgress(status: BleOtaStatus.idle);
+  late String _installedFirmwareVersion;
+  DateTime? _installedFirmwareDate;
+  String _targetFirmwareVersion = 'v1.2.1-esp32s3';
+
+  bool _isReconnecting = false;
+  bool _reconnectSuccess = false;
+  String? _reconnectMessage;
 
   @override
   void initState() {
@@ -79,12 +81,15 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
     _firmwareService = widget.firmwareService ?? FirmwareService();
     _installedFirmwareVersion = widget.currentFirmwareVersion;
 
+    _urlController = TextEditingController(
+      text: FirmwareUpdateScreen.defaultFirmwareUrl,
+    );
+
     _otaSubscription = _otaService.progressStream.listen((prog) {
       if (mounted) {
         setState(() {
           _progress = prog;
         });
-
         if (prog.status == BleOtaStatus.success) {
           _onOtaSuccess();
         }
@@ -95,36 +100,35 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
   }
 
   Future<void> _loadInstalledDeviceInfoAndCheckCloud() async {
-    // 1. Try reading local storage first
     try {
-      final localDate = await _firmwareService.getLocalInstalledDate();
-      final localVer = await _firmwareService.getLocalInstalledVersion();
-      if (mounted) {
+      final savedVer = await _firmwareService.getLocalInstalledVersion();
+      final savedDate = await _firmwareService.getLocalInstalledDate();
+      if (mounted && savedVer != null) {
         setState(() {
-          if (localDate != null) _installedFirmwareDate = localDate;
-          if (localVer != null && localVer.isNotEmpty) _installedFirmwareVersion = localVer;
+          _installedFirmwareVersion = savedVer;
+          _installedFirmwareDate = savedDate;
         });
+      }
+
+      if (widget.device != null) {
+        final info = await _firmwareService.readDeviceFirmwareInfo(widget.device!);
+        if (mounted && info.version != null && info.version!.isNotEmpty) {
+          setState(() {
+            _installedFirmwareVersion = info.version!;
+            if (info.buildDate != null) {
+              _installedFirmwareDate = info.buildDate;
+            }
+          });
+          unawaited(
+            _firmwareService.saveLocalInstalledFirmware(
+              installedDate: info.buildDate ?? _installedFirmwareDate ?? DateTime.now().toUtc(),
+              version: info.version!,
+            ),
+          );
+        }
       }
     } catch (_) {}
 
-    // 2. Try reading from connected BLE device via Device Information Service (0x180A)
-    if (widget.device != null) {
-      try {
-        final devInfo = await _firmwareService.readDeviceFirmwareInfo(widget.device!);
-        if (mounted) {
-          setState(() {
-            if (devInfo.version != null && devInfo.version!.isNotEmpty) {
-              _installedFirmwareVersion = devInfo.version!;
-            }
-            if (devInfo.buildDate != null) {
-              _installedFirmwareDate = devInfo.buildDate!;
-            }
-          });
-        }
-      } catch (_) {}
-    }
-
-    // 3. Query Cloud for the latest official firmware metadata
     await _checkCloudRelease();
   }
 
@@ -178,25 +182,18 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
   }
 
   Future<void> _onOtaSuccess() async {
-    final newDate = _cloudRelease?.releaseDate ?? DateTime.now().toUtc();
-    final newVer = _cloudRelease?.version ?? _targetFirmwareVersion;
-
-    try {
-      await _firmwareService.saveLocalInstalledFirmware(
-        installedDate: newDate,
-        version: newVer,
-      );
-    } catch (_) {}
-
+    final now = DateTime.now().toUtc();
+    await _firmwareService.saveLocalInstalledFirmware(
+      installedDate: now,
+      version: _targetFirmwareVersion,
+    );
     if (mounted) {
       setState(() {
-        _installedFirmwareDate = newDate;
-        _installedFirmwareVersion = newVer;
-        _isCloudReleaseNewer = false;
+        _installedFirmwareVersion = _targetFirmwareVersion;
+        _installedFirmwareDate = now;
       });
     }
 
-    // Trigger auto-reconnection sequence after ESP32-S3 reboot
     unawaited(_triggerAutoReconnectAfterReboot());
   }
 
@@ -207,32 +204,31 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
       setState(() {
         _isReconnecting = true;
         _reconnectSuccess = false;
-        _reconnectMessage = 'Attente du redémarrage de la chaussure (4s)...';
+        _reconnectMessage = 'Attente du redémarrage de la chaussure (3s)...';
       });
     }
 
-    // Wait 4 seconds for footwear hardware reboot (boot, CDC delay, IMU self-test, NimBLE startup)
-    await Future.delayed(const Duration(seconds: 4));
+    await Future<void>.delayed(const Duration(seconds: 3));
     if (!mounted) return;
 
     setState(() {
       _reconnectMessage = 'Recherche et reconnexion Bluetooth en cours...';
     });
 
-    final manager = widget.bleManager;
-    if (manager != null) {
-      await _bleStatusSub?.cancel();
-      _bleStatusSub = manager.statusStream.listen((status) async {
-        if (status == BleConnectionStatus.ready && manager.connectedDevice != null) {
-          // Wait briefly to allow main client service initialization to complete cleanly without GATT collision
-          await Future.delayed(const Duration(milliseconds: 400));
-          if (manager.connectedDevice != null) {
+    _bleStatusSub?.cancel();
+    if (widget.bleManager != null) {
+      _bleStatusSub = widget.bleManager!.statusStream.listen((status) async {
+        if (status == BleConnectionStatus.ready) {
+          final connectedDev = widget.bleManager!.connectedDevice;
+          if (connectedDev != null) {
             try {
-              final info = await _firmwareService.readDeviceFirmwareInfo(manager.connectedDevice!);
+              final info = await _firmwareService.readDeviceFirmwareInfo(connectedDev);
               if (info.version != null && info.version!.isNotEmpty && mounted) {
                 setState(() {
                   _installedFirmwareVersion = info.version!;
-                  _installedFirmwareDate = info.buildDate ?? _installedFirmwareDate;
+                  if (info.buildDate != null) {
+                    _installedFirmwareDate = info.buildDate;
+                  }
                 });
               }
             } catch (_) {}
@@ -241,12 +237,10 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
             setState(() {
               _isReconnecting = false;
               _reconnectSuccess = true;
-              _reconnectMessage =
-                  'Chaussure reconnectée avec succès ! (version ${_installedFirmwareVersion.isNotEmpty ? _installedFirmwareVersion : "active"})';
+              _reconnectMessage = 'Chaussure reconnectée avec succès ! (version $_installedFirmwareVersion)';
             });
           }
-          await _bleStatusSub?.cancel();
-          _bleStatusSub = null;
+          _bleStatusSub?.cancel();
         }
       });
     }
@@ -254,8 +248,8 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
     try {
       if (widget.onReconnect != null) {
         await widget.onReconnect!();
-      } else if (manager != null) {
-        await manager.startAutoConnect(
+      } else if (widget.bleManager != null) {
+        await widget.bleManager!.startAutoConnect(
           targetDeviceId: widget.targetDeviceId,
           timeout: const Duration(seconds: 45),
         );
@@ -272,65 +266,42 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
 
   @override
   void dispose() {
-    _bleStatusSub?.cancel();
     _otaSubscription?.cancel();
+    _bleStatusSub?.cancel();
     _urlController.dispose();
-    if (widget.otaService == null) {
-      _otaService.dispose();
-    }
     super.dispose();
-  }
-
-  String _formatDateTime(DateTime? dt) {
-    if (dt == null) return 'Inconnue (non horodaté)';
-    final local = dt.toLocal();
-    final d = local.day.toString().padLeft(2, '0');
-    final m = local.month.toString().padLeft(2, '0');
-    final y = local.year;
-    final h = local.hour.toString().padLeft(2, '0');
-    final min = local.minute.toString().padLeft(2, '0');
-    return '$d/$m/$y à $h:$min (heure locale)';
   }
 
   Future<bool> _showForceDownloadConfirmationDialog() async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.info_outline, color: Colors.blue),
-            SizedBox(width: 8),
-            Text('Firmware à jour'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Le firmware actuellement installé sur la chaussure '
-              '(${_installedFirmwareVersion.isNotEmpty ? _installedFirmwareVersion : (_installedFirmwareDate != null ? _formatDateTime(_installedFirmwareDate) : "inconnu")}) '
-              'est déjà identique ou plus récent que la release Cloud '
-              '(${_cloudRelease != null ? "${_cloudRelease!.version} (${_formatDateTime(_cloudRelease!.releaseDate)})" : "inconnue"}).',
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Souhaitez-vous tout de même forcer le téléchargement et réinstaller cette version ?',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Annuler'),
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.blue),
+              SizedBox(width: 8),
+              Expanded(child: Text('Firmware déjà à jour')),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Forcer le téléchargement'),
+          content: Text(
+            'La version installée sur la chaussure ($_installedFirmwareVersion) est déjà identique ou plus récente que la release cloud sélectionnée (${_cloudRelease?.version}).\n\n'
+            'Souhaitez-vous forcer le re-téléchargement et le flashage de cette version ?',
+            style: const TextStyle(fontSize: 13, height: 1.4),
           ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Forcer le téléchargement'),
+            ),
+          ],
+        );
+      },
     );
     return result ?? false;
   }
@@ -338,7 +309,6 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
   Future<void> _downloadFromUrl(String url) async {
     if (url.trim().isEmpty) return;
 
-    // Check release publication date constraint before downloading
     if (!_isCloudReleaseNewer && _installedFirmwareDate != null) {
       final confirmed = await _showForceDownloadConfirmationDialog();
       if (!confirmed) {
@@ -361,78 +331,49 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
         if (!mounted) return;
         final downloadedBytes = response.bodyBytes;
 
-        // Compute cryptographic SHA-256 digest of downloaded bytes
         final actualHash = _firmwareService.computeSha256(downloadedBytes);
-
-        // Verify with expected cloud SHA-256 if known
         final expectedHash = _cloudRelease?.sha256.trim() ?? '';
         final bool isValid;
         if (expectedHash.isNotEmpty) {
           isValid = actualHash == expectedHash.toLowerCase();
         } else {
-          isValid = true; // No official hash to verify against
+          isValid = true;
         }
 
-        if (!isValid) {
-          // Cryptographic integrity failure!
-          setState(() {
-            _selectedFirmwareBytes = null;
-            _selectedFileName = null;
-            _computedSha256 = actualHash;
-            _isSha256Valid = false;
-          });
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Échec d\'intégrité SHA-256 : l\'empreinte téléchargée ($actualHash) '
-                'ne correspond pas à l\'empreinte officielle ($expectedHash). Téléchargement rejeté.',
-              ),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 6),
-            ),
-          );
-          return;
-        }
-
-        // SHA-256 verified successfully!
+        final fileName = url.split('/').last.split('?').first;
         setState(() {
           _selectedFirmwareBytes = downloadedBytes;
+          _selectedFileName = fileName.isNotEmpty ? fileName : 'firmware.bin';
           _computedSha256 = actualHash;
-          _isSha256Valid = true;
-          _selectedFileName = url.split('/').last.split('?').first;
-          if (_selectedFileName!.isEmpty) {
-            _selectedFileName = 'firmware_downloaded.bin';
-          }
+          _isSha256Valid = isValid;
+          _isDownloading = false;
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Téléchargement réussi (${(downloadedBytes.length / 1024).toStringAsFixed(1)} Ko) · '
-              'Intégrité SHA-256 validée !',
+              isValid
+                  ? 'Binaire téléchargé avec succès (${(downloadedBytes.length / 1024).toStringAsFixed(1)} Ko). SHA-256 certifié !'
+                  : 'Alerte : Le hash SHA-256 calculé ne correspond pas à l\'empreinte officielle.',
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: isValid ? Colors.green : Colors.red,
+            duration: const Duration(seconds: 4),
           ),
         );
       } else {
-        throw Exception('HTTP ${response.statusCode}');
+        throw Exception('Code HTTP ${response.statusCode}');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur de téléchargement : $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isDownloading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _isDownloading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Échec du téléchargement : $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -467,7 +408,6 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
       return;
     }
 
-    // Open non-dismissible modal during update
     _showProgressModal();
 
     await _otaService.startUpdate(
@@ -477,230 +417,22 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
   }
 
   void _showProgressModal() {
-    showDialog(
+    showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (dialogCtx) {
-        return StreamBuilder<BleOtaProgress>(
-          stream: _otaService.progressStream,
-          initialData: _progress,
-          builder: (context, snapshot) {
-            final prog = snapshot.data ?? _progress;
-            final isBusy = prog.status == BleOtaStatus.preparing ||
-                prog.status == BleOtaStatus.transferring ||
-                prog.status == BleOtaStatus.finalizing;
-            final isDone = prog.status == BleOtaStatus.success;
-            final isError = prog.status == BleOtaStatus.error ||
-                prog.status == BleOtaStatus.aborted;
-
-            final theme = Theme.of(context);
-            return PopScope(
-              canPop: !isBusy,
-              child: AlertDialog(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                title: Row(
-                  children: [
-                    Icon(
-                      isDone
-                          ? Icons.check_circle
-                          : isError
-                              ? Icons.error_outline
-                              : Icons.system_update_alt,
-                      color: isDone
-                          ? Colors.green
-                          : isError
-                              ? Colors.redAccent
-                              : theme.colorScheme.primary,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        isDone
-                            ? 'Mise à jour réussie'
-                            : isError
-                                ? 'Erreur de mise à jour'
-                                : 'Mise à jour en cours',
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      prog.message ?? 'Préparation du transfert...',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: isError
-                            ? Colors.redAccent
-                            : isDone
-                                ? Colors.green
-                                : theme.colorScheme.onSurface,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    LinearProgressIndicator(
-                      value: prog.status == BleOtaStatus.preparing
-                          ? null
-                          : prog.progress,
-                      minHeight: 10,
-                      borderRadius: BorderRadius.circular(5),
-                      backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        isDone
-                            ? Colors.green
-                            : isError
-                                ? Colors.redAccent
-                                : theme.colorScheme.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '${(prog.progress * 100).toStringAsFixed(1)} %',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.onSurface,
-                          ),
-                        ),
-                        Text(
-                          '${(prog.bytesSent / 1024).toStringAsFixed(0)} / ${(prog.totalBytes / 1024).toStringAsFixed(0)} Ko',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (prog.status == BleOtaStatus.transferring) ...[
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Débit : ${prog.speedKbps.toStringAsFixed(1)} Ko/s',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          if (prog.estimatedTimeRemaining != null)
-                            Text(
-                              'Restant : ~${prog.estimatedTimeRemaining!.inSeconds} s',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                    if (isDone) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.green.withValues(alpha: 0.4)),
-                        ),
-                        child: Text(
-                          'L\'ESP32-S3 a validé la nouvelle partition et redémarre automatiquement.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: theme.brightness == Brightness.dark
-                                ? Colors.green.shade300
-                                : Colors.green.shade800,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      if (_isReconnecting || _reconnectSuccess || _reconnectMessage != null) ...[
-                        const SizedBox(height: 10),
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: _reconnectSuccess
-                                ? Colors.teal.withValues(alpha: 0.12)
-                                : _isReconnecting
-                                    ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4)
-                                    : Colors.orange.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: _reconnectSuccess
-                                  ? Colors.teal
-                                  : _isReconnecting
-                                      ? theme.colorScheme.primary.withValues(alpha: 0.3)
-                                      : Colors.orange,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              if (_isReconnecting)
-                                const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              else if (_reconnectSuccess)
-                                const Icon(Icons.check_circle, color: Colors.teal, size: 18)
-                              else
-                                const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 18),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  _reconnectMessage ?? '',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                    color: _reconnectSuccess
-                                        ? Colors.teal.shade800
-                                        : _isReconnecting
-                                            ? theme.colorScheme.onSurface
-                                            : Colors.orange.shade900,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ],
-                ),
-                actions: [
-                  if (isBusy && prog.status != BleOtaStatus.finalizing)
-                    TextButton(
-                      onPressed: () {
-                        _otaService.abort();
-                      },
-                      child: const Text(
-                        'Annuler',
-                        style: TextStyle(color: Colors.red),
-                      ),
-                    ),
-                  if (!isBusy)
-                    FilledButton(
-                      onPressed: () {
-                        Navigator.of(dialogCtx).pop();
-                      },
-                      child: Text(isDone ? 'Terminer' : 'Fermer'),
-                    ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+      builder: (ctx) => OtaProgressDialog(
+        progressStream: _otaService.progressStream,
+        initialProgress: _progress,
+        onAbort: () => _otaService.abort(),
+        isReconnecting: _isReconnecting,
+        reconnectSuccess: _reconnectSuccess,
+        reconnectMessage: _reconnectMessage,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final hasDevice = widget.device != null;
     final isUpdating = _otaService.isUpdating;
 
@@ -711,426 +443,46 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // 0. Auto-reconnection status banner if active
-          if (_isReconnecting || _reconnectSuccess || (_reconnectMessage != null && _reconnectMessage!.isNotEmpty))
-            Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: _reconnectSuccess
-                    ? Colors.teal.withValues(alpha: 0.15)
-                    : _isReconnecting
-                        ? theme.colorScheme.primaryContainer.withValues(alpha: 0.5)
-                        : Colors.orange.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: _reconnectSuccess
-                      ? Colors.teal
-                      : _isReconnecting
-                          ? theme.colorScheme.primary
-                          : Colors.orange,
-                ),
-              ),
-              child: Row(
-                children: [
-                  if (_isReconnecting)
-                    const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2.2),
-                    )
-                  else if (_reconnectSuccess)
-                    const Icon(Icons.check_circle, color: Colors.teal, size: 20)
-                  else
-                    const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _reconnectMessage ?? '',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: _reconnectSuccess
-                            ? Colors.teal.shade800
-                            : _isReconnecting
-                                ? theme.colorScheme.onSurface
-                                : Colors.orange.shade900,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          // 1. Device Info Card (Installed Version & Build/Install Date)
-          Card(
-            elevation: 1,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    backgroundColor: hasDevice ? Colors.green.shade100 : Colors.red.shade100,
-                    child: Icon(
-                      hasDevice ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
-                      color: hasDevice ? Colors.green.shade800 : Colors.red.shade800,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          hasDevice
-                              ? widget.device!.platformName.isNotEmpty
-                                  ? widget.device!.platformName
-                                  : 'Chaussure Connectée (ESP32-S3)'
-                              : 'Non connectée',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Version installée : $_installedFirmwareVersion',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Icon(Icons.calendar_today_outlined, size: 13, color: theme.colorScheme.primary),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                'Date firmware actif : ${_formatDateTime(_installedFirmwareDate)}',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          ReconnectionBanner(
+            isReconnecting: _isReconnecting,
+            reconnectSuccess: _reconnectSuccess,
+            reconnectMessage: _reconnectMessage,
+          ),
+          FirmwareDeviceInfoCard(
+            device: widget.device,
+            installedVersion: _installedFirmwareVersion,
+            installedDate: _installedFirmwareDate,
           ),
           const SizedBox(height: 16),
-
-          // 2. Cloud Release Status Card
-          Card(
-            elevation: 1,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.cloud_sync_outlined, color: theme.colorScheme.primary),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Dernière Release Cloud',
-                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                      IconButton(
-                        tooltip: 'Vérifier la dernière version',
-                        icon: _isCheckingCloud
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.refresh, size: 20),
-                        onPressed: _isCheckingCloud ? null : _checkCloudRelease,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-
-                  if (_isCheckingCloud)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text('Recherche de la dernière version sur le serveur...'),
-                    )
-                  else if (_cloudCheckError != null)
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.amber.shade700),
-                      ),
-                      child: Text(
-                        'Information Cloud indisponible : $_cloudCheckError',
-                        style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
-                      ),
-                    )
-                  else if (_cloudRelease != null) ...[
-                    // Comparison Badge
-                    if (_isCloudReleaseNewer)
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue.shade700),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.new_releases_outlined, color: Colors.blue, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Nouvelle version disponible (${_cloudRelease!.version}) !',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: Colors.blue,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.green.shade700),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Votre firmware est à jour ($_installedFirmwareVersion).',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: Colors.green,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    const SizedBox(height: 10),
-                    Text(
-                      '• Version Cloud : ${_cloudRelease!.version}\n'
-                      '• Date de publication : ${_formatDateTime(_cloudRelease!.releaseDate)}\n'
-                      '• Taille du binaire : ${(_cloudRelease!.sizeBytes / 1024).toStringAsFixed(1)} Ko'
-                      '${_cloudRelease!.sha256.isNotEmpty ? '\n• Empreinte SHA-256 attendue : ${_cloudRelease!.sha256.substring(0, 16)}...' : ''}',
-                      style: theme.textTheme.bodySmall?.copyWith(height: 1.4),
-                    ),
-                  ],
-                ],
-              ),
-            ),
+          FirmwareCloudReleaseCard(
+            isCheckingCloud: _isCheckingCloud,
+            cloudCheckError: _cloudCheckError,
+            cloudRelease: _cloudRelease,
+            isCloudReleaseNewer: _isCloudReleaseNewer,
+            installedVersion: _installedFirmwareVersion,
+            onCheckCloud: _checkCloudRelease,
           ),
           const SizedBox(height: 16),
-
-          // 3. Target Firmware Selection Card
-          Card(
-            elevation: 1,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Fichier Binaire Firmware (.bin)',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Le fichier téléchargé sera vérifié par empreinte cryptographique SHA-256 avant le flashage.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Selected File Badge & SHA-256 Verification Badge
-                  if (_selectedFirmwareBytes != null)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.description, color: theme.colorScheme.primary),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _selectedFileName ?? 'firmware.bin',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                    Text(
-                                      '${(_selectedFirmwareBytes!.length / 1024).toStringAsFixed(1)} Ko · Cible: $_targetFirmwareVersion',
-                                      style: theme.textTheme.bodySmall?.copyWith(
-                                        color: theme.colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.close, size: 20),
-                                onPressed: () {
-                                  setState(() {
-                                    _selectedFirmwareBytes = null;
-                                    _selectedFileName = null;
-                                    _computedSha256 = null;
-                                    _isSha256Valid = null;
-                                  });
-                                },
-                              ),
-                            ],
-                          ),
-                          if (_computedSha256 != null) ...[
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: _isSha256Valid == true
-                                    ? Colors.green.withValues(alpha: 0.15)
-                                    : Colors.red.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    _isSha256Valid == true ? Icons.verified : Icons.warning_amber,
-                                    size: 16,
-                                    color: _isSha256Valid == true ? Colors.green : Colors.red,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      _isSha256Valid == true
-                                          ? 'SHA-256 certifié : ${_computedSha256!.substring(0, 16)}...'
-                                          : 'SHA-256 non conforme !',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: _isSha256Valid == true ? Colors.green : Colors.red,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    )
-                  else
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: theme.colorScheme.outlineVariant),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'Aucun fichier sélectionné',
-                          style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-                        ),
-                      ),
-                    ),
-
-                  const SizedBox(height: 16),
-                  const Divider(),
-                  const SizedBox(height: 12),
-
-                  // Option A: Download from Cloud S3 URL (Pre-filled by default)
-                  Text(
-                    'Télécharger depuis le Cloud (AWS S3) ou une URL',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _urlController,
-                          decoration: InputDecoration(
-                            hintText: 'https://.../firmware.bin',
-                            isDense: true,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            prefixIcon: const Icon(Icons.cloud_download_outlined, size: 20),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: (_isDownloading || isUpdating)
-                            ? null
-                            : () => _downloadFromUrl(_urlController.text),
-                        child: _isDownloading
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Text(
-                                (!_isCloudReleaseNewer && _installedFirmwareDate != null)
-                                    ? 'Télécharger'
-                                    : 'Télécharger',
-                              ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+          FirmwareBinaryPickerCard(
+            selectedFirmwareBytes: _selectedFirmwareBytes,
+            selectedFileName: _selectedFileName,
+            targetFirmwareVersion: _targetFirmwareVersion,
+            computedSha256: _computedSha256,
+            isSha256Valid: _isSha256Valid,
+            onClearFile: () {
+              setState(() {
+                _selectedFirmwareBytes = null;
+                _selectedFileName = null;
+                _computedSha256 = null;
+                _isSha256Valid = null;
+              });
+            },
+            urlController: _urlController,
+            isDownloading: _isDownloading,
+            isUpdating: isUpdating,
+            onDownloadFromUrl: _downloadFromUrl,
           ),
           const SizedBox(height: 24),
-
-          // 4. Trigger Flash Button
           FilledButton.icon(
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),

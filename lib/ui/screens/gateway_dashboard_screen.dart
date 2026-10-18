@@ -39,6 +39,8 @@ import '../widgets/step_counter_card.dart';
 import '../widgets/studio_session_dialog.dart';
 import '../widgets/studio_recording_dialog.dart';
 import '../widgets/gateway_status_row.dart';
+import '../widgets/dashboard/dashboard_app_bar.dart';
+import '../widgets/dashboard/dashboard_quick_actions.dart';
 
 /// Primary dashboard screen orchestrating the BLE-MQTT mobile edge gateway.
 ///
@@ -922,104 +924,38 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         widget.authService?.currentUser?.role == 'clinician';
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('HealthKicks BLE-to-MQTT Gateway'),
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(16),
+      appBar: DashboardAppBar(
+        deviceId: _deviceId,
+        onOpenStepsHistory: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => StepsHistoryScreen(
+                storageService: _stepStorageService,
+                syncService: _stepSyncService,
+                deviceId: _deviceId,
+              ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.perm_identity, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  _deviceId,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  ),
+          );
+        },
+        onOpenDetectionEventsHistory: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => DetectionEventsHistoryScreen(
+                service: EventHistoryService(
+                  backendBaseUrl: AppConfig.backendBaseUrl,
+                  tokenStorage: TokenStorageService(),
+                  authService: widget.authService,
                 ),
-              ],
+                deviceId: _deviceId,
+                liveActivities: _recentActivities,
+                activityStream: _activityStreamController.stream,
+              ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.show_chart_rounded),
-            tooltip: 'Historique des Pas',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => StepsHistoryScreen(
-                    storageService: _stepStorageService,
-                    syncService: _stepSyncService,
-                    deviceId: _deviceId,
-                  ),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.history_rounded),
-            tooltip: 'Historique des Événements',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => DetectionEventsHistoryScreen(
-                    service: EventHistoryService(
-                      backendBaseUrl: AppConfig.backendBaseUrl,
-                      tokenStorage: TokenStorageService(),
-                      authService: widget.authService,
-                    ),
-                    deviceId: _deviceId,
-                    liveActivities: _recentActivities,
-                    activityStream: _activityStreamController.stream,
-                  ),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.article_outlined),
-            tooltip: 'Journal d\'événements',
-            onPressed: _openEventLogsScreen,
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Paramètres',
-            onPressed: _openSettingsScreen,
-          ),
-          if (widget.onLogout != null)
-            IconButton(
-              icon: const Icon(Icons.logout),
-              tooltip: 'Se déconnecter',
-              onPressed: () {
-                showDialog<void>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('Déconnexion'),
-                    content: const Text('Voulez-vous vraiment vous déconnecter de votre session HealthKicks ?'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.of(ctx).pop(),
-                        child: const Text('Annuler'),
-                      ),
-                      FilledButton(
-                        onPressed: () {
-                          Navigator.of(ctx).pop();
-                          widget.onLogout!();
-                        },
-                        child: const Text('Déconnexion'),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-        ],
+          );
+        },
+        onOpenEventLogs: _openEventLogsScreen,
+        onOpenSettings: _openSettingsScreen,
+        onLogout: widget.onLogout,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -1081,26 +1017,10 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
               const SizedBox(height: 10),
 
               // 4. Action Test Controls
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.vibration),
-                      label: const Text('Test Haptique'),
-                      onPressed: _sendTestHapticCommand,
-                    ),
-                  ),
-                  if (isClinicianOrAdmin) ...[
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.play_arrow),
-                        label: const Text('Studio'),
-                        onPressed: _showStudioSessionDialog,
-                      ),
-                    ),
-                  ],
-                ],
+              DashboardQuickActions(
+                onSendTestHaptic: _sendTestHapticCommand,
+                isClinicianOrAdmin: isClinicianOrAdmin,
+                onOpenStudio: _showStudioSessionDialog,
               ),
             ],
           ),

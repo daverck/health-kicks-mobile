@@ -11,6 +11,10 @@ import '../../services/locale_service.dart';
 import '../../services/theme_service.dart';
 import '../../services/firmware/firmware_service.dart';
 import '../widgets/imu_calibration_dialog.dart';
+import '../widgets/settings/settings_connection_status_card.dart';
+import '../widgets/settings/settings_biomechanics_section.dart';
+import '../widgets/settings/settings_account_section.dart';
+import '../widgets/settings/settings_system_info_section.dart';
 import 'firmware_update_screen.dart';
 
 /// Screen allowing the user to configure mobile gateway settings,
@@ -28,7 +32,6 @@ class SettingsScreen extends StatefulWidget {
   final bool isFootwearConnected;
   final Stream<String>? studioStatusStream;
 
-  // Connectivity action controls & status
   final BleConnectionManager? bleManager;
   final Future<void> Function()? onStartBleScan;
   final Future<void> Function()? onDisconnectBle;
@@ -326,6 +329,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _isLocallyDisconnected = false;
           }
           _previousBleStatus = currentBleStatus;
+
           final isBleReady = !_isLocallyDisconnected &&
               (widget.bleManager != null
                   ? (currentBleStatus == BleConnectionStatus.ready ||
@@ -333,27 +337,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   : (widget.isFootwearConnected ||
                       currentBleStatus == BleConnectionStatus.ready ||
                       currentBleStatus == BleConnectionStatus.connected));
+
           final isBleScanning = !_isLocallyDisconnected && currentBleStatus == BleConnectionStatus.scanning;
           final isBleConnecting = !_isLocallyDisconnected && currentBleStatus == BleConnectionStatus.connecting;
           final activeBleClient = widget.bleClientNotifier?.value ?? widget.bleClient;
-
-          final Color bleColor = isBleReady
-              ? Colors.green
-              : (isBleScanning || isBleConnecting ? Colors.orange : Colors.grey);
 
           final currentMtu = widget.bleManager?.negotiatedMtu ?? widget.mtu;
           final String currentDeviceName = widget.bleManager?.connectedDevice?.platformName.isNotEmpty == true
               ? widget.bleManager!.connectedDevice!.platformName
               : (widget.deviceName ?? widget.targetDeviceId ?? 'HealthKicks-HK-2');
 
-          final String bleStatusText = isBleReady
-              ? 'Connecté (MTU: $currentMtu)'
-              : (isBleScanning
-                  ? 'Scan en cours...'
-                  : (isBleConnecting ? 'Connexion en cours...' : 'Déconnecté'));
-
-          final isMqttConnected = widget.isMqttConnectedNotifier?.value ?? widget.isMqttConnected;
-          final Color mqttColor = isMqttConnected ? Colors.green : Colors.grey;
+          final effectiveMqttConnected =
+              widget.isMqttConnectedNotifier?.value ?? widget.isMqttConnected;
 
           final VoidCallback? onDisconnect = isBleReady
               ? () {
@@ -369,766 +364,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
               : null;
 
           return ListView(
-            padding: const EdgeInsets.symmetric(vertical: 12.0),
+            padding: const EdgeInsets.symmetric(vertical: 8),
             children: [
-              // 1. Connectivity & Background Service Category
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Text(
-                  'PASSERELLE & CONNECTIVITÉ',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.1,
-                      ),
-                ),
-              ),
-
-              // 1.1 Bluetooth BLE Control Card
-              Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  side: BorderSide(
-                    color: Theme.of(context).dividerColor.withValues(alpha: 0.15),
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Icon(Icons.bluetooth, color: bleColor, size: 22),
-                                const SizedBox(width: 8),
-                                const Expanded(
-                                  child: Text(
-                                    'Bluetooth',
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: bleColor.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(shape: BoxShape.circle, color: bleColor),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  bleStatusText,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: bleColor,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Périphérique cible : $currentDeviceName',
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              icon: const Icon(Icons.refresh, size: 16),
-                              label: const Text('Re-scanner'),
-                              onPressed: () {
-                                setState(() {
-                                  _isLocallyDisconnected = false;
-                                });
-                                widget.onStartBleScan?.call();
-                              },
-                            ),
-                          ),
-                          if (onDisconnect != null) ...[
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: FilledButton.tonalIcon(
-                                icon: const Icon(Icons.bluetooth_disabled, size: 16),
-                                label: const Text('Déconnecter'),
-                                onPressed: onDisconnect,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      if (isBleReady && (activeBleClient != null || widget.onCalibrateSensor != null)) ...[
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.straighten, size: 16),
-                            label: const Text("Étalonner l'assiette du capteur (4s)"),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Theme.of(context).colorScheme.primary,
-                            ),
-                            onPressed: () async {
-                              try {
-                                if (activeBleClient != null) {
-                                  await activeBleClient.sendCalibrateZeroCommand();
-                                } else if (widget.onCalibrateSensor != null) {
-                                  await widget.onCalibrateSensor!();
-                                }
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        "Étalonnage initié. Gardez la chaussure immobile à plat pendant 4 secondes pour ajuster la baseline à 0.",
-                                      ),
-                                      duration: Duration(seconds: 4),
-                                    ),
-                                  );
-                                }
-                              } catch (e) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text("Échec de l'étalonnage: $e")),
-                                  );
-                                }
-                              }
-                            },
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-
-              // 1.2 AWS IoT Core Control Card
-              Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  side: BorderSide(
-                    color: Theme.of(context).dividerColor.withValues(alpha: 0.15),
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Icon(Icons.cloud, color: mqttColor, size: 22),
-                                const SizedBox(width: 8),
-                                const Expanded(
-                                  child: Text(
-                                    'Cloud',
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: mqttColor.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(shape: BoxShape.circle, color: mqttColor),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  isMqttConnected ? 'Connecté' : 'Déconnecté',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: mqttColor,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Passerelle WebSockets MQTT SigV4 (Port 443)',
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.sync, size: 16),
-                          label: const Text('Re-connecter Cloud MQTT'),
-                          onPressed: widget.onReconnectMqtt,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              // 1.3 Mode Surveillance Active SwitchListTile
-              SwitchListTile(
-                secondary: Icon(
-                  Icons.shield_outlined,
-                  color: widget.surveillanceService.isSurveillanceActive
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.grey,
-                ),
-                title: const Text(
-                  'Mode Surveillance Active',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: const Text(
-                  'Maintient la connexion active écran éteint pour l\'enregistrement et la télémétrie',
-                ),
-                value: widget.surveillanceService.isSurveillanceActive,
-                onChanged: widget.surveillanceService.isSupported
-                    ? (bool value) async {
-                        await widget.surveillanceService.toggleSurveillance(value);
-                        if (context.mounted && !value) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Mode Surveillance Active désactivé.'),
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        }
+              SettingsConnectionStatusCard(
+                bleStatus: currentBleStatus,
+                isBleReady: isBleReady,
+                isBleScanning: isBleScanning,
+                isBleConnecting: isBleConnecting,
+                deviceName: currentDeviceName,
+                mtu: currentMtu,
+                bleClient: activeBleClient,
+                onStartBleScan: widget.onStartBleScan != null
+                    ? () {
+                        setState(() => _isLocallyDisconnected = false);
+                        widget.onStartBleScan!();
                       }
                     : null,
+                onDisconnectBle: onDisconnect,
+                onCalibrateSensor: widget.onCalibrateSensor,
+                isMqttConnected: effectiveMqttConnected,
+                onReconnectMqtt: widget.onReconnectMqtt,
               ),
-
-              // Platform warning or battery note
-              if (!widget.surveillanceService.isSupported)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                  child: Container(
-                    padding: const EdgeInsets.all(12.0),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8.0),
-                      border: Border.all(color: Colors.amber.shade700),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.amber.shade800, size: 20),
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text(
-                            'Le maintien de la passerelle BLE/MQTT avec écran éteint est actuellement réservé à Android. iOS n\'est pas supporté pour ce mode en raison des restrictions d\'arrière-plan de l\'OS.',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              else
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                  child: Container(
-                    padding: const EdgeInsets.all(12.0),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(8.0),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.timer_outlined,
-                              size: 18,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Gestion intelligente de la batterie',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Une notification permanente reste visible tant que la surveillance est active.\n'
-                          'Si la chaussure est éteinte ou hors de portée pendant plus de 5 minutes, le service s\'arrête automatiquement pour économiser votre batterie.',
-                          style: TextStyle(fontSize: 12, height: 1.3),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-              const Divider(height: 32),
-
-              // 2. Prolonged Inactivity Reminder Category
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Text(
-                  'RAPPEL D\'INACTIVITÉ PROLONGÉE',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.1,
-                      ),
-                ),
+              SettingsBiomechanicsSection(
+                surveillanceService: widget.surveillanceService,
+                inactivityService: _inactivityService,
+                themeService: _themeService,
+                localeService: _localeService,
+                bleClient: activeBleClient,
+                isBleReady: isBleReady,
+                onOpenCalibrationDialog: () => _showCalibrationDialog(context, isBleReady),
+                onOpenLanguageSelector: () => _showLanguageSelector(context),
               ),
-
-              SwitchListTile(
-                secondary: Icon(
-                  Icons.airline_seat_recline_normal_outlined,
-                  color: _inactivityService.isEnabled
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.grey,
-                ),
-                title: const Text(
-                  'Alerte de sédentarité',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: const Text(
-                  'Vibration discrète de la chaussure après une longue période d\'immobilité',
-                ),
-                value: _inactivityService.isEnabled,
-                onChanged: (bool value) async {
-                  await _inactivityService.updateSettings(
-                    enabled: value,
-                    repeatEnabled: _inactivityService.isRepeatEnabled,
-                    thresholdMinutes: _inactivityService.thresholdMinutes,
-                    cooldownMinutes: _inactivityService.cooldownMinutes,
-                    bleClient: widget.bleClient,
-                  );
+              SettingsAccountSection(
+                authService: widget.authService,
+                onLogout: () async {
+                  await widget.authService?.logout();
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
                 },
               ),
-
-              if (_inactivityService.isEnabled) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Expanded(
-                            child: Text(
-                              'Délai avant première alerte',
-                              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primaryContainer,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              '${_inactivityService.thresholdMinutes} min',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                                color: Theme.of(context).colorScheme.onPrimaryContainer,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Slider(
-                        value: _inactivityService.thresholdMinutes.toDouble(),
-                        min: 10,
-                        max: 120,
-                        divisions: 22,
-                        label: '${_inactivityService.thresholdMinutes} min',
-                        onChanged: (double val) {
-                          _inactivityService.updateSettings(
-                            enabled: _inactivityService.isEnabled,
-                            repeatEnabled: _inactivityService.isRepeatEnabled,
-                            thresholdMinutes: val.round(),
-                            cooldownMinutes: _inactivityService.cooldownMinutes,
-                            bleClient: widget.bleClient,
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                SwitchListTile(
-                  secondary: Icon(
-                    Icons.replay_outlined,
-                    color: _inactivityService.isRepeatEnabled
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey,
-                  ),
-                  title: const Text(
-                    'Répéter les alertes',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: const Text(
-                    'Fait re-vibrer la chaussure à intervalle régulier si vous restez assis',
-                  ),
-                  value: _inactivityService.isRepeatEnabled,
-                  onChanged: (bool value) async {
-                    await _inactivityService.updateSettings(
-                      enabled: _inactivityService.isEnabled,
-                      repeatEnabled: value,
-                      thresholdMinutes: _inactivityService.thresholdMinutes,
-                      cooldownMinutes: _inactivityService.cooldownMinutes,
-                      bleClient: widget.bleClient,
-                    );
-                  },
-                ),
-                if (_inactivityService.isRepeatEnabled)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Expanded(
-                              child: Text(
-                                'Délai de répétition (Cooldown / Snooze)',
-                                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.secondaryContainer,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                '${_inactivityService.cooldownMinutes} min',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                  color: Theme.of(context).colorScheme.onSecondaryContainer,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        Slider(
-                          value: _inactivityService.cooldownMinutes.toDouble(),
-                          min: 5,
-                          max: 30,
-                          divisions: 5,
-                          label: '${_inactivityService.cooldownMinutes} min',
-                          onChanged: (double val) {
-                            _inactivityService.updateSettings(
-                              enabled: _inactivityService.isEnabled,
-                              repeatEnabled: _inactivityService.isRepeatEnabled,
-                              thresholdMinutes: _inactivityService.thresholdMinutes,
-                              cooldownMinutes: val.round(),
-                              bleClient: widget.bleClient,
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                  child: Row(
-                    children: [
-                      Icon(
-                        isBleReady ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
-                        size: 14,
-                        color: isBleReady ? Colors.green : Colors.grey,
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          isBleReady
-                              ? 'Synchronisé en direct avec la chaussure'
-                              : 'Sera synchronisé dès la prochaine connexion BLE',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isBleReady ? Colors.green.shade700 : Colors.grey.shade600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              const Divider(height: 32),
-
-              // 3. Sensor Calibration Category
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Text(
-                  'CALIBRATION DU CAPTEUR (ASSIETTE)',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.1,
-                      ),
-                ),
-              ),
-              ListTile(
-                leading: Icon(
-                  Icons.screen_rotation_outlined,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                title: const Text(
-                  'Calibration de l\'assiette (Zéro gravité)',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: const Text(
-                  'Recalibre l\'horizontalité et la compensation d\'inclinaison mécanique',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _showCalibrationDialog(context, isBleReady),
-              ),
-
-              const Divider(height: 32),
-
-              // 5. App Theme Category
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Text(
-                  'APPARENCE & THÈME',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.1,
-                      ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                child: Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(
-                      color: Theme.of(context).dividerColor.withValues(alpha: 0.2),
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Thème de l\'application',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Choisissez le mode d\'affichage clair, sombre ou automatique.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        ListenableBuilder(
-                          listenable: _themeService,
-                          builder: (context, _) {
-                            return SizedBox(
-                              width: double.infinity,
-                              child: SegmentedButton<AppThemeMode>(
-                                segments: [
-                                  ButtonSegment<AppThemeMode>(
-                                    value: AppThemeMode.system,
-                                    label: Text(l10n.themeSystem),
-                                    icon: const Icon(Icons.brightness_auto, size: 18),
-                                  ),
-                                  ButtonSegment<AppThemeMode>(
-                                    value: AppThemeMode.light,
-                                    label: Text(l10n.themeLight),
-                                    icon: const Icon(Icons.light_mode, size: 18),
-                                  ),
-                                  ButtonSegment<AppThemeMode>(
-                                    value: AppThemeMode.dark,
-                                    label: Text(l10n.themeDark),
-                                    icon: const Icon(Icons.dark_mode, size: 18),
-                                  ),
-                                ],
-                                selected: {_themeService.currentMode},
-                                onSelectionChanged: (Set<AppThemeMode> selected) {
-                                  if (selected.isNotEmpty) {
-                                    _themeService.setThemeMode(selected.first);
-                                  }
-                                },
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              // 5b. Language & Region
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Text(
-                  l10n.languageRegion,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.1,
-                      ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(
-                      color: Theme.of(context).dividerColor.withValues(alpha: 0.15),
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l10n.languageTitle,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          l10n.languageDesc,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        ListenableBuilder(
-                          listenable: _localeService,
-                          builder: (context, _) {
-                            final current = _localeService.currentLanguage;
-                            return InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: () => _showLanguageSelector(context),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Theme.of(context).dividerColor.withValues(alpha: 0.25),
-                                  ),
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .surfaceContainerHighest
-                                      .withValues(alpha: 0.3),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Text(current.flag, style: const TextStyle(fontSize: 22)),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            current.nativeName,
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.bold, fontSize: 14),
-                                          ),
-                                          Text(
-                                            current.name,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const Icon(Icons.arrow_drop_down_rounded, size: 28),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              const Divider(height: 32),
-
-              // 6. App Info section
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Text(
-                  'INFORMATIONS SYSTÈME',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.1,
-                      ),
-                ),
-              ),
-              const ListTile(
-                leading: Icon(Icons.phone_android_outlined),
-                title: Text('Application mobile'),
-                subtitle: Text('HealthKicks Mobile v0.1.0+1 (Gateway BLE-MQTT)'),
-              ),
-              ListTile(
-                leading: Icon(Icons.memory_outlined, color: isBleReady ? Colors.teal : null),
-                title: const Text('Firmware chaussure connectée (ESP32-S3)'),
-                subtitle: Text(_getFirmwareSubtitle(isBleReady)),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: _openFirmwareUpdateScreen,
+              SettingsSystemInfoSection(
+                isBleReady: isBleReady,
+                firmwareSubtitle: _getFirmwareSubtitle(isBleReady),
+                onOpenFirmwareUpdateScreen: _openFirmwareUpdateScreen,
               ),
             ],
           );
@@ -1137,4 +416,3 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 }
-
