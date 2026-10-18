@@ -2,17 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/studio_session_model.dart';
 import '../../services/audio/studio_audio_feedback_service.dart';
+import 'studio/studio_recording_gauge.dart';
 import 'studio_session_dialog.dart';
 
-/// Current lifecycle state of an active Studio recording session.
-enum StudioActiveState {
-  countdown,
-  recording,
-  transmitting,
-  success,
-  cancelled,
-  error,
-}
+export 'studio/studio_recording_gauge.dart' show StudioActiveState, StudioRecordingGauge;
 
 /// Modal dialog overlay displaying live progress of a Studio recording session.
 class StudioRecordingDialog extends StatefulWidget {
@@ -314,185 +307,15 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
   }
 
   Widget _buildStateContent(ThemeData theme) {
-    switch (_state) {
-      case StudioActiveState.countdown:
-        final remainingSteps = _totalCountdownSteps - _countdownStep + 1;
-        return Column(
-          children: [
-            Text(
-              'Préparez-vous : 3... 2... 1...',
-              style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 16),
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  width: 90,
-                  height: 90,
-                  child: CircularProgressIndicator(
-                    value: _countdownStep / _totalCountdownSteps,
-                    strokeWidth: 6,
-                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                    color: Colors.amber.shade700,
-                  ),
-                ),
-                Text(
-                  '$remainingSteps',
-                  key: const Key('countdown_step_text'),
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.amber.shade800,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'La chaussure vibre pour cadencer le départ.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ],
-        );
-
-      case StudioActiveState.recording:
-        final progress = _targetDurationSec > 0
-            ? (_elapsedRecordingSec / _targetDurationSec).clamp(0.0, 1.0)
-            : 0.0;
-        return Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: const BoxDecoration(
-                    color: Colors.redAccent,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '🔴 Enregistrement en cours...',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.redAccent.shade700,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 12,
-                backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                color: Colors.redAccent,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '${_elapsedRecordingSec.toStringAsFixed(1)}s / ${_targetDurationSec.toStringAsFixed(1)}s',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Effectuez le geste demandé jusqu\'à la fin de la barre.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ],
-        );
-
-      case StudioActiveState.transmitting:
-        return Column(
-          children: [
-            const SizedBox(
-              width: 50,
-              height: 50,
-              child: CircularProgressIndicator(strokeWidth: 4),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '⚡ Synchronisation des données biomécaniques...',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              _samplesCollected > 0
-                  ? 'Transfert de $_samplesCollected trames haute fréquence...'
-                  : 'Réception des trames haute fréquence via BLE...',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ],
-        );
-
-      case StudioActiveState.success:
-        return Column(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.green, size: 54),
-            const SizedBox(height: 12),
-            Text(
-              '✅ Capture terminée avec succès !',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Colors.green.shade800,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '$_samplesCollected échantillons synchronisés.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ],
-        );
-
-      case StudioActiveState.cancelled:
-        return Column(
-          children: [
-            const Icon(Icons.cancel_outlined, color: Colors.orange, size: 50),
-            const SizedBox(height: 12),
-            Text(
-              'Session annulée',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Colors.orange.shade800,
-              ),
-            ),
-          ],
-        );
-
-      case StudioActiveState.error:
-        return Column(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.redAccent, size: 50),
-            const SizedBox(height: 12),
-            Text(
-              'Erreur Studio',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Colors.redAccent.shade700,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              _errorMessage ?? 'Une erreur est survenue lors de la capture.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ],
-        );
-    }
+    return StudioRecordingGauge(
+      state: _state,
+      countdownStep: _countdownStep,
+      totalCountdownSteps: _totalCountdownSteps,
+      elapsedRecordingSec: _elapsedRecordingSec,
+      targetDurationSec: _targetDurationSec,
+      samplesCollected: _samplesCollected,
+      errorMessage: _errorMessage,
+    );
   }
 
   List<Widget> _buildActions(ThemeData theme) {
