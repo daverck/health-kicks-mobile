@@ -40,6 +40,14 @@ import '../widgets/studio_session_dialog.dart';
 import '../widgets/studio_recording_dialog.dart';
 import '../widgets/gateway_status_row.dart';
 
+/// Primary dashboard screen orchestrating the BLE-MQTT mobile edge gateway.
+///
+/// Responsibilities:
+/// - **BLE Footwear Connection**: Scans, auto-reconnects, and consumes GATT telemetry from the ESP32-S3 shoe.
+/// - **Cloud MQTT Synchronization**: Relays sensor events and IMU frames over AWS IoT Core WebSockets SigV4.
+/// - **Studio & Calibration**: Triggers IMU calibration and biomechanical motion capture sessions.
+/// - **Step Counter & Odometer**: Computes daily steps via differential monotonic odometer storage.
+/// - **Background Surveillance**: Coordinates foreground/background life cycle state across app transitions.
 class GatewayDashboardScreen extends StatefulWidget {
   final AuthService? authService;
   final ThemeService? themeService;

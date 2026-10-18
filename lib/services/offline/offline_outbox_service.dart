@@ -3,15 +3,34 @@ import 'dart:convert';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
-/// Single item pending in the offline queue.
+/// Single item pending in the persistent offline queue.
+///
+/// Encapsulates the HTTP target, method, serialized payload, optional headers,
+/// retry counters, and the last failure message for telemetry or REST payloads
+/// buffered while the mobile device is offline or unreachable.
 class OutboxItem {
+  /// Unique auto-increment primary key in the SQLite outbox table.
   final int id;
+
+  /// Target REST endpoint or route (e.g. `/api/v1/steps/snapshot`).
   final String endpoint;
-  final String method; // POST, PUT, PATCH
+
+  /// HTTP verb (e.g. `POST`, `PUT`, `PATCH`).
+  final String method;
+
+  /// Serialized JSON string of the request body.
   final String payloadJson;
+
+  /// Optional HTTP headers attached to the payload (e.g. idempotency keys, auth headers).
   final Map<String, String>? headers;
+
+  /// Timestamp in UTC when the outbox record was enqueued.
   final DateTime createdAt;
+
+  /// Number of unsuccessful dispatch attempts made so far.
   final int retryCount;
+
+  /// Error message or exception string from the most recent failed dispatch attempt.
   final String? lastError;
 
   const OutboxItem({
@@ -25,6 +44,8 @@ class OutboxItem {
     this.lastError,
   });
 
+  /// Decodes and returns [payloadJson] as a dynamic map.
+  /// Returns an empty map if JSON parsing fails.
   Map<String, dynamic> get payload {
     try {
       return jsonDecode(payloadJson) as Map<String, dynamic>;
@@ -33,6 +54,7 @@ class OutboxItem {
     }
   }
 
+  /// Deserializes an [OutboxItem] instance from an SQLite row map.
   factory OutboxItem.fromMap(Map<String, dynamic> map) {
     Map<String, String>? parsedHeaders;
     if (map['headers'] != null && map['headers'] is String && (map['headers'] as String).isNotEmpty) {
@@ -55,9 +77,22 @@ class OutboxItem {
   }
 }
 
-/// Persistent SQLite FIFO queue for telemetry, events and API payloads queued while offline.
+/// Persistent SQLite FIFO queue for telemetry, events, and API payloads queued while offline.
+///
+/// ### Architecture & Guarantees
+/// - **At-Least-Once Delivery**: Items remain in SQLite until explicitly confirmed as dispatched
+///   via [markCompleted] or [processQueue].
+/// - **Poison Pill Mitigation**: Items exceeding [maxRetryThreshold] (5 attempts) are automatically
+///   excluded from pending batch queries to prevent head-of-line blocking.
+/// - **Automated Expiry Pruning**: [pruneExpired] removes stale records older than the specified
+///   retention period (default 7 days) and poisoned records.
+/// - **Thread-Safe & Testable**: Supports both persistent disk SQLite files (`healthkicks_outbox.db`)
+///   and in-memory databases (`inMemoryDbName`) for hermetic unit testing.
 class OfflineOutboxService {
+  /// Name of the SQLite table storing outbox messages.
   static const String tableName = 'offline_outbox_queue';
+
+  /// Maximum retry attempts before an item is marked poisoned and excluded from active queries.
   static const int maxRetryThreshold = 5;
 
   Database? _db;
