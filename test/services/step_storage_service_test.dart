@@ -319,5 +319,60 @@ void main() {
       expect(todayRecord.runSteps, equals(5));
       expect(todayRecord.stairsSteps, equals(5));
     });
+
+    test('recordOdometerSnapshot accumulates hourly steps and provides them in getUnsyncedDays', () async {
+      final hour14 = DateTime(2026, 10, 19, 14, 30);
+      final hour15 = DateTime(2026, 10, 19, 15, 15);
+
+      // Snapshot at 14:30
+      await storageService.recordOdometerSnapshot(
+        deviceId: 'HK-HOURLY',
+        date: hour14,
+        rawModel: StepDataModel(
+          totalSteps: 100,
+          walkSteps: 70,
+          runSteps: 30,
+          stairsSteps: 0,
+          unclassifiedSteps: 0,
+          cadenceSpm: 100,
+          timestamp: hour14,
+        ),
+      );
+
+      // Snapshot at 15:15
+      await storageService.recordOdometerSnapshot(
+        deviceId: 'HK-HOURLY',
+        date: hour15,
+        rawModel: StepDataModel(
+          totalSteps: 150,
+          walkSteps: 110,
+          runSteps: 40,
+          stairsSteps: 0,
+          unclassifiedSteps: 0,
+          cadenceSpm: 105,
+          timestamp: hour15,
+        ),
+      );
+
+      // Check getHourlySteps
+      final hourly = await storageService.getHourlySteps(hour14);
+      expect(hourly.length, equals(4)); // 2 for hour 14 (walk 70, run 30), 2 for hour 15 (walk 40, run 10)
+
+      final h14Walk = hourly.firstWhere((r) => r['hour'] == 14 && r['activity_type'] == 'walk');
+      expect(h14Walk['step_count'], equals(70));
+      final h14Run = hourly.firstWhere((r) => r['hour'] == 14 && r['activity_type'] == 'run');
+      expect(h14Run['step_count'], equals(30));
+
+      final h15Walk = hourly.firstWhere((r) => r['hour'] == 15 && r['activity_type'] == 'walk');
+      expect(h15Walk['step_count'], equals(40));
+      final h15Run = hourly.firstWhere((r) => r['hour'] == 15 && r['activity_type'] == 'run');
+      expect(h15Run['step_count'], equals(10));
+
+      // Check getUnsyncedDays includes hourly_steps
+      final unsynced = await storageService.getUnsyncedDays();
+      expect(unsynced.length, equals(1));
+      final hourlyList = unsynced.first['hourly_steps'] as List<Map<String, dynamic>>;
+      expect(hourlyList.length, equals(4));
+    });
   });
 }

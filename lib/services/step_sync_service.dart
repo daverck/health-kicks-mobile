@@ -206,11 +206,13 @@ class StepSyncService {
       for (final dayData in unsyncedDays) {
         final date = dayData['date'] as String;
         final activities = dayData['activities'] as List<Map<String, dynamic>>;
+        final hourlySteps = dayData['hourly_steps'] as List<Map<String, dynamic>>?;
 
-        final payload = {
+        final payload = <String, dynamic>{
           'device_id': deviceId,
           'date': date,
           'activities': activities,
+          if (hourlySteps != null && hourlySteps.isNotEmpty) 'hourly_steps': hourlySteps,
         };
 
         final uri = Uri.parse('$_backendBaseUrl/api/v1/steps/sync');

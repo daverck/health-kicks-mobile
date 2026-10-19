@@ -47,7 +47,9 @@ class DailyStepRecord {
 /// Service managing offline persistent SQLite storage for daily step counts.
 class StepStorageService {
   static const String tableName = 'local_daily_steps';
+  static const String tableNameHourly = 'local_hourly_steps';
   static const String columnDate = 'date';
+  static const String columnHour = 'hour';
   static const String columnActivityType = 'activity_type';
   static const String columnStepCount = 'step_count';
   static const String columnSyncStatus = 'sync_status';
@@ -100,6 +102,18 @@ class StepStorageService {
       );
     ''');
 
+    // Ensure local_hourly_steps exists
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $tableNameHourly (
+        $columnDate TEXT NOT NULL,
+        $columnHour INTEGER NOT NULL,
+        $columnActivityType TEXT NOT NULL,
+        $columnStepCount INTEGER NOT NULL,
+        $columnSyncStatus INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY ($columnDate, $columnHour, $columnActivityType)
+      );
+    ''');
+
     return db;
   }
 
@@ -111,6 +125,17 @@ class StepStorageService {
         $columnStepCount INTEGER NOT NULL,
         $columnSyncStatus INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY ($columnDate, $columnActivityType)
+      );
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $tableNameHourly (
+        $columnDate TEXT NOT NULL,
+        $columnHour INTEGER NOT NULL,
+        $columnActivityType TEXT NOT NULL,
+        $columnStepCount INTEGER NOT NULL,
+        $columnSyncStatus INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY ($columnDate, $columnHour, $columnActivityType)
       );
     ''');
 
@@ -222,7 +247,8 @@ class StepStorageService {
         }
       }
 
-      // Apply deltas to local_daily_steps
+      // Apply deltas to local_daily_steps and local_hourly_steps
+      final hour = date.hour;
       for (final entry in deltas.entries) {
         final delta = entry.value;
         if (delta > 0) {
@@ -253,6 +279,38 @@ class StepStorageService {
               },
               where: '$columnDate = ? AND $columnActivityType = ?',
               whereArgs: [dateStr, entry.key],
+            );
+          }
+
+          // Accumulate into local_hourly_steps
+          final existingHourly = await txn.query(
+            tableNameHourly,
+            columns: [columnStepCount, columnSyncStatus],
+            where: '$columnDate = ? AND $columnHour = ? AND $columnActivityType = ?',
+            whereArgs: [dateStr, hour, entry.key],
+          );
+
+          if (existingHourly.isEmpty) {
+            await txn.insert(
+              tableNameHourly,
+              {
+                columnDate: dateStr,
+                columnHour: hour,
+                columnActivityType: entry.key,
+                columnStepCount: delta,
+                columnSyncStatus: 0,
+              },
+            );
+          } else {
+            final currentHourlyCount = existingHourly.first[columnStepCount] as int;
+            await txn.update(
+              tableNameHourly,
+              {
+                columnStepCount: currentHourlyCount + delta,
+                columnSyncStatus: 0,
+              },
+              where: '$columnDate = ? AND $columnHour = ? AND $columnActivityType = ?',
+              whereArgs: [dateStr, hour, entry.key],
             );
           }
         }
@@ -381,15 +439,39 @@ class StepStorageService {
       });
     }
 
+    final dates = grouped.keys.toList();
+    final placeholders = List.filled(dates.length, '?').join(',');
+    final hourlyRows = await db.query(
+      tableNameHourly,
+      where: '$columnDate IN ($placeholders)',
+      whereArgs: dates,
+      orderBy: '$columnDate ASC, $columnHour ASC, $columnActivityType ASC',
+    );
+
+    final Map<String, List<Map<String, dynamic>>> hourlyByDate = {};
+    for (final row in hourlyRows) {
+      final date = row[columnDate] as String;
+      hourlyByDate.putIfAbsent(date, () => []).add({
+        'hour': row[columnHour] as int,
+        'activity_type': row[columnActivityType] as String,
+        'step_count': row[columnStepCount] as int,
+      });
+    }
+
     return grouped.entries.map((e) {
-      return {
+      final item = <String, dynamic>{
         'date': e.key,
         'activities': e.value,
       };
+      final hourly = hourlyByDate[e.key];
+      if (hourly != null && hourly.isNotEmpty) {
+        item['hourly_steps'] = hourly;
+      }
+      return item;
     }).toList();
   }
 
-  /// Marks the specified dates as synced (sync_status = 1).
+  /// Marks the specified dates as synced (sync_status = 1) in both daily and hourly tables.
   Future<void> markDaysSynced(List<String> dates) async {
     if (dates.isEmpty) return;
     final db = await database;
@@ -397,6 +479,12 @@ class StepStorageService {
     final placeholders = List.filled(dates.length, '?').join(',');
     await db.update(
       tableName,
+      {columnSyncStatus: 1},
+      where: '$columnDate IN ($placeholders)',
+      whereArgs: dates,
+    );
+    await db.update(
+      tableNameHourly,
       {columnSyncStatus: 1},
       where: '$columnDate IN ($placeholders)',
       whereArgs: dates,
@@ -484,10 +572,28 @@ class StepStorageService {
     final cutoffDate = DateTime.now().subtract(Duration(days: retentionDays));
     final cutoffDateStr = _formatDate(cutoffDate);
 
+    await db.delete(
+      tableNameHourly,
+      where: '$columnDate < ? AND $columnSyncStatus = 1',
+      whereArgs: [cutoffDateStr],
+    );
+
     return await db.delete(
       tableName,
       where: '$columnDate < ? AND $columnSyncStatus = 1',
       whereArgs: [cutoffDateStr],
+    );
+  }
+
+  /// Retrieves fine-grained hourly steps for a given date.
+  Future<List<Map<String, dynamic>>> getHourlySteps(DateTime date) async {
+    final db = await database;
+    final dateStr = _formatDate(date);
+    return await db.query(
+      tableNameHourly,
+      where: '$columnDate = ?',
+      whereArgs: [dateStr],
+      orderBy: '$columnHour ASC, $columnActivityType ASC',
     );
   }
 
