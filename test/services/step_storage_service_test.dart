@@ -46,8 +46,8 @@ void main() {
       final unsynced = await storageService.getUnsyncedDays();
       expect(unsynced.length, equals(1));
       expect(unsynced.first['date'], equals('2026-09-22'));
-      final acts = unsynced.first['activities'] as List<Map<String, dynamic>>;
-      expect(acts.length, equals(4));
+      final hourly = unsynced.first['hourly_steps'] as List<Map<String, dynamic>>;
+      expect(hourly.length, equals(4));
     });
 
     test('markDaysSynced updates sync status to true', () async {

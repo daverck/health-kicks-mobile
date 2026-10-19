@@ -66,7 +66,7 @@ void main() {
           final body = jsonDecode(request.body) as Map<String, dynamic>;
           expect(body['device_id'], equals('HK-2'));
           expect(body['date'], equals('2026-09-22'));
-          expect((body['activities'] as List).length, equals(4));
+          expect((body['hourly_steps'] as List).length, equals(4));
 
           return http.Response(jsonEncode({'status': 'success', 'synced': 1}), 200);
         }

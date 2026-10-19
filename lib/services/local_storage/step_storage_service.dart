@@ -367,6 +367,7 @@ class StepStorageService {
   Future<void> recordStepSnapshot(DateTime date, StepDataModel model) async {
     final db = await database;
     final dateStr = _formatDate(date);
+    final hour = date.hour;
 
     final activities = <String, int>{
       'walk': model.walkSteps,
@@ -412,6 +413,37 @@ class StepStorageService {
             // Unchanged but still unsynced: keep 0
           }
         }
+
+        // Also record/update into tableNameHourly for date.hour
+        final existingHourly = await txn.query(
+          tableNameHourly,
+          columns: [columnStepCount, columnSyncStatus],
+          where: '$columnDate = ? AND $columnHour = ? AND $columnActivityType = ?',
+          whereArgs: [dateStr, hour, entry.key],
+        );
+
+        if (existingHourly.isEmpty) {
+          await txn.insert(
+            tableNameHourly,
+            {
+              columnDate: dateStr,
+              columnHour: hour,
+              columnActivityType: entry.key,
+              columnStepCount: entry.value,
+              columnSyncStatus: 0,
+            },
+          );
+        } else {
+          await txn.update(
+            tableNameHourly,
+            {
+              columnStepCount: entry.value,
+              columnSyncStatus: 0,
+            },
+            where: '$columnDate = ? AND $columnHour = ? AND $columnActivityType = ?',
+            whereArgs: [dateStr, hour, entry.key],
+          );
+        }
       }
     });
   }
@@ -419,27 +451,27 @@ class StepStorageService {
   /// Retrieves list of days with unsynced activities formatted for backend sync.
   Future<List<Map<String, dynamic>>> getUnsyncedDays() async {
     final db = await database;
-    final rows = await db.query(
+    final rowsDaily = await db.query(
       tableName,
+      columns: [columnDate],
       where: '$columnSyncStatus = 0',
-      orderBy: '$columnDate ASC, $columnActivityType ASC',
+      distinct: true,
+    );
+    final rowsHourly = await db.query(
+      tableNameHourly,
+      columns: [columnDate],
+      where: '$columnSyncStatus = 0',
+      distinct: true,
     );
 
-    if (rows.isEmpty) return [];
+    final Set<String> datesSet = {
+      ...rowsDaily.map((r) => r[columnDate] as String),
+      ...rowsHourly.map((r) => r[columnDate] as String),
+    };
 
-    final Map<String, List<Map<String, dynamic>>> grouped = {};
-    for (final row in rows) {
-      final date = row[columnDate] as String;
-      final activity = row[columnActivityType] as String;
-      final count = row[columnStepCount] as int;
+    if (datesSet.isEmpty) return [];
 
-      grouped.putIfAbsent(date, () => []).add({
-        'activity_type': activity,
-        'step_count': count,
-      });
-    }
-
-    final dates = grouped.keys.toList();
+    final dates = datesSet.toList()..sort();
     final placeholders = List.filled(dates.length, '?').join(',');
     final hourlyRows = await db.query(
       tableNameHourly,
@@ -458,16 +490,11 @@ class StepStorageService {
       });
     }
 
-    return grouped.entries.map((e) {
-      final item = <String, dynamic>{
-        'date': e.key,
-        'activities': e.value,
+    return dates.map((d) {
+      return <String, dynamic>{
+        'date': d,
+        'hourly_steps': hourlyByDate[d] ?? <Map<String, dynamic>>[],
       };
-      final hourly = hourlyByDate[e.key];
-      if (hourly != null && hourly.isNotEmpty) {
-        item['hourly_steps'] = hourly;
-      }
-      return item;
     }).toList();
   }
 
