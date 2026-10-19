@@ -118,6 +118,11 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
     if (!mounted) return;
 
     if (status.startsWith('COUNTDOWN')) {
+      if (_state == StudioActiveState.recording ||
+          _state == StudioActiveState.transmitting ||
+          _state == StudioActiveState.success) {
+        return;
+      }
       final parts = status.split(' ');
       if (parts.length >= 2) {
         final stepParts = parts[1].split('/');

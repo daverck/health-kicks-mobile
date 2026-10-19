@@ -795,8 +795,29 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           final isConnected = _bleClient != null &&
               (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected) &&
               _bleClient!.hasStudioControl;
-          if (isConnected) {
-            _showActiveRecordingDialog(label: label, durationSec: durationSec);
+          if (!isConnected) {
+            _addLog('STUDIO', 'Chaussure non connectée ou service Studio indisponible.', color: Colors.red);
+            return;
+          }
+          if (mounted) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Row(
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    ),
+                    SizedBox(width: 12),
+                    Text('Initialisation de la session Studio...'),
+                  ],
+                ),
+                duration: Duration(seconds: 4),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
           }
           await _triggerStudioSession(label: label, durationSec: durationSec);
         },
@@ -810,6 +831,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
   }) {
     if (_isRecordingDialogVisible || !mounted || _bleClient == null) return;
     _isRecordingDialogVisible = true;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
     showDialog<void>(
       context: context,
@@ -895,7 +917,13 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         );
       }
       _addLog('STUDIO', 'Ordre START envoyé à la chaussure. En attente du flux burst...', color: Colors.indigo);
+      if (!_isRecordingDialogVisible && mounted) {
+        _showActiveRecordingDialog(label: label, durationSec: durationSec);
+      }
     } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      }
       _addLog('STUDIO', 'Échec lancement session Studio : $e', color: Colors.red);
     }
   }
