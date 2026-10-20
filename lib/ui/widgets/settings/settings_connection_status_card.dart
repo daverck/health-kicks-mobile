@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../../services/ble/ble_connection_manager.dart';
-import '../../../services/ble/ble_footwear_client.dart';
 
 /// Card widget visualizing BLE footwear connection and Cloud MQTT broker status.
 class SettingsConnectionStatusCard extends StatelessWidget {
@@ -10,10 +9,9 @@ class SettingsConnectionStatusCard extends StatelessWidget {
   final bool isBleConnecting;
   final String deviceName;
   final int mtu;
-  final BleFootwearClient? bleClient;
   final VoidCallback? onStartBleScan;
   final VoidCallback? onDisconnectBle;
-  final Future<void> Function()? onCalibrateSensor;
+  final VoidCallback? onOpenCalibration;
   final bool isMqttConnected;
   final VoidCallback? onReconnectMqtt;
 
@@ -25,10 +23,9 @@ class SettingsConnectionStatusCard extends StatelessWidget {
     required this.isBleConnecting,
     required this.deviceName,
     required this.mtu,
-    this.bleClient,
     this.onStartBleScan,
     this.onDisconnectBle,
-    this.onCalibrateSensor,
+    this.onOpenCalibration,
     required this.isMqttConnected,
     this.onReconnectMqtt,
   });
@@ -154,41 +151,17 @@ class SettingsConnectionStatusCard extends StatelessWidget {
                     ],
                   ],
                 ),
-                if (isBleReady && (bleClient != null || onCalibrateSensor != null)) ...[
+                if (isBleReady && onOpenCalibration != null) ...[
                   const SizedBox(height: 8),
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       icon: const Icon(Icons.straighten, size: 16),
-                      label: const Text("Étalonner l'assiette du capteur (4s)"),
+                      label: const Text("Étalonner l'assiette du capteur"),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: theme.colorScheme.primary,
                       ),
-                      onPressed: () async {
-                        try {
-                          if (bleClient != null) {
-                            await bleClient!.sendCalibrateZeroCommand();
-                          } else if (onCalibrateSensor != null) {
-                            await onCalibrateSensor!();
-                          }
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  "Étalonnage initié. Gardez la chaussure immobile à plat pendant 4 secondes pour ajuster la baseline à 0.",
-                                ),
-                                duration: Duration(seconds: 4),
-                              ),
-                            );
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("Échec de l'étalonnage: $e")),
-                            );
-                          }
-                        }
-                      },
+                      onPressed: onOpenCalibration,
                     ),
                   ),
                 ],
@@ -281,4 +254,3 @@ class SettingsConnectionStatusCard extends StatelessWidget {
     );
   }
 }
-

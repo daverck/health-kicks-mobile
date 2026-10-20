@@ -393,7 +393,7 @@ void main() {
       expect(themeService.currentMode, equals(AppThemeMode.system));
     });
 
-    testWidgets('Shows calibration button when disconnected device reconnects', (tester) async {
+    testWidgets('Bluetooth calibration button opens the progress dialog', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 2.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -422,17 +422,27 @@ void main() {
       await tester.pumpAndSettle();
 
       // Initially disconnected: calibration button should not be present in Bluetooth card
-      expect(find.text("Étalonner l'assiette du capteur (4s)"), findsNothing);
+      expect(find.text("Étalonner l'assiette du capteur"), findsNothing);
 
       // Reconnect via bleManager
       bleManager.updateStatusForTesting(BleConnectionStatus.ready);
       await tester.pumpAndSettle();
 
       // Now connected: calibration button appears
-      expect(find.text("Étalonner l'assiette du capteur (4s)"), findsOneWidget);
+      expect(find.text("Étalonner l'assiette du capteur"), findsOneWidget);
 
-      await tester.tap(find.text("Étalonner l'assiette du capteur (4s)"));
+      await tester.tap(find.text("Étalonner l'assiette du capteur"));
+      await tester.pumpAndSettle();
+      expect(find.text('Calibration de l\'Assiette'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Démarrer'));
+      await tester.pump();
       expect(calibrated, isTrue);
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Calibration réussie !'), findsOneWidget);
     });
 
     testWidgets('Renders LANGUE & RÉGION category and selects a new language', (tester) async {

@@ -380,7 +380,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 isBleConnecting: isBleConnecting,
                 deviceName: currentDeviceName,
                 mtu: currentMtu,
-                bleClient: activeBleClient,
                 onStartBleScan: widget.onStartBleScan != null
                     ? () {
                         setState(() => _isLocallyDisconnected = false);
@@ -388,7 +387,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       }
                     : null,
                 onDisconnectBle: onDisconnect,
-                onCalibrateSensor: widget.onCalibrateSensor,
+                onOpenCalibration: isBleReady && (activeBleClient != null || widget.onCalibrateSensor != null)
+                    ? () => _showCalibrationDialog(context, isBleReady)
+                    : null,
                 isMqttConnected: effectiveMqttConnected,
                 onReconnectMqtt: widget.onReconnectMqtt,
               ),
