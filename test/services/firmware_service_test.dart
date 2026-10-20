@@ -202,6 +202,34 @@ void main() {
       expect(await service.getLocalInstalledVersion(), equals('v1.2.1-esp32s3'));
     });
 
+    test('Firmware download cache is separate from installed firmware metadata', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final service = FirmwareService(prefs: prefs);
+      final binary = Uint8List.fromList([1, 2, 3, 4]);
+
+      service.cacheFirmwareDownload(
+        CachedFirmwareDownload(
+          bytes: binary,
+          fileName: 'firmware.bin',
+          version: 'v1.2.1-esp32s3',
+          sha256: 'a' * 64,
+          isSha256Valid: true,
+        ),
+      );
+
+      binary[0] = 99;
+      final restored = service.cachedFirmwareDownload;
+      expect(restored, isNotNull);
+      expect(restored!.bytes, orderedEquals([1, 2, 3, 4]));
+      expect(restored.version, equals('v1.2.1-esp32s3'));
+      expect(await service.getLocalInstalledVersion(), isNull);
+      expect(await service.getLocalInstalledDate(), isNull);
+
+      service.clearCachedFirmwareDownload();
+      expect(service.cachedFirmwareDownload, isNull);
+    });
+
     test('fetchLatestRelease parses REST API response successfully', () async {
       final mockClient = MockClient((request) async {
         if (request.url.path.endsWith('/api/v1/firmware/latest')) {
@@ -235,4 +263,3 @@ void main() {
     });
   });
 }
-

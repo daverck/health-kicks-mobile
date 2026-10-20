@@ -24,6 +24,22 @@ class DeviceFirmwareInfo {
   });
 }
 
+class CachedFirmwareDownload {
+  final Uint8List bytes;
+  final String fileName;
+  final String version;
+  final String sha256;
+  final bool isSha256Valid;
+
+  const CachedFirmwareDownload({
+    required this.bytes,
+    required this.fileName,
+    required this.version,
+    required this.sha256,
+    required this.isSha256Valid,
+  });
+}
+
 /// Service managing firmware release discovery, date verification, and SHA-256 integrity validation.
 class FirmwareService {
   static const String keyInstalledDate = 'hk_installed_firmware_date';
@@ -31,12 +47,39 @@ class FirmwareService {
 
   final http.Client _httpClient;
   final SharedPreferences? _prefs;
+  CachedFirmwareDownload? _cachedFirmwareDownload;
 
   FirmwareService({
     http.Client? httpClient,
     SharedPreferences? prefs,
   })  : _httpClient = httpClient ?? http.Client(),
         _prefs = prefs;
+
+  CachedFirmwareDownload? get cachedFirmwareDownload {
+    final cached = _cachedFirmwareDownload;
+    if (cached == null) return null;
+    return CachedFirmwareDownload(
+      bytes: Uint8List.fromList(cached.bytes),
+      fileName: cached.fileName,
+      version: cached.version,
+      sha256: cached.sha256,
+      isSha256Valid: cached.isSha256Valid,
+    );
+  }
+
+  void cacheFirmwareDownload(CachedFirmwareDownload download) {
+    _cachedFirmwareDownload = CachedFirmwareDownload(
+      bytes: Uint8List.fromList(download.bytes),
+      fileName: download.fileName,
+      version: download.version,
+      sha256: download.sha256,
+      isSha256Valid: download.isSha256Valid,
+    );
+  }
+
+  void clearCachedFirmwareDownload() {
+    _cachedFirmwareDownload = null;
+  }
 
   /// Fetches the latest published firmware metadata from backend REST API
   /// or falls back to an HTTP HEAD request against the direct S3 URL.
@@ -270,4 +313,3 @@ class FirmwareService {
     return sha256.convert(binaryBytes).toString().toLowerCase();
   }
 }
-

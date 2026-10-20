@@ -81,6 +81,15 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
     _firmwareService = widget.firmwareService ?? FirmwareService();
     _installedFirmwareVersion = widget.currentFirmwareVersion;
 
+    final cachedDownload = _firmwareService.cachedFirmwareDownload;
+    if (cachedDownload != null) {
+      _selectedFirmwareBytes = cachedDownload.bytes;
+      _selectedFileName = cachedDownload.fileName;
+      _targetFirmwareVersion = cachedDownload.version;
+      _computedSha256 = cachedDownload.sha256;
+      _isSha256Valid = cachedDownload.isSha256Valid;
+    }
+
     _urlController = TextEditingController(
       text: FirmwareUpdateScreen.defaultFirmwareUrl,
     );
@@ -165,7 +174,9 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
 
       setState(() {
         _cloudRelease = release;
-        _targetFirmwareVersion = release.version;
+        if (_selectedFirmwareBytes == null) {
+          _targetFirmwareVersion = release.version;
+        }
         if (release.downloadUrl.isNotEmpty) {
           _urlController.text = release.downloadUrl;
         }
@@ -187,10 +198,15 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
       installedDate: now,
       version: _targetFirmwareVersion,
     );
+    _firmwareService.clearCachedFirmwareDownload();
     if (mounted) {
       setState(() {
         _installedFirmwareVersion = _targetFirmwareVersion;
         _installedFirmwareDate = now;
+        _selectedFirmwareBytes = null;
+        _selectedFileName = null;
+        _computedSha256 = null;
+        _isSha256Valid = null;
       });
     }
 
@@ -341,9 +357,18 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
         }
 
         final fileName = url.split('/').last.split('?').first;
+        final download = CachedFirmwareDownload(
+          bytes: downloadedBytes,
+          fileName: fileName.isNotEmpty ? fileName : 'firmware.bin',
+          version: _cloudRelease?.version ?? _targetFirmwareVersion,
+          sha256: actualHash,
+          isSha256Valid: isValid,
+        );
+        _firmwareService.cacheFirmwareDownload(download);
         setState(() {
-          _selectedFirmwareBytes = downloadedBytes;
-          _selectedFileName = fileName.isNotEmpty ? fileName : 'firmware.bin';
+          _selectedFirmwareBytes = download.bytes;
+          _selectedFileName = download.fileName;
+          _targetFirmwareVersion = download.version;
           _computedSha256 = actualHash;
           _isSha256Valid = isValid;
           _isDownloading = false;
@@ -470,6 +495,7 @@ class _FirmwareUpdateScreenState extends State<FirmwareUpdateScreen> {
             computedSha256: _computedSha256,
             isSha256Valid: _isSha256Valid,
             onClearFile: () {
+              _firmwareService.clearCachedFirmwareDownload();
               setState(() {
                 _selectedFirmwareBytes = null;
                 _selectedFileName = null;

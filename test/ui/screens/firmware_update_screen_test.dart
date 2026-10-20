@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/models/firmware_release_model.dart';
@@ -124,6 +126,34 @@ void main() {
 
       // Verify up-to-date badge
       expect(find.textContaining('Votre firmware est à jour'), findsOneWidget);
+    });
+
+    testWidgets('Restores downloaded firmware without treating it as installed', (WidgetTester tester) async {
+      final mockFirmwareService = MockFirmwareService(stubIsNewer: true);
+      mockFirmwareService.cacheFirmwareDownload(
+        CachedFirmwareDownload(
+          bytes: Uint8List.fromList([1, 2, 3]),
+          fileName: 'firmware.bin',
+          version: 'v1.2.1-esp32s3',
+          sha256: 'a' * 64,
+          isSha256Valid: true,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: FirmwareUpdateScreen(
+            currentFirmwareVersion: 'v1.2.0-esp32s3',
+            firmwareService: mockFirmwareService,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('firmware.bin'), findsOneWidget);
+      expect(find.textContaining('Cible: v1.2.1-esp32s3'), findsOneWidget);
+      expect(find.text('Version installée : v1.2.0-esp32s3'), findsOneWidget);
+      expect(find.textContaining('Nouvelle version disponible'), findsOneWidget);
     });
 
     testWidgets('URL field is pre-filled with official default AWS S3 firmware URL', (WidgetTester tester) async {
