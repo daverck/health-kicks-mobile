@@ -40,11 +40,9 @@ class HealthConnectService extends ChangeNotifier {
 
   static const List<HealthDataType> _dataTypes = [
     HealthDataType.STEPS,
-    HealthDataType.DISTANCE_DELTA,
   ];
 
   static const List<HealthDataAccess> _permissions = [
-    HealthDataAccess.WRITE,
     HealthDataAccess.WRITE,
   ];
 
