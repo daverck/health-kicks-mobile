@@ -84,6 +84,7 @@ class GatewayDashboardController extends ChangeNotifier {
 
   // Getters
   BleConnectionStatus get bleStatus => _bleStatus;
+  Stream<BleConnectionStatus>? get bleStatusStream => _bleManager?.statusStream;
   BluetoothDevice? get connectedDevice => _connectedDevice;
   int get mtu => _mtu;
   bool get isMqttConnected => _mqttConnected;

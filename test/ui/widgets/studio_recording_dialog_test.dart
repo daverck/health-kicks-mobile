@@ -4,20 +4,24 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/models/studio_session_model.dart';
 import 'package:healthkicks_mobile/services/audio/studio_audio_feedback_service.dart';
 import 'package:healthkicks_mobile/ui/widgets/studio_recording_dialog.dart';
+import 'package:healthkicks_mobile/services/ble/ble_connection_manager.dart';
 
 void main() {
   group('StudioRecordingDialog Widget Tests', () {
     late StreamController<String> statusController;
     late StreamController<StudioSessionModel> sessionSavedController;
+    late StreamController<BleConnectionStatus> bleStatusController;
 
     setUp(() {
       statusController = StreamController<String>.broadcast();
       sessionSavedController = StreamController<StudioSessionModel>.broadcast();
+      bleStatusController = StreamController<BleConnectionStatus>.broadcast();
     });
 
     tearDown(() {
       statusController.close();
       sessionSavedController.close();
+      bleStatusController.close();
     });
 
     testWidgets('shows countdown step and badge on COUNTDOWN events', (WidgetTester tester) async {
@@ -347,6 +351,100 @@ void main() {
 
       statusController.add('CANCELLED');
       await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('displays error and enables close button when BLE disconnects during session', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StudioRecordingDialog(
+              label: 'walk',
+              durationSec: 5.0,
+              studioStatusStream: statusController.stream,
+              sessionSavedStream: sessionSavedController.stream,
+              connectionStatusStream: bleStatusController.stream,
+            ),
+          ),
+        ),
+      );
+
+      // Start recording
+      statusController.add('RECORDING 5.0');
+      await tester.pump();
+      expect(find.text('🔴 Enregistrement en cours...'), findsOneWidget);
+
+      // BLE disconnects unexpectedly
+      bleStatusController.add(BleConnectionStatus.disconnected);
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.text('Erreur Studio'), findsOneWidget);
+      expect(find.textContaining('Connexion Bluetooth avec la chaussure interrompue.'), findsOneWidget);
+      expect(find.text('Fermer'), findsOneWidget);
+    });
+
+    testWidgets('watchdog timer triggers error if recording completes without receiving FINISHED', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StudioRecordingDialog(
+              label: 'walk',
+              durationSec: 5.0,
+              studioStatusStream: statusController.stream,
+              sessionSavedStream: sessionSavedController.stream,
+              connectionStatusStream: bleStatusController.stream,
+            ),
+          ),
+        ),
+      );
+
+      statusController.add('RECORDING 5.0');
+      await tester.pump();
+
+      // Advance durationSec (5.0s) + 6.0s = 11s watchdog timeout
+      await tester.pump(const Duration(seconds: 12));
+
+      expect(find.text('Erreur Studio'), findsOneWidget);
+      expect(find.textContaining("Délai de capture dépassé"), findsOneWidget);
+      expect(find.text('Fermer'), findsOneWidget);
+    });
+
+    testWidgets('onCancel dismisses dialog gracefully even if cancel callback throws or times out', (WidgetTester tester) async {
+      bool dialogPopped = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () {
+                showDialog<void>(
+                  context: context,
+                  builder: (_) => StudioRecordingDialog(
+                    label: 'walk',
+                    durationSec: 5.0,
+                    studioStatusStream: statusController.stream,
+                    sessionSavedStream: sessionSavedController.stream,
+                    onCancel: () async {
+                      throw StateError('BLE write failed on disconnected device');
+                    },
+                  ),
+                ).then((_) => dialogPopped = true);
+              },
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Session Studio : walk'), findsOneWidget);
+
+      // Tap Annuler
+      await tester.tap(find.text('Annuler'));
+      await tester.pumpAndSettle();
+
+      expect(dialogPopped, isTrue);
+      expect(find.text('Session Studio : walk'), findsNothing);
     });
   });
 }

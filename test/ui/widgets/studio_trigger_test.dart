@@ -276,6 +276,13 @@ void main() {
 
       expect(find.text('Enregistrement Studio'), findsOneWidget);
       expect(find.text("Démarrer l'enregistrement"), findsOneWidget);
+
+      // Tap confirm and verify only the dialog is popped, GatewayDashboardScreen remains mounted
+      await tester.tap(find.text("Démarrer l'enregistrement"));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Test Haptique'), findsOneWidget);
+      expect(find.text('Enregistrement Studio'), findsNothing);
     });
 
     testWidgets('Studio button is VISIBLE when role is "admin"', (WidgetTester tester) async {

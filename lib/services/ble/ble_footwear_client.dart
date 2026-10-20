@@ -233,7 +233,13 @@ class BleFootwearClient {
   /// Cancels an ongoing Studio session.
   Future<void> cancelStudioSession() async {
     if (_studioControlChar == null) return;
-    await _studioControlChar!.write(utf8.encode('CANCEL'), withoutResponse: false);
+    try {
+      await _studioControlChar!
+          .write(utf8.encode('CANCEL'), withoutResponse: false)
+          .timeout(const Duration(milliseconds: 1000));
+    } catch (_) {
+      // Ignore if BLE characteristic write fails or times out during disconnection
+    }
   }
 
   /// Sends zero/tilt calibration command to the footwear (Opcode 0x05 on 0003 or "CALIBRATE" on 0004).

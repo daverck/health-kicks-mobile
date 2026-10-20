@@ -122,6 +122,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         durationSec: durationSec,
         studioStatusStream: _controller.bleClient!.studioStatusStream,
         sessionSavedStream: _controller.coordinator?.studioSessionSavedStream,
+        connectionStatusStream: _controller.bleStatusStream,
         onCancel: () async {
           try {
             await _controller.bleClient?.cancelStudioSession();
@@ -145,36 +146,17 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         initialActivityKey: _controller.lastStudioActivityKey,
         initialCustomLabel: _controller.lastStudioCustomLabel,
         onStartSession: ({required String label, required double durationSec}) async {
-          Navigator.of(dialogCtx).pop();
+          // Note: StudioSessionDialog._onConfirm already popped itself, so do not pop dialogCtx here.
           if (!isConnected) {
             _controller.addLog('STUDIO', 'Chaussure non connectée ou service Studio indisponible.', color: Colors.red);
             return;
           }
           if (mounted) {
             ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Row(
-                  children: [
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    ),
-                    SizedBox(width: 12),
-                    Text('Initialisation de la session Studio...'),
-                  ],
-                ),
-                duration: Duration(seconds: 4),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
+            _showActiveRecordingDialog(label: label, durationSec: durationSec);
           }
           try {
             await _controller.triggerStudioSession(label: label, durationSec: durationSec);
-            if (!_controller.isRecordingDialogVisible && mounted) {
-              _showActiveRecordingDialog(label: label, durationSec: durationSec);
-            }
           } catch (e) {
             if (mounted) {
               ScaffoldMessenger.of(context).hideCurrentSnackBar();

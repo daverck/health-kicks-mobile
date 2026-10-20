@@ -4,6 +4,7 @@ import '../../models/studio_session_model.dart';
 import '../../services/audio/studio_audio_feedback_service.dart';
 import 'studio/studio_recording_gauge.dart';
 import 'studio_session_dialog.dart';
+import '../../services/ble/ble_connection_manager.dart';
 
 export 'studio/studio_recording_gauge.dart' show StudioActiveState, StudioRecordingGauge;
 
@@ -13,6 +14,7 @@ class StudioRecordingDialog extends StatefulWidget {
   final double durationSec;
   final Stream<String> studioStatusStream;
   final Stream<dynamic>? sessionSavedStream;
+  final Stream<BleConnectionStatus>? connectionStatusStream;
   final Future<void> Function()? onCancel;
   final StudioAudioFeedbackService? audioService;
 
@@ -22,6 +24,7 @@ class StudioRecordingDialog extends StatefulWidget {
     this.durationSec = 5.0,
     required this.studioStatusStream,
     this.sessionSavedStream,
+    this.connectionStatusStream,
     this.onCancel,
     this.audioService,
   });
@@ -48,6 +51,8 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
 
   StreamSubscription<String>? _statusSub;
   StreamSubscription<dynamic>? _savedSub;
+  StreamSubscription<BleConnectionStatus>? _connSub;
+  Timer? _recordingTimeoutTimer;
 
   late final StudioAudioFeedbackService _audioService;
   bool _ownsAudioService = false;
@@ -67,6 +72,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
     _startCountdownTimer();
     _statusSub = widget.studioStatusStream.listen(_handleStatusUpdate);
     _savedSub = widget.sessionSavedStream?.listen(_handleSessionSaved);
+    _connSub = widget.connectionStatusStream?.listen(_handleConnectionUpdate);
   }
 
   @override
@@ -74,6 +80,8 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
     _countdownTimer?.cancel();
     _statusSub?.cancel();
     _savedSub?.cancel();
+    _connSub?.cancel();
+    _recordingTimeoutTimer?.cancel();
     _recordingProgressTimer?.cancel();
     _autoDismissTimer?.cancel();
     _transmissionTimeoutTimer?.cancel();
@@ -82,6 +90,25 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
       _audioService.dispose();
     }
     super.dispose();
+  }
+
+  void _handleConnectionUpdate(BleConnectionStatus status) {
+    if (!mounted) return;
+    if (status == BleConnectionStatus.disconnected || status == BleConnectionStatus.scanning) {
+      if (_state == StudioActiveState.countdown ||
+          _state == StudioActiveState.recording ||
+          _state == StudioActiveState.transmitting) {
+        _countdownTimer?.cancel();
+        _recordingProgressTimer?.cancel();
+        _transmissionTimeoutTimer?.cancel();
+        _recordingTimeoutTimer?.cancel();
+        _audioService.stopContinuousTone();
+        setState(() {
+          _state = StudioActiveState.error;
+          _errorMessage = 'Connexion Bluetooth avec la chaussure interrompue.';
+        });
+      }
+    }
   }
 
   void _startCountdownTimer() {
@@ -147,6 +174,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
         _samplesCollected = int.tryParse(parts[1]) ?? 0;
       }
       _recordingProgressTimer?.cancel();
+      _recordingTimeoutTimer?.cancel();
       setState(() {
         _state = StudioActiveState.transmitting;
       });
@@ -155,6 +183,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
       _countdownTimer?.cancel();
       _recordingProgressTimer?.cancel();
       _transmissionTimeoutTimer?.cancel();
+      _recordingTimeoutTimer?.cancel();
       _audioService.stopContinuousTone();
       setState(() {
         _state = StudioActiveState.cancelled;
@@ -168,6 +197,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
     } else if (status.startsWith('ERROR')) {
       _countdownTimer?.cancel();
       _recordingProgressTimer?.cancel();
+      _recordingTimeoutTimer?.cancel();
       _audioService.stopContinuousTone();
       setState(() {
         _state = StudioActiveState.error;
@@ -198,6 +228,19 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
         }
       });
     });
+
+    _recordingTimeoutTimer?.cancel();
+    _recordingTimeoutTimer = Timer(Duration(milliseconds: ((_targetDurationSec + 6.0) * 1000).toInt()), () {
+      if (!mounted) return;
+      if (_state == StudioActiveState.recording) {
+        _recordingProgressTimer?.cancel();
+        _audioService.stopContinuousTone();
+        setState(() {
+          _state = StudioActiveState.error;
+          _errorMessage = "Délai de capture dépassé : la chaussure n'a pas transmis la fin de session.";
+        });
+      }
+    });
   }
 
   void _startTransmissionTimeout() {
@@ -218,6 +261,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
     if (!mounted) return;
     _recordingProgressTimer?.cancel();
     _transmissionTimeoutTimer?.cancel();
+    _recordingTimeoutTimer?.cancel();
     _audioService.playFinishedChime();
 
     int readingsCount = _samplesCollected;
@@ -256,7 +300,8 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
     final canDismiss = _state == StudioActiveState.success ||
         _state == StudioActiveState.cancelled ||
         _state == StudioActiveState.error ||
-        _state == StudioActiveState.transmitting;
+        _state == StudioActiveState.transmitting ||
+        _isCancelling;
 
     return PopScope(
       canPop: canDismiss,
@@ -326,13 +371,20 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
               ? null
               : () async {
                   setState(() => _isCancelling = true);
+                  _countdownTimer?.cancel();
                   _recordingProgressTimer?.cancel();
+                  _recordingTimeoutTimer?.cancel();
                   unawaited(_audioService.stopContinuousTone());
-                  if (widget.onCancel != null) {
-                    await widget.onCancel!();
-                  }
-                  if (mounted && Navigator.of(context).canPop()) {
-                    Navigator.of(context).pop();
+                  try {
+                    if (widget.onCancel != null) {
+                      await widget.onCancel!().timeout(const Duration(milliseconds: 1500));
+                    }
+                  } catch (_) {
+                    // Ignore cancel timeout / disconnection errors
+                  } finally {
+                    if (mounted && Navigator.of(context).canPop()) {
+                      Navigator.of(context).pop();
+                    }
                   }
                 },
           child: const Text('Annuler', style: TextStyle(color: Colors.redAccent)),
@@ -344,12 +396,18 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
           onPressed: () async {
             _recordingProgressTimer?.cancel();
             _transmissionTimeoutTimer?.cancel();
+            _recordingTimeoutTimer?.cancel();
             unawaited(_audioService.stopContinuousTone());
-            if (widget.onCancel != null) {
-              await widget.onCancel!();
-            }
-            if (mounted && Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
+            try {
+              if (widget.onCancel != null) {
+                await widget.onCancel!().timeout(const Duration(milliseconds: 1500));
+              }
+            } catch (_) {
+              // Ignore cancel timeout
+            } finally {
+              if (mounted && Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
             }
           },
           child: const Text('Abandonner', style: TextStyle(color: Colors.redAccent)),
