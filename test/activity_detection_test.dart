@@ -112,6 +112,7 @@ void main() {
         0x02: 'run',
         0x03: 'stairs_up',
         0x04: 'stairs_down',
+        0x05: 'sit_down',
         0x10: 'fall_forward',
         0x11: 'fall_backward',
         0x12: 'fall_lateral',
@@ -132,7 +133,34 @@ void main() {
         final model = ActivityDetectionModel.fromBytes(byteData.buffer.asUint8List());
         expect(model.stateCode, equals(entry.key));
         expect(model.eventType, equals(entry.value));
+        if (entry.key == 0x00 || entry.key == 0x05) {
+          expect(model.activityCategory, ActivityCategory.sedentary);
+          expect(model.isSedentary, isTrue);
+        }
       }
+    });
+
+    test('Classifies locomotion states as active and seated posture as sedentary', () {
+      const sitDown = ActivityDetectionModel(
+        stateCode: 0x05,
+        eventType: 'sit_down',
+        confidencePercent: 90,
+        timestampEpochSec: 1726224000,
+        isFall: false,
+        isHapticTriggered: false,
+      );
+      const walk = ActivityDetectionModel(
+        stateCode: 0x01,
+        eventType: 'walk',
+        confidencePercent: 90,
+        timestampEpochSec: 1726224000,
+        isFall: false,
+        isHapticTriggered: false,
+      );
+
+      expect(sitDown.isSeated, isTrue);
+      expect(sitDown.activityCategory, ActivityCategory.sedentary);
+      expect(walk.activityCategory, ActivityCategory.active);
     });
 
     test('Correctly handles MCU boot uptime (< 10^9) by using current UTC timestamp', () {

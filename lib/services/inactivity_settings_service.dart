@@ -24,6 +24,13 @@ class InactivitySettingsService extends ChangeNotifier {
   int get cooldownSec => _isRepeatEnabled ? _cooldownMinutes * 60 : 0;
   bool get isSynced => _isSynced;
 
+  String inactivityAlertMessage({required bool isSeated}) {
+    if (isSeated) {
+      return 'Rappel de sédentarité : vous êtes assis depuis $_thresholdMinutes minutes. Pensez à vous lever et à marcher quelques pas.';
+    }
+    return 'Rappel d\'inactivité : vous êtes immobile depuis $_thresholdMinutes minutes. Pensez à faire quelques pas !';
+  }
+
   /// Loads persisted settings from SharedPreferences.
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
@@ -81,4 +88,3 @@ class InactivitySettingsService extends ChangeNotifier {
     }
   }
 }
-

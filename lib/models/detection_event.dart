@@ -115,10 +115,13 @@ class DetectionEvent {
       metadata: {
         'state_code': model.stateCode,
         'haptic_triggered': model.isHapticTriggered,
+        'activity_category': model.activityCategory.name,
         'live': true,
       },
     );
   }
+
+  ActivityCategory get activityCategory => ActivityDetectionModel.categoryForEventType(eventType);
 
   Map<String, dynamic> toJson() {
     return {
@@ -186,6 +189,9 @@ class DetectionEvent {
         return 'Escaliers';
       case 'idle':
         return 'Repos / Station debout';
+      case 'sit_down':
+      case 'sit':
+        return 'Position assise';
       case 'jump':
         return 'Saut';
       case 'activity_transition':

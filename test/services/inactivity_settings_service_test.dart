@@ -23,6 +23,25 @@ void main() {
       expect(service.isSynced, isFalse);
     });
 
+    test('Builds a seated inactivity reminder using the configured threshold', () async {
+      final service = InactivitySettingsService();
+      await service.loadSettings();
+      await service.updateSettings(
+        enabled: true,
+        thresholdMinutes: 45,
+        cooldownMinutes: 10,
+      );
+
+      expect(
+        service.inactivityAlertMessage(isSeated: true),
+        'Rappel de sédentarité : vous êtes assis depuis 45 minutes. Pensez à vous lever et à marcher quelques pas.',
+      );
+      expect(
+        service.inactivityAlertMessage(isSeated: false),
+        'Rappel d\'inactivité : vous êtes immobile depuis 45 minutes. Pensez à faire quelques pas !',
+      );
+    });
+
     test('Loads persisted values from SharedPreferences including repeatEnabled', () async {
       SharedPreferences.setMockInitialValues({
         InactivitySettingsService.keyEnabled: false,
@@ -78,4 +97,3 @@ void main() {
     });
   });
 }
-

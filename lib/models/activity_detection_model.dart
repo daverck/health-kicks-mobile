@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 import '../core/constants/ble_constants.dart';
 
+enum ActivityCategory { sedentary, active, other }
+
 /// Model representing an activity detection event decoded from BLE characteristic 7a5a0002.
 /// Contract reference: contracts/ble_gatt_specs.md (Characteristic 1)
 class ActivityDetectionModel {
@@ -12,6 +14,12 @@ class ActivityDetectionModel {
   final bool isFall;
   final bool isHapticTriggered;
 
+  bool get isSeated => eventType == 'sit_down';
+
+  bool get isSedentary => activityCategory == ActivityCategory.sedentary;
+
+  ActivityCategory get activityCategory => categoryForEventType(eventType);
+
   const ActivityDetectionModel({
     required this.stateCode,
     required this.eventType,
@@ -21,6 +29,25 @@ class ActivityDetectionModel {
     required this.isFall,
     required this.isHapticTriggered,
   });
+
+  static ActivityCategory categoryForEventType(String eventType) {
+    switch (eventType.toLowerCase()) {
+      case 'idle':
+      case 'sit_down':
+      case 'sit':
+        return ActivityCategory.sedentary;
+      case 'walk':
+      case 'walking':
+      case 'run':
+      case 'running':
+      case 'stairs':
+      case 'stairs_up':
+      case 'stairs_down':
+        return ActivityCategory.active;
+      default:
+        return ActivityCategory.other;
+    }
+  }
 
   DateTime get effectiveTimestamp {
     if (receivedAt != null) return receivedAt!;

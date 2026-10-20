@@ -205,7 +205,6 @@ class AppLocalizations {
       'success': 'Succès',
       'active': 'Actif',
       'inactive': 'Inactif',
-
       'login_title': 'Connexion',
       'login_subtitle': 'Accédez à votre espace HealthKicks',
       'email_label': 'Adresse email',
@@ -214,7 +213,6 @@ class AppLocalizations {
       'logout': 'Déconnexion',
       'session_checking': 'Vérification de session...',
       'invalid_credentials': 'Email ou mot de passe invalide.',
-
       'dashboard_title': 'Tableau de bord Passerelle',
       'ble_card_title': 'Bluetooth Low Energy',
       'cloud_card_title': 'AWS IoT Core Cloud',
@@ -222,7 +220,6 @@ class AppLocalizations {
       'test_haptic_desc': 'Déclencher une impulsion vibrotactile',
       'studio_session_btn': 'Session Studio',
       'haptic_success': 'Vibration envoyée avec succès',
-
       'steps_today': 'Pas aujourd\'hui',
       'steps_goal': 'Objectif : {goal} pas',
       'cadence': 'Cadence',
@@ -230,11 +227,9 @@ class AppLocalizations {
       'steps_history': 'Historique du Podomètre',
       'sync_steps': 'Synchroniser les pas',
       'steps_sync_success': 'Pas synchronisés avec succès',
-
       'recent_activities': 'Activités récentes',
       'waiting_detections': 'En attente de détections...',
       'fall_badge': 'CHUTE',
-
       'settings_title': 'Paramètres',
       'bluetooth_and_cloud': 'BLUETOOTH & CLOUD',
       'bluetooth_footwear': 'Chaussure connectée (BLE)',
@@ -267,7 +262,6 @@ class AppLocalizations {
       'event_logs_title': 'Journal d\'événements',
       'clear_logs': 'Effacer les logs',
       'export_logs': 'Exporter par email',
-
       'studio_title': 'Session d\'enregistrement Studio',
       'studio_subtitle': 'Capture biomécanique haute fréquence à 54 Hz',
       'studio_activity_type': 'Type d\'activité',
@@ -277,7 +271,6 @@ class AppLocalizations {
       'studio_transmitting': 'Synchronisation des données biomécaniques...',
       'studio_success': 'Capture terminée avec succès !',
       'custom_activity_label': 'Autre / Personnalisé',
-
       'evt_fall_forward': 'Chute avant',
       'evt_fall_backward': 'Chute arrière',
       'evt_fall_lateral': 'Chute latérale',
@@ -297,7 +290,7 @@ class AppLocalizations {
       'evt_stairs_down': 'Escaliers (Descente)',
       'evt_calibration': 'Calibration des capteurs',
       'evt_idle': 'Immobile',
-      'evt_sit_down': 'S\'asseoir (Transition)',
+      'evt_sit_down': 'Position assise',
       'evt_jump': 'Saut',
       'evt_activity_transition': 'Transition d\'activité',
     },
@@ -321,7 +314,6 @@ class AppLocalizations {
       'success': 'Success',
       'active': 'Active',
       'inactive': 'Inactive',
-
       'login_title': 'Sign In',
       'login_subtitle': 'Access your HealthKicks space',
       'email_label': 'Email address',
@@ -330,7 +322,6 @@ class AppLocalizations {
       'logout': 'Log Out',
       'session_checking': 'Checking session...',
       'invalid_credentials': 'Invalid email or password.',
-
       'dashboard_title': 'Gateway Dashboard',
       'ble_card_title': 'Bluetooth Low Energy',
       'cloud_card_title': 'AWS IoT Core Cloud',
@@ -338,7 +329,6 @@ class AppLocalizations {
       'test_haptic_desc': 'Trigger a vibrotactile pulse',
       'studio_session_btn': 'Studio Session',
       'haptic_success': 'Vibration sent successfully',
-
       'steps_today': 'Steps today',
       'steps_goal': 'Goal: {goal} steps',
       'cadence': 'Cadence',
@@ -346,11 +336,9 @@ class AppLocalizations {
       'steps_history': 'Pedometer History',
       'sync_steps': 'Sync steps',
       'steps_sync_success': 'Steps synchronized successfully',
-
       'recent_activities': 'Recent activities',
       'waiting_detections': 'Waiting for detections...',
       'fall_badge': 'FALL',
-
       'settings_title': 'Settings',
       'bluetooth_and_cloud': 'BLUETOOTH & CLOUD',
       'bluetooth_footwear': 'Connected footwear (BLE)',
@@ -383,7 +371,6 @@ class AppLocalizations {
       'event_logs_title': 'Event Logs',
       'clear_logs': 'Clear logs',
       'export_logs': 'Export by email',
-
       'studio_title': 'Studio Recording Session',
       'studio_subtitle': 'High-frequency 54 Hz biomechanical capture',
       'studio_activity_type': 'Activity type',
@@ -393,7 +380,6 @@ class AppLocalizations {
       'studio_transmitting': 'Syncing biomechanical telemetry...',
       'studio_success': 'Capture completed successfully!',
       'custom_activity_label': 'Other / Custom',
-
       'evt_fall_forward': 'Forward fall',
       'evt_fall_backward': 'Backward fall',
       'evt_fall_lateral': 'Lateral fall',
@@ -413,7 +399,7 @@ class AppLocalizations {
       'evt_stairs_down': 'Stairs (Descent)',
       'evt_calibration': 'Sensor calibration',
       'evt_idle': 'Idle',
-      'evt_sit_down': 'Sitting down (Transition)',
+      'evt_sit_down': 'Seated',
       'evt_jump': 'Jump',
       'evt_activity_transition': 'Activity transition',
     },
@@ -437,7 +423,6 @@ class AppLocalizations {
       'success': 'Succes',
       'active': 'Actief',
       'inactive': 'Inactief',
-
       'login_title': 'Inloggen',
       'login_subtitle': 'Toegang tot uw HealthKicks-ruimte',
       'email_label': 'E-mailadres',
@@ -446,7 +431,6 @@ class AppLocalizations {
       'logout': 'Uitloggen',
       'session_checking': 'Sessie controleren...',
       'invalid_credentials': 'Ongeldig e-mailadres of wachtwoord.',
-
       'dashboard_title': 'Gateway Dashboard',
       'ble_card_title': 'Bluetooth Low Energy',
       'cloud_card_title': 'AWS IoT Core Cloud',
@@ -454,7 +438,6 @@ class AppLocalizations {
       'test_haptic_desc': 'Een trillingspuls verzenden',
       'studio_session_btn': 'Studio-sessie',
       'haptic_success': 'Trilling succesvol verzonden',
-
       'steps_today': 'Stappen vandaag',
       'steps_goal': 'Doel: {goal} stappen',
       'cadence': 'Cadans',
@@ -462,11 +445,9 @@ class AppLocalizations {
       'steps_history': 'Stappengeschiedenis',
       'sync_steps': 'Stappen synchroniseren',
       'steps_sync_success': 'Stappen succesvol gesynchroniseerd',
-
       'recent_activities': 'Recente activiteiten',
       'waiting_detections': 'Wachten op detecties...',
       'fall_badge': 'VAL',
-
       'settings_title': 'Instellingen',
       'bluetooth_and_cloud': 'BLUETOOTH & CLOUD',
       'bluetooth_footwear': 'Verbonden schoen (BLE)',
@@ -499,7 +480,6 @@ class AppLocalizations {
       'event_logs_title': 'Gebeurtenissenlogboek',
       'clear_logs': 'Logboek wissen',
       'export_logs': 'Exporteren via e-mail',
-
       'studio_title': 'Studio-opnamesessie',
       'studio_subtitle': 'Hoge-frequentie 54 Hz biomechanische registratie',
       'studio_activity_type': 'Type activiteit',
@@ -509,7 +489,6 @@ class AppLocalizations {
       'studio_transmitting': 'Biomechanische gegevens synchroniseren...',
       'studio_success': 'Opname succesvol voltooid!',
       'custom_activity_label': 'Overig / Aangepast',
-
       'evt_fall_forward': 'Val voorover',
       'evt_fall_backward': 'Val achterover',
       'evt_fall_lateral': 'Zijwaartse val',
@@ -529,7 +508,7 @@ class AppLocalizations {
       'evt_stairs_down': 'Trappen (Omlaag)',
       'evt_calibration': 'Sensorkalibratie',
       'evt_idle': 'Stilstaand / Zittend',
-      'evt_sit_down': 'Gaan zitten (Overgang)',
+      'evt_sit_down': 'Zittend',
       'evt_jump': 'Sprong',
       'evt_activity_transition': 'Activiteitsovergang',
     },
@@ -553,7 +532,6 @@ class AppLocalizations {
       'success': 'Éxito',
       'active': 'Activo',
       'inactive': 'Inactivo',
-
       'login_title': 'Iniciar Sesión',
       'login_subtitle': 'Acceda a su espacio HealthKicks',
       'email_label': 'Correo electrónico',
@@ -562,7 +540,6 @@ class AppLocalizations {
       'logout': 'Cerrar Sesión',
       'session_checking': 'Comprobando sesión...',
       'invalid_credentials': 'Email o contraseña inválidos.',
-
       'dashboard_title': 'Panel de Control Gateway',
       'ble_card_title': 'Bluetooth Low Energy',
       'cloud_card_title': 'AWS IoT Core Cloud',
@@ -570,7 +547,6 @@ class AppLocalizations {
       'test_haptic_desc': 'Activar pulso vibrotáctil',
       'studio_session_btn': 'Sesión Studio',
       'haptic_success': 'Vibración enviada con éxito',
-
       'steps_today': 'Pasos hoy',
       'steps_goal': 'Objetivo: {goal} pasos',
       'cadence': 'Cadencia',
@@ -578,11 +554,9 @@ class AppLocalizations {
       'steps_history': 'Historial del Podómetro',
       'sync_steps': 'Sincronizar pasos',
       'steps_sync_success': 'Pasos sincronizados con éxito',
-
       'recent_activities': 'Actividades recientes',
       'waiting_detections': 'Esperando detecciones...',
       'fall_badge': 'CAÍDA',
-
       'settings_title': 'Configuración',
       'bluetooth_and_cloud': 'BLUETOOTH Y CLOUD',
       'bluetooth_footwear': 'Calzado conectado (BLE)',
@@ -615,7 +589,6 @@ class AppLocalizations {
       'event_logs_title': 'Registro de eventos',
       'clear_logs': 'Limpiar registros',
       'export_logs': 'Exportar por email',
-
       'studio_title': 'Sesión de Grabación Studio',
       'studio_subtitle': 'Captura biomecánica de alta frecuencia a 54 Hz',
       'studio_activity_type': 'Tipo de actividad',
@@ -625,7 +598,6 @@ class AppLocalizations {
       'studio_transmitting': 'Sincronizando datos biomecánicos...',
       'studio_success': '¡Captura completada con éxito!',
       'custom_activity_label': 'Otro / Personalizado',
-
       'evt_fall_forward': 'Caída frontal',
       'evt_fall_backward': 'Caída hacia atrás',
       'evt_fall_lateral': 'Caída lateral',
@@ -645,7 +617,7 @@ class AppLocalizations {
       'evt_stairs_down': 'Escaleras (Bajada)',
       'evt_calibration': 'Calibración de sensores',
       'evt_idle': 'En reposo / Sentado',
-      'evt_sit_down': 'Sentarse (Transición)',
+      'evt_sit_down': 'Sentado',
       'evt_jump': 'Salto',
       'evt_activity_transition': 'Transición de actividad',
     },
@@ -669,7 +641,6 @@ class AppLocalizations {
       'success': 'Erfolg',
       'active': 'Aktiv',
       'inactive': 'Inaktiv',
-
       'login_title': 'Anmelden',
       'login_subtitle': 'Greifen Sie auf Ihr HealthKicks-Konto zu',
       'email_label': 'E-Mail-Adresse',
@@ -678,7 +649,6 @@ class AppLocalizations {
       'logout': 'Abmelden',
       'session_checking': 'Sitzung wird überprüft...',
       'invalid_credentials': 'Ungültige E-Mail-Adresse oder Passwort.',
-
       'dashboard_title': 'Gateway-Dashboard',
       'ble_card_title': 'Bluetooth Low Energy',
       'cloud_card_title': 'AWS IoT Core Cloud',
@@ -686,7 +656,6 @@ class AppLocalizations {
       'test_haptic_desc': 'Vibrationsimpuls auslösen',
       'studio_session_btn': 'Studio-Sitzung',
       'haptic_success': 'Vibration erfolgreich gesendet',
-
       'steps_today': 'Schritte heute',
       'steps_goal': 'Ziel: {goal} Schritte',
       'cadence': 'Kadenz',
@@ -694,11 +663,9 @@ class AppLocalizations {
       'steps_history': 'Schrittverlauf',
       'sync_steps': 'Schritte synchronisieren',
       'steps_sync_success': 'Schritte erfolgreich synchronisiert',
-
       'recent_activities': 'Aktuelle Aktivitäten',
       'waiting_detections': 'Warten auf Erkennungen...',
       'fall_badge': 'STURZ',
-
       'settings_title': 'Einstellungen',
       'bluetooth_and_cloud': 'BLUETOOTH & CLOUD',
       'bluetooth_footwear': 'Verbundener Schuh (BLE)',
@@ -731,7 +698,6 @@ class AppLocalizations {
       'event_logs_title': 'Ereignisprotokoll',
       'clear_logs': 'Protokoll löschen',
       'export_logs': 'Per E-Mail exportieren',
-
       'studio_title': 'Studio-Aufnahmesitzung',
       'studio_subtitle': 'Hochfrequente biomechanische 54-Hz-Erfassung',
       'studio_activity_type': 'Aktivitätstyp',
@@ -741,7 +707,6 @@ class AppLocalizations {
       'studio_transmitting': 'Biomechanische Daten werden übertragen...',
       'studio_success': 'Aufnahme erfolgreich abgeschlossen!',
       'custom_activity_label': 'Andere / Benutzerdefiniert',
-
       'evt_fall_forward': 'Sturz vorwärts',
       'evt_fall_backward': 'Sturz rückwärts',
       'evt_fall_lateral': 'Seitlicher Sturz',
@@ -761,7 +726,7 @@ class AppLocalizations {
       'evt_stairs_down': 'Treppen (Abwärts)',
       'evt_calibration': 'Sensorkalibrierung',
       'evt_idle': 'Ruhe / Sitzen',
-      'evt_sit_down': 'Hinsetzen (Übergang)',
+      'evt_sit_down': 'Sitzend',
       'evt_jump': 'Sprung',
       'evt_activity_transition': 'Aktivitätsübergang',
     },
@@ -785,7 +750,6 @@ class AppLocalizations {
       'success': 'نجاح',
       'active': 'نشط',
       'inactive': 'غير نشط',
-
       'login_title': 'تسجيل الدخول',
       'login_subtitle': 'ادخل إلى مساحتك في هيلث كيكس',
       'email_label': 'البريد الإلكتروني',
@@ -794,7 +758,6 @@ class AppLocalizations {
       'logout': 'تسجيل الخروج',
       'session_checking': 'جارٍ التحقق من الجلسة...',
       'invalid_credentials': 'البريد الإلكتروني أو كلمة المرور غير صالحة.',
-
       'dashboard_title': 'لوحة تحكم البوابة',
       'ble_card_title': 'البلوتوث منخفض الطاقة',
       'cloud_card_title': 'سحابة AWS IoT Core',
@@ -802,7 +765,6 @@ class AppLocalizations {
       'test_haptic_desc': 'تشغيل نبضة اهتزازية تجريبية',
       'studio_session_btn': 'جلسة الاستوديو',
       'haptic_success': 'تم إرسال الاهتزاز بنجاح',
-
       'steps_today': 'خطوات اليوم',
       'steps_goal': 'الهدف: {goal} خطوة',
       'cadence': 'معدل الخطوات',
@@ -810,11 +772,9 @@ class AppLocalizations {
       'steps_history': 'سجل عداد الخطوات',
       'sync_steps': 'مزامنة الخطوات',
       'steps_sync_success': 'تمت مزامنة الخطوات بنجاح',
-
       'recent_activities': 'الأنشطة الأخيرة',
       'waiting_detections': 'في انتظار عمليات الرصد...',
       'fall_badge': 'سقوط',
-
       'settings_title': 'الإعدادات',
       'bluetooth_and_cloud': 'البلوتوث والسحابة',
       'bluetooth_footwear': 'الحذاء المتصل (BLE)',
@@ -846,7 +806,6 @@ class AppLocalizations {
       'event_logs_title': 'سجل الأحداث',
       'clear_logs': 'مسح السجلات',
       'export_logs': 'تصدير عبر البريد',
-
       'studio_title': 'جلسة تسجيل الاستوديو',
       'studio_subtitle': 'تسجيل حركي حيوي عالي الدقة بتردد 54 هرتز',
       'studio_activity_type': 'نوع النشاط',
@@ -856,7 +815,6 @@ class AppLocalizations {
       'studio_transmitting': 'مزامنة البيانات الحركية...',
       'studio_success': 'اكتمل التسجيل بنجاح!',
       'custom_activity_label': 'أخرى / مخصص',
-
       'evt_fall_forward': 'سقوط إلى الأمام',
       'evt_fall_backward': 'سقوط إلى الخلف',
       'evt_fall_lateral': 'سقوط جانبي',
@@ -876,7 +834,7 @@ class AppLocalizations {
       'evt_stairs_down': 'درج (نزول)',
       'evt_calibration': 'معايرة الحساسات',
       'evt_idle': 'راحة / جلوس',
-      'evt_sit_down': 'الجلوس (انتقال)',
+      'evt_sit_down': 'جالس',
       'evt_jump': 'قفز',
       'evt_activity_transition': 'تغير النشاط',
     },
@@ -900,7 +858,6 @@ class AppLocalizations {
       'success': '成功',
       'active': '运行中',
       'inactive': '未激活',
-
       'login_title': '登录',
       'login_subtitle': '进入您的 HealthKicks 健康空间',
       'email_label': '电子邮箱',
@@ -909,7 +866,6 @@ class AppLocalizations {
       'logout': '退出登录',
       'session_checking': '正在检查登录状态...',
       'invalid_credentials': '邮箱或密码不正确。',
-
       'dashboard_title': '网关控制台',
       'ble_card_title': '低功耗蓝牙 (BLE)',
       'cloud_card_title': 'AWS IoT 核心云端',
@@ -917,7 +873,6 @@ class AppLocalizations {
       'test_haptic_desc': '触发鞋端振动脉冲',
       'studio_session_btn': 'Studio 动作采集',
       'haptic_success': '振动指令已成功发送',
-
       'steps_today': '今日步数',
       'steps_goal': '目标：{goal} 步',
       'cadence': '步频',
@@ -925,11 +880,9 @@ class AppLocalizations {
       'steps_history': '计步历史记录',
       'sync_steps': '同步计步数据',
       'steps_sync_success': '计步数据已同步成功',
-
       'recent_activities': '近期活动',
       'waiting_detections': '等待活动识别...',
       'fall_badge': '跌倒',
-
       'settings_title': '设置',
       'bluetooth_and_cloud': '蓝牙与云端连接',
       'bluetooth_footwear': '智能鞋夹设备 (BLE)',
@@ -960,7 +913,6 @@ class AppLocalizations {
       'event_logs_title': '系统事件日志',
       'clear_logs': '清空日志',
       'export_logs': '邮件导出日志',
-
       'studio_title': 'Studio 动作录制会话',
       'studio_subtitle': '54 Hz 高频生物力学姿态采集',
       'studio_activity_type': '动作类型',
@@ -970,7 +922,6 @@ class AppLocalizations {
       'studio_transmitting': '正在同步生物力学遥测数据...',
       'studio_success': '数据采集已成功完成！',
       'custom_activity_label': '其他 / 自定义标签',
-
       'evt_fall_forward': '向前跌倒',
       'evt_fall_backward': '向后跌倒',
       'evt_fall_lateral': '侧向跌倒',
@@ -990,7 +941,7 @@ class AppLocalizations {
       'evt_stairs_down': '下楼梯',
       'evt_calibration': '传感器校准',
       'evt_idle': '静止休息 / 坐姿',
-      'evt_sit_down': '坐下 (姿态转换)',
+      'evt_sit_down': '坐姿',
       'evt_jump': '跳跃',
       'evt_activity_transition': '活动状态转换',
     },
@@ -1015,4 +966,3 @@ class _AppLocalizationsDelegate
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
 }
-

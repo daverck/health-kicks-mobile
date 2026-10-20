@@ -56,6 +56,7 @@ class GatewayDashboardController extends ChangeNotifier {
   BluetoothDevice? _connectedDevice;
   int _mtu = 23;
   bool _mqttConnected = false;
+  bool _isUserSeated = false;
   final ValueNotifier<bool> _mqttConnectedNotifier = ValueNotifier<bool>(false);
   bool _isInitializingBleClient = false;
   final List<ActivityDetectionModel> _recentActivities = [];
@@ -458,6 +459,9 @@ class GatewayDashboardController extends ChangeNotifier {
       }
 
       _bleClient!.activityStream.listen((detection) {
+        if (detection.activityCategory != ActivityCategory.other) {
+          _isUserSeated = detection.isSeated;
+        }
         _recentActivities.insert(0, detection);
         if (_recentActivities.length > 20) {
           _recentActivities.removeLast();
@@ -475,7 +479,7 @@ class GatewayDashboardController extends ChangeNotifier {
           if (_lastInactivityToastTime == null || now.difference(_lastInactivityToastTime!).inSeconds >= 30) {
             _lastInactivityToastTime = now;
             onShowSnackBar?.call(
-              'Rappel d\'inactivité : Vous êtes immobile depuis ${_inactivitySettingsService.thresholdMinutes} minutes. Pensez à faire quelques pas !',
+              _inactivitySettingsService.inactivityAlertMessage(isSeated: _isUserSeated),
               backgroundColor: Colors.deepOrange.shade700,
             );
           }

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:healthkicks_mobile/models/activity_detection_model.dart';
 import 'package:healthkicks_mobile/models/detection_event.dart';
 
 void main() {
@@ -38,6 +39,23 @@ void main() {
       expect(DetectionEvent(id: '6', deviceId: 'HK', eventType: 'fall_generic', timestamp: DateTime.now(), severity: EventSeverity.critical, isValidated: false).formattedTitle, 'Chute (générique)');
       expect(DetectionEvent(id: '7', deviceId: 'HK', eventType: 'fall_detected', timestamp: DateTime.now(), severity: EventSeverity.critical, isValidated: false).formattedTitle, 'Chute détectée');
       expect(DetectionEvent(id: '8', deviceId: 'HK', eventType: 'free_fall', timestamp: DateTime.now(), severity: EventSeverity.critical, isValidated: false).formattedTitle, 'Chute libre (Impact violent)');
+    });
+
+    test('Categorizes seated live detections as sedentary in clinical events', () {
+      const seated = ActivityDetectionModel(
+        stateCode: 0x05,
+        eventType: 'sit_down',
+        confidencePercent: 91,
+        timestampEpochSec: 1726840000,
+        isFall: false,
+        isHapticTriggered: false,
+      );
+      final event = DetectionEvent.fromActivityDetection(seated);
+
+      expect(event.activityCategory, ActivityCategory.sedentary);
+      expect(event.metadata?['activity_category'], 'sedentary');
+      expect(event.formattedTitle, 'Position assise');
+      expect(event.severity, EventSeverity.info);
     });
 
     test('Infers severity automatically from event_type if missing', () {
@@ -130,4 +148,3 @@ void main() {
     });
   });
 }
-
