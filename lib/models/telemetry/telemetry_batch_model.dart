@@ -112,6 +112,7 @@ class BatchMetadata {
   final String flushTrigger;
   final String? sessionId;
   final String? label;
+  final double? durationSec;
 
   const BatchMetadata({
     required this.sampleCount,
@@ -120,6 +121,7 @@ class BatchMetadata {
     this.flushTrigger = 'studio',
     this.sessionId,
     this.label,
+    this.durationSec,
   });
 
   factory BatchMetadata.fromJson(Map<String, dynamic> json) {
@@ -130,6 +132,7 @@ class BatchMetadata {
       flushTrigger: json['flush_trigger'] as String? ?? 'studio',
       sessionId: json['session_id'] as String?,
       label: json['label'] as String?,
+      durationSec: (json['duration_sec'] as num?)?.toDouble(),
     );
   }
 
@@ -141,6 +144,7 @@ class BatchMetadata {
       'flush_trigger': flushTrigger,
       if (sessionId != null) 'session_id': sessionId,
       if (label != null) 'label': label,
+      if (durationSec != null) 'duration_sec': durationSec,
     };
   }
 }
@@ -239,6 +243,7 @@ class TelemetryBatch {
           flushTrigger: 'studio',
           sessionId: session.sessionId,
           label: session.label,
+          durationSec: session.durationSec,
         ),
         readings: telemetryItems,
       );

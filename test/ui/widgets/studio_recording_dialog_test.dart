@@ -86,6 +86,46 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
 
+    testWidgets('allows finishing after two seconds and uses actual duration', (WidgetTester tester) async {
+      var finishCalled = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StudioRecordingDialog(
+              label: 'walk',
+              durationSec: 5.0,
+              studioStatusStream: statusController.stream,
+              sessionSavedStream: sessionSavedController.stream,
+              onFinish: () async {
+                finishCalled = true;
+              },
+            ),
+          ),
+        ),
+      );
+
+      statusController.add('RECORDING 5.0');
+      await tester.pump();
+      expect(find.text('Terminer'), findsNothing);
+
+      await tester.pump(const Duration(milliseconds: 1950));
+      expect(find.text('Terminer'), findsNothing);
+
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('Terminer'), findsOneWidget);
+
+      await tester.tap(find.text('Terminer'));
+      await tester.pump();
+      expect(finishCalled, isTrue);
+      expect(find.text('Arrêt...'), findsOneWidget);
+
+      statusController.add('FINISHED 105 test-session-id 2.1');
+      await tester.pump();
+      expect(find.text('⚡ Synchronisation des données biomécaniques...'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 2));
+    });
+
     testWidgets('shows transmitting state on FINISHED and success on session saved', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(

@@ -102,6 +102,7 @@ void main() {
         label: 'marche',
         deviceId: 'HK-SHOE-001',
         startTimestampEpoch: 1718000000.0,
+        durationSec: 2.1,
         readings: [
           ImuReadingModel(
             deltaMs: 0,
@@ -123,6 +124,7 @@ void main() {
 
       expect(decoded['header']['device_id'], equals('HK-SHOE-001'));
       expect(decoded['metadata']['sample_count'], equals(1));
+      expect(decoded['metadata']['duration_sec'], equals(2.1));
       expect((decoded['readings'] as List).length, equals(1));
     });
 

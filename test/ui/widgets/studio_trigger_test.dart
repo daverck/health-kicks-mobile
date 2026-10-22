@@ -22,7 +22,8 @@ void main() {
   });
 
   group('Studio Session Dialog Widget Tests', () {
-    testWidgets('renders all activities and fixed 5s duration indicator', (WidgetTester tester) async {
+    testWidgets('renders all activities and fixed 5s duration indicator',
+        (WidgetTester tester) async {
       String? triggeredLabel;
       double? triggeredDuration;
 
@@ -30,7 +31,8 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: StudioSessionDialog(
-              onStartSession: ({required String label, required double durationSec}) async {
+              onStartSession: (
+                  {required String label, required double durationSec}) async {
                 triggeredLabel = label;
                 triggeredDuration = durationSec;
               },
@@ -52,7 +54,8 @@ void main() {
       expect(triggeredDuration, 5.0);
     });
 
-    testWidgets('allows selecting custom activity tag with 5s duration', (WidgetTester tester) async {
+    testWidgets('allows selecting custom activity tag with 5s duration',
+        (WidgetTester tester) async {
       String? triggeredLabel;
       double? triggeredDuration;
 
@@ -60,7 +63,8 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: StudioSessionDialog(
-              onStartSession: ({required String label, required double durationSec}) async {
+              onStartSession: (
+                  {required String label, required double durationSec}) async {
                 triggeredLabel = label;
                 triggeredDuration = durationSec;
               },
@@ -93,7 +97,9 @@ void main() {
       expect(triggeredDuration, 5.0);
     });
 
-    testWidgets('remembers and defaults to last used activity from SharedPreferences', (WidgetTester tester) async {
+    testWidgets(
+        'remembers and defaults to last used activity from SharedPreferences',
+        (WidgetTester tester) async {
       SharedPreferences.setMockInitialValues({
         StudioSessionDialog.prefLastActivityKey: 'run',
       });
@@ -123,7 +129,59 @@ void main() {
       expect(triggeredLabel, 'run');
     });
 
-    testWidgets('persists newly selected activity into SharedPreferences', (WidgetTester tester) async {
+    testWidgets('shows recent activity shortcuts and remembers their order',
+        (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({
+        StudioSessionDialog.prefRecentActivityKeys: [
+          'run',
+          'walk',
+          'stairs',
+          'idle',
+        ],
+      });
+
+      String? triggeredLabel;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StudioSessionDialog(
+              onStartSession: ({
+                required String label,
+                required double durationSec,
+              }) async {
+                triggeredLabel = label;
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('studio-recent-activity-run')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('studio-recent-activity-walk')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('studio-recent-activity-stairs')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('studio-recent-activity-idle')),
+          findsOneWidget);
+
+      await tester
+          .tap(find.byKey(const ValueKey('studio-recent-activity-walk')));
+      await tester.tap(find.text("Démarrer l'enregistrement"));
+      await tester.pumpAndSettle();
+
+      expect(triggeredLabel, 'walk');
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+        prefs.getStringList(StudioSessionDialog.prefRecentActivityKeys),
+        ['walk', 'run', 'stairs', 'idle'],
+      );
+      expect(prefs.getString(StudioSessionDialog.prefLastActivityKey), 'walk');
+    });
+
+    testWidgets('persists newly selected activity into SharedPreferences',
+        (WidgetTester tester) async {
       SharedPreferences.setMockInitialValues({});
 
       await tester.pumpWidget(
@@ -151,10 +209,12 @@ void main() {
       await tester.pumpAndSettle();
 
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString(StudioSessionDialog.prefLastActivityKey), 'stairs');
+      expect(
+          prefs.getString(StudioSessionDialog.prefLastActivityKey), 'stairs');
     });
 
-    testWidgets('allows selecting stairs_up and stairs_down', (WidgetTester tester) async {
+    testWidgets('allows selecting stairs_up and stairs_down',
+        (WidgetTester tester) async {
       String? triggeredLabel;
 
       await tester.pumpWidget(
@@ -185,7 +245,8 @@ void main() {
       expect(triggeredLabel, 'stairs_up');
     });
 
-    testWidgets('restores persisted custom activity and label', (WidgetTester tester) async {
+    testWidgets('restores persisted custom activity and label',
+        (WidgetTester tester) async {
       SharedPreferences.setMockInitialValues({
         StudioSessionDialog.prefLastActivityKey: 'custom',
         StudioSessionDialog.prefLastCustomLabel: 'jumping_jacks',
@@ -249,7 +310,8 @@ void main() {
       );
     }
 
-    testWidgets('Studio button is HIDDEN when role is "user"', (WidgetTester tester) async {
+    testWidgets('Studio button is HIDDEN when role is "user"',
+        (WidgetTester tester) async {
       final authService = createAuthServiceWithRole('user');
 
       await tester.pumpWidget(HealthKicksApp(authService: authService));
@@ -259,7 +321,8 @@ void main() {
       expect(find.text('Studio'), findsNothing);
     });
 
-    testWidgets('Studio button is VISIBLE when role is "clinician"', (WidgetTester tester) async {
+    testWidgets('Studio button is VISIBLE when role is "clinician"',
+        (WidgetTester tester) async {
       final authService = createAuthServiceWithRole('clinician');
 
       await tester.pumpWidget(HealthKicksApp(authService: authService));
@@ -285,7 +348,8 @@ void main() {
       expect(find.text('Enregistrement Studio'), findsNothing);
     });
 
-    testWidgets('Studio button is VISIBLE when role is "admin"', (WidgetTester tester) async {
+    testWidgets('Studio button is VISIBLE when role is "admin"',
+        (WidgetTester tester) async {
       final authService = createAuthServiceWithRole('admin');
 
       await tester.pumpWidget(HealthKicksApp(authService: authService));

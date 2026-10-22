@@ -31,6 +31,7 @@ class FakeBleFootwearClient implements BleFootwearClient {
 
   void emitActivity(ActivityDetectionModel model) => _activityCtrl.add(model);
   void emitBurst(BurstReassemblyResult result) => _burstCtrl.add(result);
+  void emitStatus(String status) => _statusCtrl.add(status);
 
   @override
   Future<void> sendHapticCommand(HapticCommandModel command) async {
@@ -78,13 +79,15 @@ class FakeMqttGatewayService implements MqttGatewayService {
   Stream<HapticCommandModel> get hapticCommandStream => _hapticCtrl.stream;
 
   @override
-  Stream<StudioCommandModel> get studioCommandStream => _studioCommandCtrl.stream;
+  Stream<StudioCommandModel> get studioCommandStream =>
+      _studioCommandCtrl.stream;
 
   void emitHapticCommand(HapticCommandModel cmd) => _hapticCtrl.add(cmd);
   void emitStudioCommand(StudioCommandModel cmd) => _studioCommandCtrl.add(cmd);
 
   @override
-  Future<void> publishActivityDetection(ActivityDetectionModel detection) async {
+  Future<void> publishActivityDetection(
+      ActivityDetectionModel detection) async {
     publishedDetections.add(detection);
   }
 
@@ -147,7 +150,9 @@ class FakeStudioApiService implements StudioApiService {
 }
 
 void main() {
-  group('GatewayCoordinator - Routage bidirectionnel BLE <-> MQTT & Synchronisation REST Studio', () {
+  group(
+      'GatewayCoordinator - Routage bidirectionnel BLE <-> MQTT & Synchronisation REST Studio',
+      () {
     late FakeBleFootwearClient fakeBle;
     late FakeMqttGatewayService fakeMqtt;
     late FakeStudioApiService fakeStudioApi;
@@ -172,7 +177,8 @@ void main() {
       fakeMqtt.disconnect();
     });
 
-    test('Relais montant : Détection d\'activité BLE transmise à MQTT', () async {
+    test('Relais montant : Détection d\'activité BLE transmise à MQTT',
+        () async {
       const detection = ActivityDetectionModel(
         stateCode: 0x02,
         eventType: 'run',
@@ -190,7 +196,8 @@ void main() {
       expect(fakeMqtt.publishedDetections.first.confidencePercent, equals(92));
     });
 
-    test('Relais descendant : Commande haptique MQTT répercutée en BLE', () async {
+    test('Relais descendant : Commande haptique MQTT répercutée en BLE',
+        () async {
       const command = HapticCommandModel(
         commandId: 'cmd-haptic-test',
         patternId: 1,
@@ -207,7 +214,9 @@ void main() {
       expect(fakeBle.sentHapticCommands.first.durationMs, equals(300));
     });
 
-    test('Relais Studio Burst : Réserve la session en REST (/commands/studio/start) puis publie en MQTT avec le même UUID', () async {
+    test(
+        'Relais Studio Burst : Réserve la session en REST (/commands/studio/start) puis publie en MQTT avec le même UUID',
+        () async {
       StudioSessionModel? savedNotifiedSession;
       final sub = coordinator.studioSessionSavedStream.listen((sess) {
         savedNotifiedSession = sess;
@@ -223,17 +232,27 @@ void main() {
 
       // Verify backend was called upon START command
       expect(fakeStudioApi.startedSessions.length, equals(1));
-      expect(fakeStudioApi.startedSessions.first['device_id'], equals('HK-SHOE-TEST-001'));
-      expect(fakeStudioApi.startedSessions.first['label'], equals('course_fractionne'));
+      expect(fakeStudioApi.startedSessions.first['device_id'],
+          equals('HK-SHOE-TEST-001'));
+      expect(fakeStudioApi.startedSessions.first['label'],
+          equals('course_fractionne'));
       expect(fakeStudioApi.startedSessions.first['duration_sec'], equals(30.0));
 
       // Verify sessionId returned by REST API was sent to footwear
-      expect(fakeBle.lastStartedStudioSessionId, equals('88888888-9999-aaaa-bbbb-cccccccccccc'));
+      expect(fakeBle.lastStartedStudioSessionId,
+          equals('88888888-9999-aaaa-bbbb-cccccccccccc'));
+      fakeBle.emitStatus('RECORDING 30.0');
+      fakeBle.emitStatus(
+        'FINISHED 105 88888888-9999-aaaa-bbbb-cccccccccccc 2.1',
+      );
+      await Future<void>.delayed(Duration.zero);
 
       // 2. Receive BLE Burst stream
       final frames = [
-        const ImuReadingModel(deltaMs: 0, ax: 0.1, ay: 0.9, az: -0.2, gx: 10, gy: -5, gz: 0),
-        const ImuReadingModel(deltaMs: 20, ax: 0.12, ay: 0.88, az: -0.19, gx: 12, gy: -4, gz: 1),
+        const ImuReadingModel(
+            deltaMs: 0, ax: 0.1, ay: 0.9, az: -0.2, gx: 10, gy: -5, gz: 0),
+        const ImuReadingModel(
+            deltaMs: 20, ax: 0.12, ay: 0.88, az: -0.19, gx: 12, gy: -4, gz: 1),
       ];
 
       final burstResult = BurstReassemblyResult(
@@ -250,19 +269,24 @@ void main() {
       // 3. Verify MQTT publishing with reserved official UUID
       expect(fakeMqtt.publishedStudioSessions.length, equals(1));
       final publishedSession = fakeMqtt.publishedStudioSessions.first;
-      expect(publishedSession.sessionId, equals('88888888-9999-aaaa-bbbb-cccccccccccc'));
+      expect(publishedSession.sessionId,
+          equals('88888888-9999-aaaa-bbbb-cccccccccccc'));
       expect(publishedSession.label, equals('course_fractionne'));
       expect(publishedSession.deviceId, equals('HK-SHOE-TEST-001'));
       expect(publishedSession.readings.length, equals(2));
+      expect(publishedSession.durationSec, equals(2.1));
 
       // 4. Verify Stream UI Toast / SnackBar notification
       expect(savedNotifiedSession, isNotNull);
-      expect(savedNotifiedSession!.sessionId, equals('88888888-9999-aaaa-bbbb-cccccccccccc'));
+      expect(savedNotifiedSession!.sessionId,
+          equals('88888888-9999-aaaa-bbbb-cccccccccccc'));
 
       await sub.cancel();
     });
 
-    test('Commande Studio distante MQTT : Déclenche la capture BLE avec le session_id officiel sans appel REST', () async {
+    test(
+        'Commande Studio distante MQTT : Déclenche la capture BLE avec le session_id officiel sans appel REST',
+        () async {
       StudioSessionModel? savedNotifiedSession;
       final sub = coordinator.studioSessionSavedStream.listen((sess) {
         savedNotifiedSession = sess;
@@ -282,11 +306,13 @@ void main() {
       expect(fakeStudioApi.startedSessions.isEmpty, isTrue);
 
       // Verify BLE START command was sent with official sessionId received from backend
-      expect(fakeBle.lastStartedStudioSessionId, equals('99999999-aaaa-bbbb-cccc-dddddddddddd'));
+      expect(fakeBle.lastStartedStudioSessionId,
+          equals('99999999-aaaa-bbbb-cccc-dddddddddddd'));
 
       // 2. Receive BLE Burst stream
       final frames = [
-        const ImuReadingModel(deltaMs: 0, ax: 0.2, ay: 0.8, az: -0.1, gx: 5, gy: -2, gz: 3),
+        const ImuReadingModel(
+            deltaMs: 0, ax: 0.2, ay: 0.8, az: -0.1, gx: 5, gy: -2, gz: 3),
       ];
 
       final burstResult = BurstReassemblyResult(
@@ -303,19 +329,23 @@ void main() {
       // 3. Verify MQTT publishing with same UUID received in command
       expect(fakeMqtt.publishedStudioSessions.length, equals(1));
       final published = fakeMqtt.publishedStudioSessions.first;
-      expect(published.sessionId, equals('99999999-aaaa-bbbb-cccc-dddddddddddd'));
+      expect(
+          published.sessionId, equals('99999999-aaaa-bbbb-cccc-dddddddddddd'));
       expect(published.label, equals('test_web_remote'));
       expect(published.deviceId, equals('HK-SHOE-TEST-001'));
       expect(published.readings.length, equals(1));
 
       // 4. UI notification
       expect(savedNotifiedSession, isNotNull);
-      expect(savedNotifiedSession!.sessionId, equals('99999999-aaaa-bbbb-cccc-dddddddddddd'));
+      expect(savedNotifiedSession!.sessionId,
+          equals('99999999-aaaa-bbbb-cccc-dddddddddddd'));
 
       await sub.cancel();
     });
 
-    test('triggerStudioSession génère un UUID v4 valide si aucun service REST n\'est configuré', () async {
+    test(
+        'triggerStudioSession génère un UUID v4 valide si aucun service REST n\'est configuré',
+        () async {
       final standaloneCoordinator = GatewayCoordinator(
         bleClient: fakeBle,
         mqttService: fakeMqtt,
@@ -337,7 +367,9 @@ void main() {
       standaloneCoordinator.stopRouting();
     });
 
-    test('Relais Studio Burst : Transmet les trames même si CRC32 présente une anomalie pour éviter la perte de données', () async {
+    test(
+        'Relais Studio Burst : Transmet les trames même si CRC32 présente une anomalie pour éviter la perte de données',
+        () async {
       final List<String> logs = [];
       final testBle = FakeBleFootwearClient();
       final testMqtt = FakeMqttGatewayService();
@@ -350,7 +382,8 @@ void main() {
       loggedCoordinator.startRouting();
 
       final frames = [
-        const ImuReadingModel(deltaMs: 0, ax: 0.1, ay: 0.9, az: -0.2, gx: 10, gy: -5, gz: 0),
+        const ImuReadingModel(
+            deltaMs: 0, ax: 0.1, ay: 0.9, az: -0.2, gx: 10, gy: -5, gz: 0),
       ];
 
       // Burst completed with invalid CRC
@@ -373,7 +406,9 @@ void main() {
       testMqtt.disconnect();
     });
 
-    test('Relais Studio Burst : Ignore la publication si le burst ne contient aucun échantillon IMU', () async {
+    test(
+        'Relais Studio Burst : Ignore la publication si le burst ne contient aucun échantillon IMU',
+        () async {
       final List<String> logs = [];
       final testBle = FakeBleFootwearClient();
       final testMqtt = FakeMqttGatewayService();
@@ -404,7 +439,9 @@ void main() {
       testMqtt.disconnect();
     });
 
-    test('Présence unitaire BLE : startRouting et stopRouting émettent online et offline sur status', () async {
+    test(
+        'Présence unitaire BLE : startRouting et stopRouting émettent online et offline sur status',
+        () async {
       final localBle = FakeBleFootwearClient();
       final localMqtt = FakeMqttGatewayService();
       final localCoordinator = GatewayCoordinator(
@@ -433,7 +470,9 @@ void main() {
       localMqtt.disconnect();
     });
 
-    test('Déduplication Studio : Ignore l\'écho distant MQTT si la session est déjà en cours localement', () async {
+    test(
+        'Déduplication Studio : Ignore l\'écho distant MQTT si la session est déjà en cours localement',
+        () async {
       final List<String> logs = [];
       final testBle = FakeBleFootwearClient();
       final testMqtt = FakeMqttGatewayService();
@@ -468,14 +507,17 @@ void main() {
 
       // Verify BLE client did not receive a second START call
       expect(testBle.startStudioSessionCallCount, equals(1));
-      expect(logs.any((l) => l.contains('Studio session echo ignored')), isTrue);
+      expect(
+          logs.any((l) => l.contains('Studio session echo ignored')), isTrue);
 
       loggedCoordinator.stopRouting();
       testBle.dispose();
       testMqtt.disconnect();
     });
 
-    test('Déduplication Studio : Ignore toute commande distante MQTT lorsqu\'une capture est active', () async {
+    test(
+        'Déduplication Studio : Ignore toute commande distante MQTT lorsqu\'une capture est active',
+        () async {
       final List<String> logs = [];
       final testBle = FakeBleFootwearClient();
       final testMqtt = FakeMqttGatewayService();
@@ -509,14 +551,17 @@ void main() {
 
       // Verify second BLE call is blocked by _isStudioRecordingActive
       expect(testBle.startStudioSessionCallCount, equals(1));
-      expect(logs.any((l) => l.contains('Studio session echo ignored')), isTrue);
+      expect(
+          logs.any((l) => l.contains('Studio session echo ignored')), isTrue);
 
       loggedCoordinator.stopRouting();
       testBle.dispose();
       testMqtt.disconnect();
     });
 
-    test('Statut Studio BLE : Libère l\'état de capture si le firmware notifie ERROR ou CANCELLED', () async {
+    test(
+        'Statut Studio BLE : Libère l\'état de capture si le firmware notifie ERROR ou CANCELLED',
+        () async {
       final List<String> logs = [];
       final testBle = FakeBleFootwearClient();
       final testMqtt = FakeMqttGatewayService();

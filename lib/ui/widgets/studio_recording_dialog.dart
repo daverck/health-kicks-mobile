@@ -16,6 +16,7 @@ class StudioRecordingDialog extends StatefulWidget {
   final Stream<dynamic>? sessionSavedStream;
   final Stream<BleConnectionStatus>? connectionStatusStream;
   final Future<void> Function()? onCancel;
+  final Future<void> Function()? onFinish;
   final StudioAudioFeedbackService? audioService;
 
   const StudioRecordingDialog({
@@ -26,6 +27,7 @@ class StudioRecordingDialog extends StatefulWidget {
     this.sessionSavedStream,
     this.connectionStatusStream,
     this.onCancel,
+    this.onFinish,
     this.audioService,
   });
 
@@ -48,6 +50,9 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
   int _samplesCollected = 0;
   String? _errorMessage;
   bool _isCancelling = false;
+  bool _isFinishing = false;
+
+  static const double _minimumRecordingDurationSec = 2.0;
 
   StreamSubscription<String>? _statusSub;
   StreamSubscription<dynamic>? _savedSub;
@@ -173,10 +178,19 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
       if (parts.length >= 2) {
         _samplesCollected = int.tryParse(parts[1]) ?? 0;
       }
+      if (parts.length >= 4) {
+        final actualDuration = double.tryParse(parts[3]);
+        if (actualDuration != null &&
+            actualDuration >= _minimumRecordingDurationSec) {
+          _targetDurationSec = actualDuration;
+          _elapsedRecordingSec = actualDuration;
+        }
+      }
       _recordingProgressTimer?.cancel();
       _recordingTimeoutTimer?.cancel();
       setState(() {
         _state = StudioActiveState.transmitting;
+        _isFinishing = false;
       });
       _startTransmissionTimeout();
     } else if (status == 'CANCELLED') {
@@ -201,6 +215,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
       _audioService.stopContinuousTone();
       setState(() {
         _state = StudioActiveState.error;
+        _isFinishing = false;
         _errorMessage = status.replaceFirst('ERROR', '').trim();
       });
     }
@@ -344,6 +359,16 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
           children: [
             const SizedBox(height: 12),
             _buildStateContent(theme),
+            if (_state == StudioActiveState.recording &&
+                _errorMessage != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _errorMessage!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ],
           ],
         ),
         actions: _buildActions(theme),
@@ -365,7 +390,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
 
   List<Widget> _buildActions(ThemeData theme) {
     if (_state == StudioActiveState.countdown || _state == StudioActiveState.recording) {
-      return [
+      final actions = <Widget>[
         TextButton(
           onPressed: _isCancelling
               ? null
@@ -390,6 +415,34 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
           child: const Text('Annuler', style: TextStyle(color: Colors.redAccent)),
         ),
       ];
+      if (_state == StudioActiveState.recording &&
+          _elapsedRecordingSec >= _minimumRecordingDurationSec &&
+          _elapsedRecordingSec < _targetDurationSec &&
+          widget.onFinish != null) {
+        actions.insert(
+          0,
+          FilledButton.icon(
+            onPressed: _isFinishing
+                ? null
+                : () async {
+                    setState(() => _isFinishing = true);
+                    try {
+                      await widget.onFinish!();
+                    } catch (error) {
+                      if (!mounted) return;
+                      setState(() {
+                        _isFinishing = false;
+                        _errorMessage =
+                            "Impossible de terminer l'enregistrement : $error";
+                      });
+                    }
+                  },
+            icon: const Icon(Icons.stop, size: 18),
+            label: Text(_isFinishing ? 'Arrêt...' : 'Terminer'),
+          ),
+        );
+      }
+      return actions;
     } else if (_state == StudioActiveState.transmitting) {
       return [
         TextButton(

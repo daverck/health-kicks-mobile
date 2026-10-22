@@ -92,6 +92,21 @@ class GatewayCoordinator {
 
     // 4. Listen to BLE Studio status (to release state on cancellation or error)
     _studioStatusSub = bleClient.studioStatusStream.listen((status) {
+      if (status.startsWith('RECORDING')) {
+        _currentStudioStartTimestamp =
+            DateTime.now().millisecondsSinceEpoch / 1000.0;
+      } else if (status.startsWith('FINISHED')) {
+        final parts = status.split(' ');
+        if (parts.length >= 4) {
+          final actualDuration = double.tryParse(parts[3]);
+          if (actualDuration != null &&
+              actualDuration >= 2.0 &&
+              actualDuration <= _currentStudioDurationSec) {
+            _currentStudioDurationSec = actualDuration;
+          }
+        }
+      }
+
       if (status.startsWith('ERROR') || status == 'CANCELLED') {
         onLog?.call(
           'BLE Studio status received: $status -> Releasing capture state.',

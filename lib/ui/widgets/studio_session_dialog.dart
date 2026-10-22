@@ -25,9 +25,15 @@ class StudioSessionDialog extends StatefulWidget {
   final String? initialActivityKey;
   final String? initialCustomLabel;
   final SharedPreferences? preferences;
+  final void Function({
+    required String activityKey,
+    required String customLabel,
+  })? onActivitySaved;
 
   static const String prefLastActivityKey = 'hk_studio_last_activity';
   static const String prefLastCustomLabel = 'hk_studio_last_custom_label';
+  static const String prefRecentActivityKeys = 'hk_studio_recent_activities';
+  static const int maxRecentActivities = 4;
 
   const StudioSessionDialog({
     super.key,
@@ -35,23 +41,33 @@ class StudioSessionDialog extends StatefulWidget {
     this.initialActivityKey,
     this.initialCustomLabel,
     this.preferences,
+    this.onActivitySaved,
   });
 
   static const List<StudioActivityOption> defaultActivities = [
     StudioActivityOption(key: 'walk', label: 'Marche', emoji: '🚶'),
     StudioActivityOption(key: 'run', label: 'Course', emoji: '🏃'),
     StudioActivityOption(key: 'stairs', label: 'Escaliers', emoji: '🪜'),
-    StudioActivityOption(key: 'stairs_up', label: 'Escaliers (Montée)', emoji: '↗️'),
-    StudioActivityOption(key: 'stairs_down', label: 'Escaliers (Descente)', emoji: '↘️'),
+    StudioActivityOption(
+        key: 'stairs_up', label: 'Escaliers (Montée)', emoji: '↗️'),
+    StudioActivityOption(
+        key: 'stairs_down', label: 'Escaliers (Descente)', emoji: '↘️'),
     StudioActivityOption(key: 'idle', label: 'Repos / Assis', emoji: '🪑'),
-    StudioActivityOption(key: 'sit_down', label: "S'asseoir (Transition)", emoji: '🪑'),
+    StudioActivityOption(
+        key: 'sit_down', label: "S'asseoir (Transition)", emoji: '🪑'),
     StudioActivityOption(key: 'jump', label: 'Saut', emoji: '🦘'),
-    StudioActivityOption(key: 'stumble_recover', label: 'Trébuchement rattrapé', emoji: '⚠️'),
-    StudioActivityOption(key: 'fall_forward', label: 'Chute avant', emoji: '⤵️'),
-    StudioActivityOption(key: 'fall_backward', label: 'Chute arrière', emoji: '⤴️'),
-    StudioActivityOption(key: 'fall_lateral', label: 'Chute latérale', emoji: '↔️'),
-    StudioActivityOption(key: 'fall_recovery', label: 'Chute relevée', emoji: '🔄'),
-    StudioActivityOption(key: 'custom', label: 'Autre / Personnalisé', emoji: '🏷️'),
+    StudioActivityOption(
+        key: 'stumble_recover', label: 'Trébuchement rattrapé', emoji: '⚠️'),
+    StudioActivityOption(
+        key: 'fall_forward', label: 'Chute avant', emoji: '⤵️'),
+    StudioActivityOption(
+        key: 'fall_backward', label: 'Chute arrière', emoji: '⤴️'),
+    StudioActivityOption(
+        key: 'fall_lateral', label: 'Chute latérale', emoji: '↔️'),
+    StudioActivityOption(
+        key: 'fall_recovery', label: 'Chute relevée', emoji: '🔄'),
+    StudioActivityOption(
+        key: 'custom', label: 'Autre / Personnalisé', emoji: '🏷️'),
   ];
 
   static const double fixedDurationSec = 5.0;
@@ -63,32 +79,44 @@ class StudioSessionDialog extends StatefulWidget {
 class _StudioSessionDialogState extends State<StudioSessionDialog> {
   late String _selectedActivityKey;
   late final TextEditingController _customLabelController;
+  List<String> _recentActivityKeys = [];
 
   @override
   void initState() {
     super.initState();
     _selectedActivityKey = widget.initialActivityKey ?? 'walk';
-    _customLabelController = TextEditingController(text: widget.initialCustomLabel ?? '');
+    _customLabelController =
+        TextEditingController(text: widget.initialCustomLabel ?? '');
 
-    if (widget.initialActivityKey == null) {
-      _loadSavedPreferences();
-    }
+    _loadSavedPreferences();
   }
 
   Future<void> _loadSavedPreferences() async {
     try {
       final prefs = widget.preferences ?? await SharedPreferences.getInstance();
       final savedKey = prefs.getString(StudioSessionDialog.prefLastActivityKey);
-      final savedCustom = prefs.getString(StudioSessionDialog.prefLastCustomLabel);
-      if (savedKey != null && StudioSessionDialog.defaultActivities.any((a) => a.key == savedKey)) {
-        if (mounted) {
-          setState(() {
+      final savedCustom =
+          prefs.getString(StudioSessionDialog.prefLastCustomLabel);
+      final savedRecents =
+          prefs.getStringList(StudioSessionDialog.prefRecentActivityKeys) ?? [];
+      if (mounted) {
+        setState(() {
+          _recentActivityKeys = savedRecents
+              .where((key) => StudioSessionDialog.defaultActivities
+                  .any((a) => a.key == key))
+              .toSet()
+              .take(StudioSessionDialog.maxRecentActivities)
+              .toList();
+          if (widget.initialActivityKey == null &&
+              savedKey != null &&
+              StudioSessionDialog.defaultActivities
+                  .any((a) => a.key == savedKey)) {
             _selectedActivityKey = savedKey;
-            if (savedCustom != null && savedCustom.isNotEmpty) {
-              _customLabelController.text = savedCustom;
-            }
-          });
-        }
+          }
+          if (savedCustom != null && savedCustom.isNotEmpty) {
+            _customLabelController.text = savedCustom;
+          }
+        });
       }
     } catch (_) {
       // Ignore preference read errors
@@ -100,8 +128,19 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
       final prefs = widget.preferences ?? await SharedPreferences.getInstance();
       await prefs.setString(StudioSessionDialog.prefLastActivityKey, key);
       if (key == 'custom') {
-        await prefs.setString(StudioSessionDialog.prefLastCustomLabel, customLabel);
+        await prefs.setString(
+            StudioSessionDialog.prefLastCustomLabel, customLabel);
       }
+      final previous =
+          prefs.getStringList(StudioSessionDialog.prefRecentActivityKeys) ?? [];
+      final recentKeys = [
+        key,
+        ...previous.where((recentKey) => recentKey != key),
+      ].take(StudioSessionDialog.maxRecentActivities);
+      await prefs.setStringList(
+        StudioSessionDialog.prefRecentActivityKeys,
+        recentKeys.toList(),
+      );
     } catch (_) {
       // Ignore preference write errors
     }
@@ -113,17 +152,22 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
     super.dispose();
   }
 
-  void _onConfirm() {
+  Future<void> _onConfirm() async {
     String label = _selectedActivityKey;
     final customText = _customLabelController.text.trim();
     if (_selectedActivityKey == 'custom') {
       label = customText.isNotEmpty ? customText : 'custom';
     }
 
-    _savePreferences(_selectedActivityKey, customText);
+    await _savePreferences(_selectedActivityKey, customText);
+    if (!mounted) return;
+    widget.onActivitySaved?.call(
+      activityKey: _selectedActivityKey,
+      customLabel: customText,
+    );
 
     Navigator.of(context).pop();
-    widget.onStartSession(
+    await widget.onStartSession(
       label: label,
       durationSec: StudioSessionDialog.fixedDurationSec,
     );
@@ -166,7 +210,8 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
               items: StudioSessionDialog.defaultActivities.map((opt) {
                 return DropdownMenuItem<String>(
@@ -182,6 +227,73 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
                 }
               },
             ),
+            if (_recentActivityKeys.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Récemment utilisés',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: _recentActivityKeys.map((key) {
+                  final option = StudioSessionDialog.defaultActivities
+                      .firstWhere((activity) => activity.key == key);
+                  final isSelected = key == _selectedActivityKey;
+                  final label = key == 'custom' &&
+                          _customLabelController.text.trim().isNotEmpty
+                      ? _customLabelController.text.trim()
+                      : option.label;
+
+                  return SizedBox(
+                    width: 120,
+                    height: 56,
+                    child: Material(
+                      color: isSelected
+                          ? theme.colorScheme.primaryContainer
+                          : theme.colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(10),
+                      child: InkWell(
+                        key: ValueKey('studio-recent-activity-$key'),
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: () => setState(() {
+                          _selectedActivityKey = key;
+                        }),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isSelected
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.outlineVariant,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Text(option.emoji),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  label,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.labelMedium,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
             if (_selectedActivityKey == 'custom') ...[
               const SizedBox(height: 12),
               TextField(
@@ -192,14 +304,16 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
               ),
             ],
             const SizedBox(height: 12),
             Row(
               children: [
-                Icon(Icons.timer_outlined, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                Icon(Icons.timer_outlined,
+                    size: 16, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 6),
                 Text(
                   'Durée : 5 secondes',

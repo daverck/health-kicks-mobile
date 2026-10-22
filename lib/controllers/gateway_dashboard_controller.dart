@@ -8,6 +8,7 @@ import '../core/config/app_config.dart';
 import '../core/constants/ble_constants.dart';
 import '../core/permissions/permission_service.dart';
 import '../models/activity_detection_model.dart';
+import '../models/firmware_release_model.dart';
 import '../models/haptic_command_model.dart';
 import '../models/log_entry_model.dart';
 import '../models/step_data_model.dart';
@@ -35,10 +36,10 @@ class GatewayDashboardController extends ChangeNotifier {
   final String deviceId;
   final String targetDeviceId;
   final AuthService? authService;
+  final FirmwareService _firmwareService;
 
   final PermissionService _permissionService = PermissionService();
   late final BackgroundSurveillanceService _surveillanceService;
-  late final FirmwareService _firmwareService = FirmwareService();
   late final DashboardOdometerCoordinator _odometerCoordinator;
   late final InactivitySettingsService _inactivitySettingsService;
 
@@ -59,6 +60,10 @@ class GatewayDashboardController extends ChangeNotifier {
   bool _isUserSeated = false;
   final ValueNotifier<bool> _mqttConnectedNotifier = ValueNotifier<bool>(false);
   bool _isInitializingBleClient = false;
+  FirmwareReleaseModel? _latestFirmwareRelease;
+  String? _installedFirmwareVersion;
+  DateTime? _installedFirmwareDate;
+  String? _announcedFirmwareReleaseVersion;
   final List<ActivityDetectionModel> _recentActivities = [];
   final StreamController<ActivityDetectionModel> _activityStreamController =
       StreamController<ActivityDetectionModel>.broadcast();
@@ -68,6 +73,7 @@ class GatewayDashboardController extends ChangeNotifier {
   String _lastStudioCustomLabel = '';
   final List<LogEntry> _logs = [];
   bool _isDisposed = false;
+  bool _isInitialized = false;
 
   // Callbacks to UI
   void Function(String message, {Color? backgroundColor})? onShowSnackBar;
@@ -78,10 +84,11 @@ class GatewayDashboardController extends ChangeNotifier {
     this.deviceId = 'HK-2',
     this.targetDeviceId = 'HealthKicks-HK-2',
     this.authService,
+    FirmwareService? firmwareService,
     this.onShowSnackBar,
     this.onShowRecordingDialog,
     this.onPermissionDeniedAction,
-  });
+  }) : _firmwareService = firmwareService ?? FirmwareService();
 
   // Getters
   BleConnectionStatus get bleStatus => _bleStatus;
@@ -108,6 +115,10 @@ class GatewayDashboardController extends ChangeNotifier {
   BackgroundSurveillanceService get surveillanceService => _surveillanceService;
 
   void initialize() {
+    if (_isInitialized || _isDisposed) return;
+    _isInitialized = true;
+    unawaited(checkForFirmwareUpdate());
+
     _inactivitySettingsService = InactivitySettingsService();
     unawaited(_inactivitySettingsService.loadSettings());
 
@@ -131,6 +142,85 @@ class GatewayDashboardController extends ChangeNotifier {
 
     _ensureBleManager();
     _initGateway();
+  }
+
+  Future<void> checkForFirmwareUpdate() async {
+    if (_isDisposed) return;
+    String? installedVersion;
+    DateTime? installedDate;
+    try {
+      installedVersion = await _firmwareService.getLocalInstalledVersion();
+      installedDate = await _firmwareService.getLocalInstalledDate();
+      _installedFirmwareVersion = installedVersion;
+      _installedFirmwareDate = installedDate;
+    } catch (e) {
+      addLog('FIRMWARE', 'Version locale non disponible : $e',
+          color: Colors.orange);
+    }
+    if (_isDisposed) return;
+
+    try {
+      String? token;
+      try {
+        token = await authService?.getValidAccessToken();
+      } catch (e) {
+        addLog('FIRMWARE',
+            'Jeton API indisponible, tentative de vérification publique : $e',
+            color: Colors.orange);
+      }
+      if (_isDisposed) return;
+
+      final release = await _firmwareService.fetchLatestRelease(
+        backendUrl: authService?.backendBaseUrl,
+        token: token,
+      );
+      if (_isDisposed) return;
+
+      _latestFirmwareRelease = release;
+      addLog('FIRMWARE',
+          'Vérification automatique terminée : ${release.version}.');
+      _notifyIfFirmwareUpdateAvailable(
+        installedVersion: _installedFirmwareVersion ?? installedVersion,
+        installedDate: _installedFirmwareDate ?? installedDate,
+      );
+    } catch (e) {
+      if (!_isDisposed) {
+        addLog(
+            'FIRMWARE', 'Échec de la vérification automatique du firmware : $e',
+            color: Colors.red);
+      }
+    }
+  }
+
+  void _notifyIfFirmwareUpdateAvailable({
+    required String? installedVersion,
+    required DateTime? installedDate,
+  }) {
+    if (_isDisposed) return;
+    final release = _latestFirmwareRelease;
+    if (release == null) return;
+
+    if (installedVersion == null && installedDate == null) {
+      addLog('FIRMWARE',
+          'Version installée inconnue ; comparaison reportée à la connexion BLE.');
+      return;
+    }
+
+    final isNewer = _firmwareService.isCloudReleaseNewer(
+      cloudReleaseDate: release.releaseDate,
+      installedDate: installedDate,
+      cloudVersion: release.version,
+      installedVersion: installedVersion,
+    );
+    if (!isNewer || _announcedFirmwareReleaseVersion == release.version) return;
+
+    _announcedFirmwareReleaseVersion = release.version;
+    addLog('FIRMWARE', 'Nouveau firmware disponible : ${release.version}.',
+        color: Colors.orange);
+    onShowSnackBar?.call(
+      'Nouveau firmware disponible (${release.version}). Consultez Paramètres > Mise à jour du firmware.',
+      backgroundColor: Colors.orange.shade800,
+    );
   }
 
   void setForegroundState(bool isForeground) {
@@ -442,6 +532,13 @@ class GatewayDashboardController extends ChangeNotifier {
 
       if (_bleClient?.firmwareVersion != null && _bleClient!.firmwareVersion!.isNotEmpty) {
         addLog('BLE', 'Firmware détecté : ${_bleClient!.firmwareVersion} (${_bleClient!.rawBuildString ?? ""})');
+        _installedFirmwareVersion = _bleClient!.firmwareVersion;
+        _installedFirmwareDate =
+            _bleClient!.firmwareBuildDate ?? _installedFirmwareDate;
+        _notifyIfFirmwareUpdateAvailable(
+          installedVersion: _installedFirmwareVersion,
+          installedDate: _installedFirmwareDate,
+        );
         _firmwareService.saveLocalInstalledFirmware(
           installedDate: _bleClient!.firmwareBuildDate ?? DateTime.now().toUtc(),
           version: _bleClient!.firmwareVersion!,
@@ -450,6 +547,12 @@ class GatewayDashboardController extends ChangeNotifier {
         unawaited(_firmwareService.readDeviceFirmwareInfo(device).then((info) {
           if (info.version != null && info.version!.isNotEmpty) {
             addLog('BLE', 'Firmware détecté : ${info.version} (${info.rawBuildString ?? ""})');
+            _installedFirmwareVersion = info.version;
+            _installedFirmwareDate = info.buildDate ?? _installedFirmwareDate;
+            _notifyIfFirmwareUpdateAvailable(
+              installedVersion: _installedFirmwareVersion,
+              installedDate: _installedFirmwareDate,
+            );
             _firmwareService.saveLocalInstalledFirmware(
               installedDate: info.buildDate ?? DateTime.now().toUtc(),
               version: info.version!,
@@ -580,6 +683,17 @@ class GatewayDashboardController extends ChangeNotifier {
         notifyListeners();
       }
     } catch (_) {}
+  }
+
+  void rememberStudioActivity({
+    required String activityKey,
+    required String customLabel,
+  }) {
+    _lastStudioActivityKey = activityKey;
+    if (activityKey == 'custom') {
+      _lastStudioCustomLabel = customLabel;
+    }
+    notifyListeners();
   }
 
   Future<void> triggerStudioSession({
@@ -730,8 +844,11 @@ class GatewayDashboardController extends ChangeNotifier {
     _isDisposed = true;
     _activityStreamController.close();
     _bleManager?.removeListener(_onBleManagerUpdated);
-    _inactivitySettingsService.dispose();
-    _odometerCoordinator.dispose();
+    if (_isInitialized) {
+      _inactivitySettingsService.dispose();
+      _odometerCoordinator.dispose();
+      _surveillanceService.dispose();
+    }
     _studioSavedSub?.cancel();
     _remoteStudioCommandSub?.cancel();
     _coordinator?.stopRouting();
@@ -739,7 +856,6 @@ class GatewayDashboardController extends ChangeNotifier {
     _bleClient = null;
     _bleClientNotifier.dispose();
     _bleManager?.dispose();
-    _surveillanceService.dispose();
     _mqttService?.disconnect();
     _mqttConnectedNotifier.dispose();
     super.dispose();

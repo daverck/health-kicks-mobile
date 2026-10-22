@@ -242,6 +242,17 @@ class BleFootwearClient {
     }
   }
 
+  /// Ends the active Studio recording and asks the footwear to transmit its samples.
+  Future<void> finishStudioSession() async {
+    if (_studioControlChar == null) {
+      throw StateError('Studio Control characteristic not initialized.');
+    }
+    await _studioControlChar!.write(
+      utf8.encode('FINISH'),
+      withoutResponse: false,
+    );
+  }
+
   /// Sends zero/tilt calibration command to the footwear (Opcode 0x05 on 0003 or "CALIBRATE" on 0004).
   Future<void> sendCalibrateZeroCommand() async {
     if (_hapticChar != null) {

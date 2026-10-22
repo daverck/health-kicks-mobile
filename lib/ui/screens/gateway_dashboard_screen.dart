@@ -128,6 +128,9 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
             await _controller.bleClient?.cancelStudioSession();
           } catch (_) {}
         },
+        onFinish: () async {
+          await _controller.bleClient?.finishStudioSession();
+        },
       ),
     ).then((_) {
       _controller.isRecordingDialogVisible = false;
@@ -145,6 +148,14 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
       builder: (dialogCtx) => StudioSessionDialog(
         initialActivityKey: _controller.lastStudioActivityKey,
         initialCustomLabel: _controller.lastStudioCustomLabel,
+        onActivitySaved: ({
+          required String activityKey,
+          required String customLabel,
+        }) =>
+            _controller.rememberStudioActivity(
+          activityKey: activityKey,
+          customLabel: customLabel,
+        ),
         onStartSession: ({required String label, required double durationSec}) async {
           // Note: StudioSessionDialog._onConfirm already popped itself, so do not pop dialogCtx here.
           if (!isConnected) {
