@@ -55,6 +55,18 @@ class BleConnectionManager extends ChangeNotifier {
   StreamSubscription<List<ScanResult>>? _scanSubscription;
   StreamSubscription<BluetoothConnectionState>? _deviceStateSubscription;
   Timer? _scanTimeoutTimer;
+  Timer? _reconnectTimer;
+  Timer? _autoReconnectWindowTimer;
+  Stopwatch? _autoReconnectWindow;
+  bool _autoReconnectEnabled = false;
+  String? _autoReconnectTargetDeviceId;
+  Duration _autoReconnectScanTimeout = BleConstants.defaultScanTimeout;
+  BleLogCallback? _autoReconnectLog;
+  int _connectionAttemptId = 0;
+
+  static const Duration _autoReconnectDelay = Duration(seconds: 2);
+  static const Duration _autoReconnectErrorDelay = Duration(seconds: 30);
+  static const Duration _autoReconnectMaxDuration = Duration(minutes: 2);
 
   int _negotiatedMtu = 23;
   int get negotiatedMtu => _negotiatedMtu;
@@ -76,7 +88,8 @@ class BleConnectionManager extends ChangeNotifier {
   }
 
   @visibleForTesting
-  void updateStatusForTesting(BleConnectionStatus newStatus) => _updateStatus(newStatus);
+  void updateStatusForTesting(BleConnectionStatus newStatus) =>
+      _updateStatus(newStatus);
 
   /// Starts scanning and automatically connects to the first detected HealthKicks device.
   /// If no device is found after [timeout] (default 3 minutes), scanning stops automatically.
@@ -86,13 +99,25 @@ class BleConnectionManager extends ChangeNotifier {
     BleLogCallback? onLog,
   }) async {
     final log = onLog ?? this.onLog;
+    final attemptId = ++_connectionAttemptId;
+    _autoReconnectEnabled = true;
+    _autoReconnectTargetDeviceId = targetDeviceId;
+    _autoReconnectScanTimeout = timeout;
+    _autoReconnectLog = log;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     log?.call('Checking permissions...');
 
     final permsResult = await _permissionService.requestDetailedBlePermissions(
       onLog: (msg) => log?.call(msg),
     );
 
+    if (!_isCurrentConnectionAttempt(attemptId)) return;
     if (!permsResult.isGranted) {
+      if (permsResult.isPermanentlyDenied) {
+        _autoReconnectEnabled = false;
+        _clearAutoReconnectWindow();
+      }
       _updateStatus(BleConnectionStatus.disconnected);
       final reason = permsResult.isPermanentlyDenied
           ? 'Bluetooth/Location permissions permanently denied. Please enable them in app settings.'
@@ -114,26 +139,41 @@ class BleConnectionManager extends ChangeNotifier {
 
     // Check if Bluetooth is turned on (with timeout to never block)
     try {
-      final state = await FlutterBluePlus.adapterState
-          .first
-          .timeout(const Duration(seconds: 2), onTimeout: () => BluetoothAdapterState.on);
+      final state = await FlutterBluePlus.adapterState.first.timeout(
+          const Duration(seconds: 2),
+          onTimeout: () => BluetoothAdapterState.on);
+      if (!_isCurrentConnectionAttempt(attemptId)) return;
       if (state != BluetoothAdapterState.on) {
         log?.call('Bluetooth inactive, attempting activation...');
         await FlutterBluePlus.turnOn().timeout(const Duration(seconds: 4));
       }
+      if (!_isCurrentConnectionAttempt(attemptId)) return;
     } catch (e) {
+      if (!_isCurrentConnectionAttempt(attemptId)) return;
       log?.call('BT adapter warning: $e');
     }
 
+    final remainingReconnectTime = _remainingAutoReconnectTime;
+    if (remainingReconnectTime != null &&
+        remainingReconnectTime <= Duration.zero) {
+      await _expireAutoReconnectWindow();
+      return;
+    }
+    final scanTimeout =
+        remainingReconnectTime == null || timeout <= remainingReconnectTime
+            ? timeout
+            : remainingReconnectTime;
+
     _updateStatus(BleConnectionStatus.scanning);
-    final timeoutLabel = timeout.inMinutes > 0
-        ? '${timeout.inMinutes} minute(s)'
-        : '${timeout.inSeconds} second(s)';
+    final timeoutLabel = scanTimeout.inMinutes > 0
+        ? '${scanTimeout.inMinutes} minute(s)'
+        : '${scanTimeout.inSeconds} second(s)';
     log?.call('Starting scan (timeout: $timeoutLabel)...');
 
     // Scan timeout trigger if no device is found
-    _scanTimeoutTimer = Timer(timeout, () async {
-      if (_status == BleConnectionStatus.scanning) {
+    _scanTimeoutTimer = Timer(scanTimeout, () async {
+      if (_isCurrentConnectionAttempt(attemptId) &&
+          _status == BleConnectionStatus.scanning) {
         log?.call('No device detected after $timeoutLabel. Stopping scan.');
         try {
           await FlutterBluePlus.stopScan();
@@ -141,6 +181,7 @@ class BleConnectionManager extends ChangeNotifier {
         await _scanSubscription?.cancel();
         _scanSubscription = null;
         _updateStatus(BleConnectionStatus.disconnected);
+        _scheduleAutoReconnect();
       }
     });
 
@@ -148,10 +189,11 @@ class BleConnectionManager extends ChangeNotifier {
 
     try {
       await FlutterBluePlus.startScan(
-        timeout: timeout,
+        timeout: scanTimeout,
         androidUsesFineLocation: false,
       );
     } catch (e) {
+      if (!_isCurrentConnectionAttempt(attemptId)) return;
       _scanTimeoutTimer?.cancel();
       _scanTimeoutTimer = null;
       _updateStatus(BleConnectionStatus.disconnected);
@@ -160,6 +202,7 @@ class BleConnectionManager extends ChangeNotifier {
     }
 
     _scanSubscription = FlutterBluePlus.scanResults.listen((results) async {
+      if (!_isCurrentConnectionAttempt(attemptId)) return;
       for (final r in results) {
         final deviceId = r.device.remoteId.str;
         final advName = r.advertisementData.advName;
@@ -173,7 +216,9 @@ class BleConnectionManager extends ChangeNotifier {
         }
 
         final hasServiceUuid = r.advertisementData.serviceUuids.any(
-          (u) => u.toString().toLowerCase() == BleConstants.footwearServiceUuid.toLowerCase(),
+          (u) =>
+              u.toString().toLowerCase() ==
+              BleConstants.footwearServiceUuid.toLowerCase(),
         );
 
         final matchesTargetName = targetDeviceId != null
@@ -184,7 +229,8 @@ class BleConnectionManager extends ChangeNotifier {
             deviceId.toLowerCase() == targetDeviceId.toLowerCase();
 
         if (hasServiceUuid || matchesTargetName || matchesTargetMac) {
-          log?.call('Target found ($name / $deviceId), attempting connection...');
+          log?.call(
+              'Target found ($name / $deviceId), attempting connection...');
           _scanTimeoutTimer?.cancel();
           _scanTimeoutTimer = null;
           try {
@@ -195,18 +241,22 @@ class BleConnectionManager extends ChangeNotifier {
 
           bool connected = false;
           try {
-            await connectToDevice(r.device, onLog: log);
+            await connectToDevice(
+              r.device,
+              onLog: log,
+              connectionAttemptId: attemptId,
+            );
             connected = true;
           } catch (e) {
             log?.call('Auto-connect attempt failed: $e');
           }
 
-          if (!connected && _status != BleConnectionStatus.ready && _status != BleConnectionStatus.connected) {
-            log?.call('Auto-connect attempt failed. Re-initiating scan in 2s...');
-            await Future.delayed(const Duration(seconds: 2));
-            if (_status != BleConnectionStatus.ready && _status != BleConnectionStatus.connected) {
-              unawaited(startAutoConnect(targetDeviceId: targetDeviceId, timeout: timeout, onLog: log));
-            }
+          if (!connected &&
+              _status != BleConnectionStatus.ready &&
+              _status != BleConnectionStatus.connected) {
+            log?.call(
+                'Auto-connect attempt failed. Re-initiating scan in 2s...');
+            _scheduleAutoReconnect();
           }
           break;
         }
@@ -214,12 +264,120 @@ class BleConnectionManager extends ChangeNotifier {
     });
   }
 
+  bool _isCurrentConnectionAttempt(int attemptId) =>
+      !_isDisposed &&
+      _autoReconnectEnabled &&
+      attemptId == _connectionAttemptId;
+
+  Duration? get _remainingAutoReconnectTime {
+    final window = _autoReconnectWindow;
+    if (window == null) return null;
+    return _autoReconnectMaxDuration - window.elapsed;
+  }
+
+  void _startAutoReconnectWindow() {
+    if (_autoReconnectWindow != null || !_autoReconnectEnabled || _isDisposed) {
+      return;
+    }
+
+    _autoReconnectWindow = Stopwatch()..start();
+    _autoReconnectWindowTimer = Timer(
+      _autoReconnectMaxDuration,
+      _expireAutoReconnectWindow,
+    );
+  }
+
+  void _clearAutoReconnectWindow() {
+    _autoReconnectWindowTimer?.cancel();
+    _autoReconnectWindowTimer = null;
+    _autoReconnectWindow?.stop();
+    _autoReconnectWindow = null;
+  }
+
+  Future<void> _expireAutoReconnectWindow() async {
+    if (!_autoReconnectEnabled || _isDisposed) return;
+
+    _autoReconnectEnabled = false;
+    final expiredAttemptId = ++_connectionAttemptId;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _scanTimeoutTimer?.cancel();
+    _scanTimeoutTimer = null;
+    _autoReconnectLog?.call(
+      'Automatic BLE reconnection stopped after 2 minutes.',
+    );
+
+    try {
+      await FlutterBluePlus.stopScan();
+    } catch (_) {}
+    if (_isDisposed || expiredAttemptId != _connectionAttemptId) return;
+    await _scanSubscription?.cancel();
+    _scanSubscription = null;
+    await _deviceStateSubscription?.cancel();
+    _deviceStateSubscription = null;
+
+    final device = _connectedDevice;
+    _connectedDevice = null;
+    _negotiatedMtu = 23;
+    if (device != null) {
+      try {
+        await device.disconnect();
+      } catch (_) {}
+    }
+    _clearAutoReconnectWindow();
+    _updateStatus(BleConnectionStatus.disconnected);
+  }
+
+  void _scheduleAutoReconnect({Duration delay = _autoReconnectDelay}) {
+    if (!_autoReconnectEnabled ||
+        _isDisposed ||
+        _reconnectTimer?.isActive == true ||
+        _status == BleConnectionStatus.ready ||
+        _status == BleConnectionStatus.connected ||
+        _status == BleConnectionStatus.scanning ||
+        _status == BleConnectionStatus.connecting) {
+      return;
+    }
+
+    _startAutoReconnectWindow();
+    final remainingTime = _remainingAutoReconnectTime;
+    if (remainingTime == null || remainingTime <= Duration.zero) {
+      unawaited(_expireAutoReconnectWindow());
+      return;
+    }
+
+    final retryDelay = delay <= remainingTime ? delay : remainingTime;
+    _autoReconnectLog?.call(
+      'Unexpected disconnect. Retrying BLE connection in ${retryDelay.inSeconds}s...',
+    );
+    _reconnectTimer = Timer(
+      retryDelay,
+      () async {
+        _reconnectTimer = null;
+        if (!_autoReconnectEnabled || _isDisposed) return;
+
+        try {
+          await startAutoConnect(
+            targetDeviceId: _autoReconnectTargetDeviceId,
+            timeout: _autoReconnectScanTimeout,
+            onLog: _autoReconnectLog,
+          );
+        } catch (error) {
+          _autoReconnectLog?.call('Automatic BLE reconnection failed: $error');
+          _scheduleAutoReconnect(delay: _autoReconnectErrorDelay);
+        }
+      },
+    );
+  }
+
   /// Establishes connection with device and negotiates maximum MTU (>= 247).
-  Future<void> connectToDevice(BluetoothDevice device, {BleLogCallback? onLog}) async {
+  Future<void> connectToDevice(BluetoothDevice device,
+      {BleLogCallback? onLog, int? connectionAttemptId}) async {
     final log = onLog ?? this.onLog;
     _connectedDevice = device;
     _updateStatus(BleConnectionStatus.connecting);
-    log?.call('Connecting to ${device.platformName} (${device.remoteId.str})...');
+    log?.call(
+        'Connecting to ${device.platformName} (${device.remoteId.str})...');
 
     try {
       await device.connect(
@@ -227,6 +385,11 @@ class BleConnectionManager extends ChangeNotifier {
         autoConnect: false,
         timeout: const Duration(seconds: 15),
       );
+      if (connectionAttemptId != null &&
+          !_isCurrentConnectionAttempt(connectionAttemptId)) {
+        await device.disconnect();
+        return;
+      }
       _updateStatus(BleConnectionStatus.connected);
       log?.call('Connected to ${device.remoteId.str}. Negotiating MTU...');
 
@@ -242,6 +405,11 @@ class BleConnectionManager extends ChangeNotifier {
       } else {
         _negotiatedMtu = 247;
       }
+      if (connectionAttemptId != null &&
+          !_isCurrentConnectionAttempt(connectionAttemptId)) {
+        await device.disconnect();
+        return;
+      }
       notifyListeners();
 
       // Listen to connection state to handle automatic reconnection & unexpected drops
@@ -254,7 +422,11 @@ class BleConnectionManager extends ChangeNotifier {
           _deviceStateSubscription?.cancel();
           _deviceStateSubscription = null;
           _updateStatus(BleConnectionStatus.disconnected);
+          _startAutoReconnectWindow();
+          _scheduleAutoReconnect();
         } else if (state == BluetoothConnectionState.connected) {
+          _reconnectTimer?.cancel();
+          _reconnectTimer = null;
           if (_status != BleConnectionStatus.ready) {
             log?.call('Device reconnected.');
             _connectedDevice = device;
@@ -265,6 +437,7 @@ class BleConnectionManager extends ChangeNotifier {
       });
 
       _updateStatus(BleConnectionStatus.ready);
+      _clearAutoReconnectWindow();
       log?.call('Device ready for services initialization.');
     } catch (e) {
       _connectedDevice = null;
@@ -279,6 +452,11 @@ class BleConnectionManager extends ChangeNotifier {
 
   /// Cleanly disconnects active device.
   Future<void> disconnect() async {
+    _autoReconnectEnabled = false;
+    _connectionAttemptId++;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _clearAutoReconnectWindow();
     _scanTimeoutTimer?.cancel();
     _scanTimeoutTimer = null;
     await _scanSubscription?.cancel();
@@ -299,6 +477,11 @@ class BleConnectionManager extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _autoReconnectEnabled = false;
+    _connectionAttemptId++;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _clearAutoReconnectWindow();
     _scanTimeoutTimer?.cancel();
     _scanTimeoutTimer = null;
     _scanSubscription?.cancel();

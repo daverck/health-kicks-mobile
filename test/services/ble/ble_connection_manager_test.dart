@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/core/constants/ble_constants.dart';
 import 'package:healthkicks_mobile/core/permissions/permission_service.dart';
@@ -10,15 +12,30 @@ class FakePermissionService extends PermissionService {
   FakePermissionService({this.granted = true});
 
   @override
-  Future<BlePermissionResult> requestDetailedBlePermissions({PermissionLogCallback? onLog}) async {
+  Future<BlePermissionResult> requestDetailedBlePermissions(
+      {PermissionLogCallback? onLog}) async {
     return BlePermissionResult(
       isGranted: granted,
       isPermanentlyDenied: !granted,
-      scanStatus: granted ? PermissionStatus.granted : PermissionStatus.permanentlyDenied,
-      connectStatus: granted ? PermissionStatus.granted : PermissionStatus.permanentlyDenied,
+      scanStatus: granted
+          ? PermissionStatus.granted
+          : PermissionStatus.permanentlyDenied,
+      connectStatus: granted
+          ? PermissionStatus.granted
+          : PermissionStatus.permanentlyDenied,
       details: 'Mocked permissions (granted: $granted)',
     );
   }
+}
+
+class DelayedPermissionService extends PermissionService {
+  final Completer<BlePermissionResult> result =
+      Completer<BlePermissionResult>();
+
+  @override
+  Future<BlePermissionResult> requestDetailedBlePermissions(
+          {PermissionLogCallback? onLog}) =>
+      result.future;
 }
 
 void main() {
@@ -26,7 +43,8 @@ void main() {
 
   group('BleConnectionManager - Scan timeout management', () {
     test('BleConstants.defaultScanTimeout is 3 minutes', () {
-      expect(BleConstants.defaultScanTimeout, equals(const Duration(minutes: 3)));
+      expect(
+          BleConstants.defaultScanTimeout, equals(const Duration(minutes: 3)));
       expect(BleConstants.defaultScanTimeout.inSeconds, equals(180));
     });
 
@@ -39,7 +57,9 @@ void main() {
       expect(manager.connectedDevice, isNull);
     });
 
-    test('disconnect() and dispose() cleanly release resources and remain disconnected', () async {
+    test(
+        'disconnect() and dispose() cleanly release resources and remain disconnected',
+        () async {
       final manager = BleConnectionManager(
         permissionService: FakePermissionService(granted: true),
       );
@@ -63,7 +83,33 @@ void main() {
       expect(manager.status, equals(BleConnectionStatus.disconnected));
     });
 
-    test('BleConnectionManager notifies ChangeNotifier listeners and statusStream on transitions', () async {
+    test('disconnect cancels an auto-connect waiting for permissions',
+        () async {
+      final permissions = DelayedPermissionService();
+      final manager = BleConnectionManager(permissionService: permissions);
+      addTearDown(manager.dispose);
+
+      final pendingConnection = manager.startAutoConnect();
+      await manager.disconnect();
+      permissions.result.complete(
+        BlePermissionResult(
+          isGranted: true,
+          isPermanentlyDenied: false,
+          scanStatus: PermissionStatus.granted,
+          connectStatus: PermissionStatus.granted,
+          details: 'Mocked permissions',
+        ),
+      );
+
+      await pendingConnection;
+
+      expect(manager.status, equals(BleConnectionStatus.disconnected));
+      expect(manager.connectedDevice, isNull);
+    });
+
+    test(
+        'BleConnectionManager notifies ChangeNotifier listeners and statusStream on transitions',
+        () async {
       final manager = BleConnectionManager(
         permissionService: FakePermissionService(granted: true),
       );
@@ -100,14 +146,15 @@ void main() {
 
       await pumpEventQueue();
 
-      expect(receivedStatuses, equals([
-        BleConnectionStatus.scanning,
-        BleConnectionStatus.connecting,
-        BleConnectionStatus.connected,
-        BleConnectionStatus.ready,
-        BleConnectionStatus.disconnected,
-      ]));
+      expect(
+          receivedStatuses,
+          equals([
+            BleConnectionStatus.scanning,
+            BleConnectionStatus.connecting,
+            BleConnectionStatus.connected,
+            BleConnectionStatus.ready,
+            BleConnectionStatus.disconnected,
+          ]));
     });
   });
 }
-
