@@ -253,6 +253,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           },
           onReconnectMqtt: _controller.connectMqtt,
           onCalibrateSensor: _controller.calibrateSensor,
+          onOpenEventLogs: _openEventLogsScreen,
         ),
       ),
     )
@@ -281,7 +282,6 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
             deviceId: _controller.deviceId,
             onOpenStepsHistory: _openStepsHistoryScreen,
             onOpenDetectionEventsHistory: _openDetectionEventsHistoryScreen,
-            onOpenEventLogs: _openEventLogsScreen,
             onOpenSettings: _openSettingsScreen,
             onLogout: widget.onLogout,
           ),

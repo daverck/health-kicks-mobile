@@ -38,6 +38,7 @@ class SettingsScreen extends StatefulWidget {
   final Future<void> Function()? onStartBleScan;
   final Future<void> Function()? onDisconnectBle;
   final Future<void> Function()? onReconnectMqtt;
+  final VoidCallback? onOpenEventLogs;
   final BleConnectionStatus bleStatus;
   final bool isMqttConnected;
   final ValueNotifier<bool>? isMqttConnectedNotifier;
@@ -63,6 +64,7 @@ class SettingsScreen extends StatefulWidget {
     this.onStartBleScan,
     this.onDisconnectBle,
     this.onReconnectMqtt,
+    this.onOpenEventLogs,
     this.bleStatus = BleConnectionStatus.disconnected,
     this.isMqttConnected = false,
     this.isMqttConnectedNotifier,
@@ -413,6 +415,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   }
                 },
               ),
+              if (widget.onOpenEventLogs != null)
+                ListTile(
+                  leading: const Icon(Icons.article_outlined),
+                  title: const Text('Journal d\'événements'),
+                  subtitle: const Text('Consulter les événements récents'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: widget.onOpenEventLogs,
+                ),
               SettingsSystemInfoSection(
                 isBleReady: isBleReady,
                 firmwareSubtitle: _getFirmwareSubtitle(isBleReady),

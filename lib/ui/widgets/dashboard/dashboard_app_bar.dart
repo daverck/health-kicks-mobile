@@ -5,7 +5,6 @@ class DashboardAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String deviceId;
   final VoidCallback onOpenStepsHistory;
   final VoidCallback onOpenDetectionEventsHistory;
-  final VoidCallback onOpenEventLogs;
   final VoidCallback onOpenSettings;
   final VoidCallback? onLogout;
 
@@ -14,7 +13,6 @@ class DashboardAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.deviceId,
     required this.onOpenStepsHistory,
     required this.onOpenDetectionEventsHistory,
-    required this.onOpenEventLogs,
     required this.onOpenSettings,
     this.onLogout,
   });
@@ -86,11 +84,6 @@ class DashboardAppBar extends StatelessWidget implements PreferredSizeWidget {
           onPressed: onOpenDetectionEventsHistory,
         ),
         IconButton(
-          icon: const Icon(Icons.article_outlined),
-          tooltip: 'Journal d\'événements',
-          onPressed: onOpenEventLogs,
-        ),
-        IconButton(
           icon: const Icon(Icons.settings_outlined),
           tooltip: 'Paramètres',
           onPressed: onOpenSettings,
@@ -105,4 +98,3 @@ class DashboardAppBar extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 }
-

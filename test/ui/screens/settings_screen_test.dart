@@ -67,6 +67,34 @@ void main() {
       expect(find.text('Déconnecté'), findsOneWidget);
     });
 
+    testWidgets('Opens event log from settings', (tester) async {
+      final service = BackgroundSurveillanceService();
+      addTearDown(service.dispose);
+      var eventLogsOpened = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SettingsScreen(
+            surveillanceService: service,
+            onOpenEventLogs: () => eventLogsOpened = true,
+          ),
+        ),
+      );
+
+      final eventLogsTile = find.text('Journal d\'événements');
+      await tester.scrollUntilVisible(
+        eventLogsTile,
+        300,
+        scrollable: find.descendant(
+          of: find.byType(SettingsScreen),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      expect(eventLogsTile, findsOneWidget);
+      await tester.tap(eventLogsTile);
+      expect(eventLogsOpened, isTrue);
+    });
+
     testWidgets('Displays Settings AppBar and Mode Surveillance Active tile', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 2.0;
