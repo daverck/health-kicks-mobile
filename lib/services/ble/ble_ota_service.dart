@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
@@ -54,7 +55,8 @@ class BleOtaProgress {
       totalBytes: totalBytes ?? this.totalBytes,
       progress: progress ?? this.progress,
       speedKbps: speedKbps ?? this.speedKbps,
-      estimatedTimeRemaining: estimatedTimeRemaining ?? this.estimatedTimeRemaining,
+      estimatedTimeRemaining:
+          estimatedTimeRemaining ?? this.estimatedTimeRemaining,
       message: message ?? this.message,
       errorCode: errorCode ?? this.errorCode,
     );
@@ -64,6 +66,9 @@ class BleOtaProgress {
 /// Service managing Over-The-Air (OTA) firmware binary transfer over BLE GATT.
 /// Contract reference: contracts/ble_gatt_specs.md (Service 0010, Chars 0011 & 0012)
 class BleOtaService {
+  static const int preferredMtu = 247;
+  static const int maxChunkSize = 244;
+
   final StreamController<BleOtaProgress> _progressController =
       StreamController<BleOtaProgress>.broadcast();
 
@@ -79,6 +84,8 @@ class BleOtaService {
       _currentProgress.status == BleOtaStatus.preparing ||
       _currentProgress.status == BleOtaStatus.transferring ||
       _currentProgress.status == BleOtaStatus.finalizing;
+
+  static int chunkSizeForMtu(int mtu) => max(20, min(mtu - 3, maxChunkSize));
 
   void _emit(BleOtaProgress progress) {
     _currentProgress = progress;
@@ -122,7 +129,7 @@ class BleOtaService {
   Future<bool> startUpdate({
     required BluetoothDevice device,
     required Uint8List firmwareBytes,
-    int pacingDelayMs = 6,
+    int pacingDelayMs = 0,
     int? forcedChunkSize,
   }) async {
     if (firmwareBytes.isEmpty) {
@@ -140,12 +147,31 @@ class BleOtaService {
       message: 'Découverte du service OTA et négociation MTU...',
     ));
 
+    var highConnectionPriorityRequested = false;
     try {
       // 1. Request preferred MTU for high-speed streaming
       try {
-        await device.requestMtu(247).timeout(const Duration(seconds: 3));
+        await device
+            .requestMtu(preferredMtu)
+            .timeout(const Duration(seconds: 3));
       } catch (_) {
         // MTU request might not be supported on all platforms/OS versions; continue with current MTU
+      }
+
+      if (Platform.isAndroid) {
+        try {
+          await device
+              .requestConnectionPriority(
+                connectionPriorityRequest: ConnectionPriority.high,
+              )
+              .timeout(const Duration(seconds: 3));
+          highConnectionPriorityRequested = true;
+        } catch (_) {
+          _emit(_currentProgress.copyWith(
+            message:
+                'Priorité BLE rapide indisponible, poursuite du transfert.',
+          ));
+        }
       }
 
       // 2. Discover GATT services
@@ -170,7 +196,8 @@ class BleOtaService {
       if (controlChar == null || dataChar == null) {
         _emit(const BleOtaProgress(
           status: BleOtaStatus.error,
-          message: 'Service OTA ou caractéristiques introuvables sur l\'appareil.',
+          message:
+              'Service OTA ou caractéristiques introuvables sur l\'appareil.',
         ));
         return false;
       }
@@ -239,7 +266,7 @@ class BleOtaService {
 
       // 6. Compute optimal chunk size based on negotiated MTU
       final activeMtu = device.mtuNow;
-      final chunkSize = forcedChunkSize ?? max(20, min(activeMtu - 3, 244));
+      final chunkSize = forcedChunkSize ?? chunkSizeForMtu(activeMtu);
       final totalChunks = (totalSize / chunkSize).ceil();
 
       _emit(BleOtaProgress(
@@ -268,9 +295,11 @@ class BleOtaService {
 
         // Calculate speed & estimated remaining duration
         final elapsedSeconds = stopwatch.elapsedMilliseconds / 1000.0;
-        final speedKbps = elapsedSeconds > 0 ? (bytesSent / 1024.0) / elapsedSeconds : 0.0;
+        final speedKbps =
+            elapsedSeconds > 0 ? (bytesSent / 1024.0) / elapsedSeconds : 0.0;
         final remainingBytes = totalSize - bytesSent;
-        final estimatedSec = (speedKbps > 0) ? (remainingBytes / 1024.0) / speedKbps : null;
+        final estimatedSec =
+            (speedKbps > 0) ? (remainingBytes / 1024.0) / speedKbps : null;
 
         _emit(BleOtaProgress(
           status: BleOtaStatus.transferring,
@@ -281,7 +310,8 @@ class BleOtaService {
           estimatedTimeRemaining: estimatedSec != null
               ? Duration(seconds: estimatedSec.ceil())
               : null,
-          message: 'Transfert en cours (${(bytesSent / 1024).toStringAsFixed(0)} / ${(totalSize / 1024).toStringAsFixed(0)} Ko)...',
+          message:
+              'Transfert en cours (${(bytesSent / 1024).toStringAsFixed(0)} / ${(totalSize / 1024).toStringAsFixed(0)} Ko)...',
         ));
 
         // Pacing delay to avoid saturating BLE buffer queues
@@ -314,7 +344,8 @@ class BleOtaService {
         // If write threw 133 / GATT_ERROR because peripheral began restarting, check if success was signaled
         if (!finalCompleter.isCompleted) {
           try {
-            await finalCompleter.future.timeout(const Duration(milliseconds: 1500));
+            await finalCompleter.future
+                .timeout(const Duration(milliseconds: 1500));
           } catch (_) {
             rethrow;
           }
@@ -337,7 +368,8 @@ class BleOtaService {
         bytesSent: totalSize,
         totalBytes: totalSize,
         progress: 1.0,
-        message: 'Mise à jour réussie ! Redémarrage de la chaussure en cours...',
+        message:
+            'Mise à jour réussie ! Redémarrage de la chaussure en cours...',
       ));
 
       return true;
@@ -350,12 +382,24 @@ class BleOtaService {
     } finally {
       await _controlSubscription?.cancel();
       _controlSubscription = null;
+      if (highConnectionPriorityRequested) {
+        try {
+          await device
+              .requestConnectionPriority(
+                connectionPriorityRequest: ConnectionPriority.balanced,
+              )
+              .timeout(const Duration(seconds: 3));
+        } catch (_) {
+          // The connection may already be closing after a successful OTA reboot.
+        }
+      }
     }
   }
 
   Future<void> _sendAbort(BluetoothCharacteristic controlChar) async {
     try {
-      await controlChar.write([BleConstants.otaCmdAbort], withoutResponse: false);
+      await controlChar
+          .write([BleConstants.otaCmdAbort], withoutResponse: false);
     } catch (_) {}
     _emit(_currentProgress.copyWith(
       status: BleOtaStatus.aborted,

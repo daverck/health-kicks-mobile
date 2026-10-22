@@ -21,13 +21,23 @@ void main() {
       expect(otaService.isUpdating, isFalse);
     });
 
+    test('OTA chunks are capped by the negotiated MTU and maximum payload', () {
+      expect(BleOtaService.chunkSizeForMtu(23), equals(20));
+      expect(BleOtaService.chunkSizeForMtu(100), equals(97));
+      expect(BleOtaService.chunkSizeForMtu(247), equals(244));
+      expect(BleOtaService.chunkSizeForMtu(517), equals(244));
+    });
+
     test('formatErrorCode translates all specification codes accurately', () {
-      expect(BleOtaService.formatErrorCode(0x01), contains('No inactive OTA partition'));
+      expect(BleOtaService.formatErrorCode(0x01),
+          contains('No inactive OTA partition'));
       expect(BleOtaService.formatErrorCode(0x02), contains('esp_ota_begin'));
       expect(BleOtaService.formatErrorCode(0x03), contains('esp_ota_write'));
-      expect(BleOtaService.formatErrorCode(0x04), contains('byte count mismatch'));
+      expect(
+          BleOtaService.formatErrorCode(0x04), contains('byte count mismatch'));
       expect(BleOtaService.formatErrorCode(0x05), contains('esp_ota_end'));
-      expect(BleOtaService.formatErrorCode(0x06), contains('Switch active boot partition failed'));
+      expect(BleOtaService.formatErrorCode(0x06),
+          contains('Switch active boot partition failed'));
       expect(BleOtaService.formatErrorCode(0x07), contains('SHA-256'));
       expect(BleOtaService.formatErrorCode(0x99), contains('0x99'));
     });
@@ -46,7 +56,8 @@ void main() {
       await sub.cancel();
     });
 
-    test('BleOtaProgress copyWith preserves or overrides properties correctly', () {
+    test('BleOtaProgress copyWith preserves or overrides properties correctly',
+        () {
       const original = BleOtaProgress(
         status: BleOtaStatus.transferring,
         bytesSent: 100,
@@ -69,7 +80,8 @@ void main() {
       expect(updated.totalBytes, equals(500));
       expect(updated.progress, equals(0.5));
       expect(updated.speedKbps, equals(50.0));
-      expect(updated.estimatedTimeRemaining, equals(const Duration(seconds: 8)));
+      expect(
+          updated.estimatedTimeRemaining, equals(const Duration(seconds: 8)));
       expect(updated.message, equals('Uploading...'));
     });
   });
