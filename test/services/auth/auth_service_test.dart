@@ -8,6 +8,8 @@ import 'package:healthkicks_mobile/services/auth/token_storage_service.dart';
 import 'token_storage_service_test.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('AuthService - SSO OAuth2 Flow and Deep Links', () {
     late FakeFlutterSecureStorage fakeStorage;
     late TokenStorageService tokenStorage;
@@ -310,7 +312,83 @@ void main() {
       expect(authService.currentUser, isNull);
       expect(await tokenStorage.hasValidToken(), isFalse);
     });
+
+    test('refreshCurrentUser - Reloads profile and notifies listeners', () async {
+      await tokenStorage.saveTokens(accessToken: 'valid_access_token');
+      final mockClient = MockClient((request) async {
+        expect(request.url.path, '/api/v1/auth/me');
+        return http.Response(
+          jsonEncode({
+            'id': 42,
+            'email': 'clinician@example.com',
+            'role': 'clinician',
+            'is_active': true,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final authService = AuthService(
+        backendBaseUrl: 'http://127.0.0.1:8000',
+        tokenStorage: tokenStorage,
+        httpClient: mockClient,
+      );
+      var notifications = 0;
+      authService.addListener(() => notifications++);
+
+      final refreshed = await authService.refreshCurrentUser();
+
+      expect(refreshed, isTrue);
+      expect(authService.currentUser?.role, 'clinician');
+      expect(notifications, 1);
+    });
+
+    test('initialize - Reloads profile after refreshing an expired token', () async {
+      await tokenStorage.saveTokens(
+        accessToken: 'expired_access_token',
+        refreshToken: 'valid_refresh_token',
+      );
+      var profileRequests = 0;
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/v1/auth/me') {
+          profileRequests++;
+          if (profileRequests == 1) {
+            return http.Response('Unauthorized', 401);
+          }
+          return http.Response(
+            jsonEncode({
+              'id': 42,
+              'email': 'clinician@example.com',
+              'role': 'clinician',
+              'is_active': true,
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (request.url.path == '/api/v1/auth/refresh') {
+          return http.Response(
+            jsonEncode({
+              'access_token': 'refreshed_access_token',
+              'refresh_token': 'refreshed_refresh_token',
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('Not Found', 404);
+      });
+      final authService = AuthService(
+        backendBaseUrl: 'http://127.0.0.1:8000',
+        tokenStorage: tokenStorage,
+        httpClient: mockClient,
+      );
+
+      final initialized = await authService.initialize();
+
+      expect(initialized, isTrue);
+      expect(authService.currentUser?.role, 'clinician');
+      expect(profileRequests, 2);
+    });
   });
 }
-
-

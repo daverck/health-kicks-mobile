@@ -139,8 +139,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
 
   void _showStudioSessionDialog() {
     final isConnected = _controller.bleClient != null &&
-        (_controller.bleStatus == BleConnectionStatus.ready ||
-            _controller.bleStatus == BleConnectionStatus.connected) &&
+        (_controller.bleStatus == BleConnectionStatus.ready || _controller.bleStatus == BleConnectionStatus.connected) &&
         _controller.bleClient!.hasStudioControl;
 
     showDialog<void>(
@@ -185,9 +184,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           logs: _controller.logs,
           onClearLogs: () => setState(() => _controller.logs.clear()),
           deviceId: _controller.deviceId,
-          deviceName: _controller.connectedDevice?.platformName.isNotEmpty == true
-              ? _controller.connectedDevice!.platformName
-              : _controller.targetDeviceId,
+          deviceName: _controller.connectedDevice?.platformName.isNotEmpty == true ? _controller.connectedDevice!.platformName : _controller.targetDeviceId,
           bleStatus: _controller.bleStatus.name,
           mtu: _controller.mtu,
           mqttConnected: _controller.isMqttConnected,
@@ -226,11 +223,11 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
   }
 
   void _openSettingsScreen() {
-    final isConnected = _controller.bleClient != null &&
-        (_controller.bleStatus == BleConnectionStatus.ready ||
-            _controller.bleStatus == BleConnectionStatus.connected);
+    final isConnected =
+        _controller.bleClient != null && (_controller.bleStatus == BleConnectionStatus.ready || _controller.bleStatus == BleConnectionStatus.connected);
 
-    Navigator.of(context).push(
+    Navigator.of(context)
+        .push(
       MaterialPageRoute(
         builder: (_) => SettingsScreen(
           authService: widget.authService,
@@ -258,7 +255,8 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           onCalibrateSensor: _controller.calibrateSensor,
         ),
       ),
-    ).then((_) {
+    )
+        .then((_) {
       if (mounted) {
         setState(() {});
       }
@@ -267,12 +265,17 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
 
   @override
   Widget build(BuildContext context) {
-    final isClinicianOrAdmin = widget.authService?.currentUser?.role == 'admin' ||
-        widget.authService?.currentUser?.role == 'clinician';
+    final listenables = <Listenable>[_controller];
+    if (widget.authService != null) {
+      listenables.add(widget.authService!);
+    }
 
     return ListenableBuilder(
-      listenable: _controller,
+      listenable: Listenable.merge(listenables),
       builder: (context, _) {
+        final role = widget.authService?.currentUser?.role;
+        final isClinicianOrAdmin = role == 'admin' || role == 'clinician';
+
         return Scaffold(
           appBar: DashboardAppBar(
             deviceId: _controller.deviceId,

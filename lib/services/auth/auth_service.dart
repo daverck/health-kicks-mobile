@@ -75,8 +75,7 @@ class AuthService extends ChangeNotifier {
   String? _pendingCodeVerifier;
   String? get pendingCodeVerifier => _pendingCodeVerifier;
 
-  static const String _pkceCharset =
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+  static const String _pkceCharset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
 
   /// Generates a 64-character URL-safe PKCE code_verifier, stores it in
   /// [_pendingCodeVerifier], and returns it.
@@ -92,8 +91,7 @@ class AuthService extends ChangeNotifier {
 
   /// Computes the S256 PKCE code_challenge from [verifier].
   static String computePkceChallenge(String verifier) {
-    return base64UrlEncode(sha256.convert(utf8.encode(verifier)).bytes)
-        .replaceAll('=', '');
+    return base64UrlEncode(sha256.convert(utf8.encode(verifier)).bytes).replaceAll('=', '');
   }
 
   AuthService({
@@ -180,6 +178,10 @@ class AuthService extends ChangeNotifier {
         // Attempt refresh if possible
         final refreshed = await refreshToken();
         if (refreshed) {
+          final refreshedAccessToken = await _tokenStorage.getAccessToken();
+          if (refreshedAccessToken != null) {
+            await _fetchUserProfile(refreshedAccessToken);
+          }
           _state = AuthState.authenticated;
           notifyListeners();
           return true;
@@ -354,9 +356,7 @@ class AuthService extends ChangeNotifier {
     }
 
     if (uri.queryParameters.containsKey('error')) {
-      _lastError = uri.queryParameters['error_description'] ??
-          uri.queryParameters['error'] ??
-          'OAuth authentication failed';
+      _lastError = uri.queryParameters['error_description'] ?? uri.queryParameters['error'] ?? 'OAuth authentication failed';
       _state = AuthState.unauthenticated;
       notifyListeners();
       return false;
@@ -402,8 +402,50 @@ class AuthService extends ChangeNotifier {
         _tokenUserId = TokenStorageService.parseUserId(newAccessToken);
         return true;
       }
+
       return false;
     } catch (_) {
+      return false;
+    }
+  }
+
+  /// Reloads the authenticated user's profile, for example after connectivity
+  /// is restored while the app is already open.
+  Future<bool> refreshCurrentUser() async {
+    var accessToken = await _tokenStorage.getAccessToken();
+    if (accessToken == null || accessToken.isEmpty) return false;
+
+    try {
+      var response = await _httpClient.get(
+        Uri.parse('$_sanitizedBaseUrl/api/v1/auth/me'),
+        headers: buildApiHeaders(accessToken),
+      );
+
+      if (response.statusCode == 401 && await refreshToken()) {
+        accessToken = await _tokenStorage.getAccessToken();
+        if (accessToken == null || accessToken.isEmpty) return false;
+        response = await _httpClient.get(
+          Uri.parse('$_sanitizedBaseUrl/api/v1/auth/me'),
+          headers: buildApiHeaders(accessToken),
+        );
+      }
+
+      if (response.statusCode != 200) {
+        debugPrint(
+          '[AuthService] Could not refresh user profile '
+          '(${response.statusCode}).',
+        );
+        return false;
+      }
+
+      _currentUser = AuthUser.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+      _tokenUserId = _currentUser!.id.toString();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('[AuthService] Could not refresh user profile: $e');
       return false;
     }
   }
@@ -427,5 +469,3 @@ class AuthService extends ChangeNotifier {
     return _backendBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
   }
 }
-
-

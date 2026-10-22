@@ -65,8 +65,7 @@ class GatewayDashboardController extends ChangeNotifier {
   DateTime? _installedFirmwareDate;
   String? _announcedFirmwareReleaseVersion;
   final List<ActivityDetectionModel> _recentActivities = [];
-  final StreamController<ActivityDetectionModel> _activityStreamController =
-      StreamController<ActivityDetectionModel>.broadcast();
+  final StreamController<ActivityDetectionModel> _activityStreamController = StreamController<ActivityDetectionModel>.broadcast();
   DateTime? _lastInactivityToastTime;
   bool isRecordingDialogVisible = false;
   String _lastStudioActivityKey = 'walk';
@@ -154,8 +153,7 @@ class GatewayDashboardController extends ChangeNotifier {
       _installedFirmwareVersion = installedVersion;
       _installedFirmwareDate = installedDate;
     } catch (e) {
-      addLog('FIRMWARE', 'Version locale non disponible : $e',
-          color: Colors.orange);
+      addLog('FIRMWARE', 'Version locale non disponible : $e', color: Colors.orange);
     }
     if (_isDisposed) return;
 
@@ -164,9 +162,7 @@ class GatewayDashboardController extends ChangeNotifier {
       try {
         token = await authService?.getValidAccessToken();
       } catch (e) {
-        addLog('FIRMWARE',
-            'Jeton API indisponible, tentative de vérification publique : $e',
-            color: Colors.orange);
+        addLog('FIRMWARE', 'Jeton API indisponible, tentative de vérification publique : $e', color: Colors.orange);
       }
       if (_isDisposed) return;
 
@@ -177,17 +173,14 @@ class GatewayDashboardController extends ChangeNotifier {
       if (_isDisposed) return;
 
       _latestFirmwareRelease = release;
-      addLog('FIRMWARE',
-          'Vérification automatique terminée : ${release.version}.');
+      addLog('FIRMWARE', 'Vérification automatique terminée : ${release.version}.');
       _notifyIfFirmwareUpdateAvailable(
         installedVersion: _installedFirmwareVersion ?? installedVersion,
         installedDate: _installedFirmwareDate ?? installedDate,
       );
     } catch (e) {
       if (!_isDisposed) {
-        addLog(
-            'FIRMWARE', 'Échec de la vérification automatique du firmware : $e',
-            color: Colors.red);
+        addLog('FIRMWARE', 'Échec de la vérification automatique du firmware : $e', color: Colors.red);
       }
     }
   }
@@ -201,8 +194,7 @@ class GatewayDashboardController extends ChangeNotifier {
     if (release == null) return;
 
     if (installedVersion == null && installedDate == null) {
-      addLog('FIRMWARE',
-          'Version installée inconnue ; comparaison reportée à la connexion BLE.');
+      addLog('FIRMWARE', 'Version installée inconnue ; comparaison reportée à la connexion BLE.');
       return;
     }
 
@@ -215,8 +207,7 @@ class GatewayDashboardController extends ChangeNotifier {
     if (!isNewer || _announcedFirmwareReleaseVersion == release.version) return;
 
     _announcedFirmwareReleaseVersion = release.version;
-    addLog('FIRMWARE', 'Nouveau firmware disponible : ${release.version}.',
-        color: Colors.orange);
+    addLog('FIRMWARE', 'Nouveau firmware disponible : ${release.version}.', color: Colors.orange);
     onShowSnackBar?.call(
       'Nouveau firmware disponible (${release.version}). Consultez Paramètres > Mise à jour du firmware.',
       backgroundColor: Colors.orange.shade800,
@@ -303,9 +294,7 @@ class GatewayDashboardController extends ChangeNotifier {
       );
       addLog(
         'PERM',
-        perms.isGranted
-            ? 'Permissions BLE accordées (${perms.details}).'
-            : 'Permissions BLE incomplètes (${perms.details}).',
+        perms.isGranted ? 'Permissions BLE accordées (${perms.details}).' : 'Permissions BLE incomplètes (${perms.details}).',
         color: perms.isGranted ? Colors.green : Colors.orange,
       );
 
@@ -354,9 +343,7 @@ class GatewayDashboardController extends ChangeNotifier {
           addLog(
             'BLE',
             msg,
-            color: isError
-                ? Colors.red
-                : (msg.contains('Connecté') ? Colors.green : Colors.blueGrey),
+            color: isError ? Colors.red : (msg.contains('Connecté') ? Colors.green : Colors.blueGrey),
           );
         },
       );
@@ -417,8 +404,24 @@ class GatewayDashboardController extends ChangeNotifier {
           addLog('MQTT', msg, color: isError ? Colors.red : Colors.teal);
         },
         onConnectionRestored: () {
-          if (_bleClient != null &&
-              (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected)) {
+          if (_isDisposed) return;
+          _mqttConnected = true;
+          _mqttConnectedNotifier.value = true;
+          notifyListeners();
+
+          if (authService?.currentUser == null && authService != null) {
+            unawaited(authService!.refreshCurrentUser().then((refreshed) {
+              if (!refreshed && !_isDisposed) {
+                addLog(
+                  'AUTH',
+                  'Impossible de recharger le profil utilisateur après la reconnexion cloud.',
+                  color: Colors.orange,
+                );
+              }
+            }));
+          }
+
+          if (_bleClient != null && (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected)) {
             addLog('GATEWAY', 'Reconnexion MQTT : re-synchronisation du statut BLE online...', color: Colors.green);
             _coordinator?.publishBleStatus(online: true);
           }
@@ -431,8 +434,7 @@ class GatewayDashboardController extends ChangeNotifier {
       notifyListeners();
 
       if (connected) {
-        final isBleReady = _bleClient != null &&
-            (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected);
+        final isBleReady = _bleClient != null && (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected);
 
         if (isBleReady) {
           if (_coordinator == null) {
@@ -481,9 +483,7 @@ class GatewayDashboardController extends ChangeNotifier {
     );
 
     _studioSavedSub = _coordinator!.studioSessionSavedStream.listen((savedSession) {
-      final shortId = savedSession.sessionId.length > 8
-          ? savedSession.sessionId.substring(0, 8)
-          : savedSession.sessionId;
+      final shortId = savedSession.sessionId.length > 8 ? savedSession.sessionId.substring(0, 8) : savedSession.sessionId;
       onShowSnackBar?.call(
         'Session Studio synchronisée ($shortId, ${savedSession.readings.length} trames)',
         backgroundColor: const Color(0xFF0F766E),
@@ -533,8 +533,7 @@ class GatewayDashboardController extends ChangeNotifier {
       if (_bleClient?.firmwareVersion != null && _bleClient!.firmwareVersion!.isNotEmpty) {
         addLog('BLE', 'Firmware détecté : ${_bleClient!.firmwareVersion} (${_bleClient!.rawBuildString ?? ""})');
         _installedFirmwareVersion = _bleClient!.firmwareVersion;
-        _installedFirmwareDate =
-            _bleClient!.firmwareBuildDate ?? _installedFirmwareDate;
+        _installedFirmwareDate = _bleClient!.firmwareBuildDate ?? _installedFirmwareDate;
         _notifyIfFirmwareUpdateAvailable(
           installedVersion: _installedFirmwareVersion,
           installedDate: _installedFirmwareDate,
@@ -591,8 +590,7 @@ class GatewayDashboardController extends ChangeNotifier {
 
       _bleClient!.studioStatusStream.listen((statusMsg) {
         addLog('STUDIO', 'Signal d\'état : $statusMsg');
-        if ((statusMsg.startsWith('COUNTDOWN') || statusMsg.startsWith('RECORDING')) &&
-            !isRecordingDialogVisible) {
+        if ((statusMsg.startsWith('COUNTDOWN') || statusMsg.startsWith('RECORDING')) && !isRecordingDialogVisible) {
           double dur = _coordinator?.currentStudioDurationSec ?? 5.0;
           if (statusMsg.startsWith('RECORDING')) {
             final parts = statusMsg.split(' ');
@@ -601,8 +599,7 @@ class GatewayDashboardController extends ChangeNotifier {
             }
           }
           onShowRecordingDialog?.call(
-            label: _coordinator?.currentStudioLabel ??
-                (_coordinator?.isStudioRecordingActive == true ? 'Activité' : 'Studio'),
+            label: _coordinator?.currentStudioLabel ?? (_coordinator?.isStudioRecordingActive == true ? 'Activité' : 'Studio'),
             durationSec: dur,
           );
         }
@@ -647,9 +644,7 @@ class GatewayDashboardController extends ChangeNotifier {
   }
 
   Future<void> sendTestHapticCommand() async {
-    final isConnected = _bleClient != null &&
-        (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected) &&
-        _bleClient!.hasHaptic;
+    final isConnected = _bleClient != null && (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected) && _bleClient!.hasHaptic;
 
     if (!isConnected) {
       addLog('HAPTIC', 'Chaussure non connectée : impossible d\'émettre la commande.', color: Colors.red);
@@ -700,9 +695,8 @@ class GatewayDashboardController extends ChangeNotifier {
     required String label,
     required double durationSec,
   }) async {
-    final isConnected = _bleClient != null &&
-        (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected) &&
-        _bleClient!.hasStudioControl;
+    final isConnected =
+        _bleClient != null && (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected) && _bleClient!.hasStudioControl;
 
     if (!isConnected) {
       addLog('STUDIO', 'Chaussure non connectée ou service Studio indisponible.', color: Colors.red);
