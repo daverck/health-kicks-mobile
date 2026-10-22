@@ -279,7 +279,6 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
 
         return Scaffold(
           appBar: DashboardAppBar(
-            deviceId: _controller.deviceId,
             onOpenStepsHistory: _openStepsHistoryScreen,
             onOpenDetectionEventsHistory: _openDetectionEventsHistoryScreen,
             onOpenSettings: _openSettingsScreen,
