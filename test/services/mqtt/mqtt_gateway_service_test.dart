@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:healthkicks_mobile/models/fall_alert_model.dart';
 import 'package:healthkicks_mobile/services/auth/iot_credentials_model.dart';
 import 'package:healthkicks_mobile/services/auth/iot_credentials_repository.dart';
 import 'package:healthkicks_mobile/services/auth/token_storage_service.dart';
@@ -28,7 +29,7 @@ class FakeCredentialsRepository implements IotCredentialsRepository {
 }
 
 void main() {
-  group('MqttGatewayService - Hybrid Presence Mechanism & LWT', () {
+  group('MqttGatewayService - Hybrid Presence Mechanism, LWT & Fall Alerting', () {
     test('Constructor properly stores userId and deviceId with randomized session nonce', () {
       final fakeRepo = FakeCredentialsRepository();
       final service = MqttGatewayService(
@@ -89,6 +90,48 @@ void main() {
       expect(decoded['gateway'], equals('mobile'));
       expect(decoded['timestamp'], isNotNull);
       expect(DateTime.tryParse(decoded['timestamp'] as String), isNotNull);
+    });
+
+    test('handleIncomingPayload decodes fall-alert/status downlink messages and emits on fallAlertStatusStream', () async {
+      final fakeRepo = FakeCredentialsRepository();
+      final service = MqttGatewayService(
+        deviceId: 'HK-2',
+        userId: '42',
+        credentialsRepository: fakeRepo,
+      );
+
+      FallAlertStatusModel? receivedStatus;
+      final sub = service.fallAlertStatusStream.listen((status) {
+        receivedStatus = status;
+      });
+
+      final statusJson = jsonEncode({
+        'event_id': '0b6f4b1e-6a51-4c1f-9a3e-2d7f1c9b8e10',
+        'alert_id': 99,
+        'state': 'ESCALATING',
+        'current_contact_rank': 2,
+        'contacts_total': 3,
+        'acknowledged_by': null,
+        'cancel_reason': null,
+        'next_action_at': '2026-10-23T08:43:03Z',
+        'updated_at': '2026-10-23T08:40:03Z',
+      });
+
+      service.handleIncomingPayload(
+        'healthkicks/v1/users/42/fall-alert/status',
+        statusJson,
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(receivedStatus, isNotNull);
+      expect(receivedStatus!.eventId, equals('0b6f4b1e-6a51-4c1f-9a3e-2d7f1c9b8e10'));
+      expect(receivedStatus!.alertId, equals(99));
+      expect(receivedStatus!.state, equals('ESCALATING'));
+      expect(receivedStatus!.currentContactRank, equals(2));
+      expect(receivedStatus!.contactsTotal, equals(3));
+
+      await sub.cancel();
+      service.disconnect();
     });
 
     test('connect() rejects connection immediately if userId is null and no token is available', () async {

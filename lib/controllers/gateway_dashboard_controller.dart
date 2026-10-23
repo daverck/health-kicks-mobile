@@ -29,14 +29,17 @@ import '../services/step_sync_service.dart';
 import '../services/studio/studio_api_service.dart';
 import '../ui/widgets/studio_session_dialog.dart';
 import 'dashboard_odometer_coordinator.dart';
+import 'fall_alert_controller.dart';
 
 /// Business controller managing the background lifecycle, BLE connection,
-/// MQTT synchronization, and Studio motion capture routing for the Gateway Dashboard.
+/// MQTT synchronization, Fall Alerting, and Studio motion capture routing for the Gateway Dashboard.
 class GatewayDashboardController extends ChangeNotifier {
   final String deviceId;
   final String targetDeviceId;
   final AuthService? authService;
   final FirmwareService _firmwareService;
+  late final FallAlertController _fallAlertController;
+  final bool _ownsFallAlertController;
 
   final PermissionService _permissionService = PermissionService();
   late final BackgroundSurveillanceService _surveillanceService;
@@ -84,12 +87,25 @@ class GatewayDashboardController extends ChangeNotifier {
     this.targetDeviceId = 'HealthKicks-HK-2',
     this.authService,
     FirmwareService? firmwareService,
+    FallAlertController? fallAlertController,
     this.onShowSnackBar,
     this.onShowRecordingDialog,
     this.onPermissionDeniedAction,
-  }) : _firmwareService = firmwareService ?? FirmwareService();
+  })  : _firmwareService = firmwareService ?? FirmwareService(),
+        _ownsFallAlertController = fallAlertController == null {
+    _fallAlertController = fallAlertController ??
+        FallAlertController(
+          deviceId: deviceId,
+          isMqttConnectedGetter: () => _mqttConnected || (_mqttService?.isConnected ?? false),
+          onLog: (tag, msg, {bool isError = false}) {
+            addLog(tag, msg, color: isError ? Colors.red : Colors.deepOrange);
+          },
+        );
+    _fallAlertController.addListener(_onFallAlertUpdated);
+  }
 
   // Getters
+  FallAlertController get fallAlertController => _fallAlertController;
   BleConnectionStatus get bleStatus => _bleStatus;
   Stream<BleConnectionStatus>? get bleStatusStream => _bleManager?.statusStream;
   BluetoothDevice? get connectedDevice => _connectedDevice;
@@ -112,6 +128,12 @@ class GatewayDashboardController extends ChangeNotifier {
   DashboardOdometerCoordinator get odometerCoordinator => _odometerCoordinator;
   InactivitySettingsService get inactivitySettingsService => _inactivitySettingsService;
   BackgroundSurveillanceService get surveillanceService => _surveillanceService;
+
+  void _onFallAlertUpdated() {
+    if (!_isDisposed) {
+      notifyListeners();
+    }
+  }
 
   void initialize() {
     if (_isInitialized || _isDisposed) return;
@@ -387,6 +409,7 @@ class GatewayDashboardController extends ChangeNotifier {
         );
         _mqttConnected = false;
         _mqttConnectedNotifier.value = false;
+        _fallAlertController.setMqttConnected(false);
         notifyListeners();
         return;
       }
@@ -407,6 +430,7 @@ class GatewayDashboardController extends ChangeNotifier {
           if (_isDisposed) return;
           _mqttConnected = true;
           _mqttConnectedNotifier.value = true;
+          _fallAlertController.setMqttConnected(true);
           notifyListeners();
 
           if (authService?.currentUser == null && authService != null) {
@@ -428,9 +452,12 @@ class GatewayDashboardController extends ChangeNotifier {
         },
       );
 
+      _fallAlertController.attachMqttService(_mqttService);
+
       final connected = await _mqttService!.connect();
       _mqttConnected = connected;
       _mqttConnectedNotifier.value = connected;
+      _fallAlertController.setMqttConnected(connected);
       notifyListeners();
 
       if (connected) {
@@ -452,6 +479,7 @@ class GatewayDashboardController extends ChangeNotifier {
       addLog('MQTT', 'Erreur MQTT inattendue : $e', color: Colors.red);
       _mqttConnected = false;
       _mqttConnectedNotifier.value = false;
+      _fallAlertController.setMqttConnected(false);
       notifyListeners();
     }
   }
@@ -575,6 +603,11 @@ class GatewayDashboardController extends ChangeNotifier {
           'ACTIVITY',
           '${detection.eventType.toUpperCase()} (${detection.confidencePercent}%) | Chute=${detection.isFall} | Haptique=${detection.isHapticTriggered}',
         );
+
+        unawaited(_fallAlertController.onActivityDetected(
+          detection,
+          overrideDeviceId: deviceId,
+        ));
 
         if (detection.eventType == 'inactivity_alert') {
           final now = DateTime.now();
@@ -809,6 +842,8 @@ class GatewayDashboardController extends ChangeNotifier {
         return Colors.cyan;
       case 'ACTIVITY':
         return Colors.orange;
+      case 'FALL_ALERT':
+        return Colors.deepOrange;
       case 'BURST':
       case 'CRC32':
         return Colors.purple;
@@ -836,6 +871,10 @@ class GatewayDashboardController extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _fallAlertController.removeListener(_onFallAlertUpdated);
+    if (_ownsFallAlertController) {
+      _fallAlertController.dispose();
+    }
     _activityStreamController.close();
     _bleManager?.removeListener(_onBleManagerUpdated);
     if (_isInitialized) {

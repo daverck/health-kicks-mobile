@@ -13,10 +13,13 @@ class ActivityDetectionModel {
   final DateTime? receivedAt;
   final bool isFall;
   final bool isHapticTriggered;
+  final bool isOfflineBuffered;
 
   bool get isSeated => eventType == 'sit_down';
 
   bool get isSedentary => activityCategory == ActivityCategory.sedentary;
+
+  bool get isFallRecovery => eventType == 'fall_recovery' || stateCode == 0x13;
 
   ActivityCategory get activityCategory => categoryForEventType(eventType);
 
@@ -28,6 +31,7 @@ class ActivityDetectionModel {
     this.receivedAt,
     required this.isFall,
     required this.isHapticTriggered,
+    this.isOfflineBuffered = false,
   });
 
   static ActivityCategory categoryForEventType(String eventType) {
@@ -74,6 +78,7 @@ class ActivityDetectionModel {
     final eventType = _mapStateCodeToEventType(stateCode);
     final isFall = (flags & 0x01) != 0;
     final isHapticTriggered = (flags & 0x02) != 0;
+    final isOfflineBuffered = (flags & 0x04) != 0;
 
     return ActivityDetectionModel(
       stateCode: stateCode,
@@ -83,6 +88,7 @@ class ActivityDetectionModel {
       receivedAt: DateTime.now(),
       isFall: isFall,
       isHapticTriggered: isHapticTriggered,
+      isOfflineBuffered: isOfflineBuffered,
     );
   }
 

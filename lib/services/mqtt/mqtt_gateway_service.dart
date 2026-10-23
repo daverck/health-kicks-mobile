@@ -6,6 +6,7 @@ import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 import '../../core/aws/sigv4_signer.dart';
 import '../../models/activity_detection_model.dart';
+import '../../models/fall_alert_model.dart';
 import '../../models/haptic_command_model.dart';
 import '../../models/studio_command_model.dart';
 import '../../models/studio_session_model.dart';
@@ -15,7 +16,7 @@ import '../auth/token_storage_service.dart';
 typedef MqttLogCallback = void Function(String message, {bool isError});
 
 /// Dedicated MQTT gateway service to AWS IoT Core (WSS SigV4 Port 443).
-/// Contract reference: contracts/README.md (Section 3: IoT MQTT Contracts)
+/// Contract reference: contracts/README.md (Section 3: IoT MQTT Contracts) & contracts/fall_alerting.md
 class MqttGatewayService {
   final String deviceId;
   final String? userId;
@@ -25,17 +26,26 @@ class MqttGatewayService {
   final VoidCallback? onConnectionRestored;
 
   MqttServerClient? _client;
+  String? _effectiveUserId;
   bool _isConnected = false;
   bool get isConnected =>
       _isConnected &&
       _client != null &&
       _client!.connectionStatus?.state == MqttConnectionState.connected;
 
+  String? get effectiveUserId =>
+      (_effectiveUserId != null && _effectiveUserId!.isNotEmpty)
+          ? _effectiveUserId
+          : userId;
+
   final _hapticCommandsController = StreamController<HapticCommandModel>.broadcast();
   Stream<HapticCommandModel> get hapticCommandStream => _hapticCommandsController.stream;
 
   final _studioCommandsController = StreamController<StudioCommandModel>.broadcast();
   Stream<StudioCommandModel> get studioCommandStream => _studioCommandsController.stream;
+
+  final _fallAlertStatusController = StreamController<FallAlertStatusModel>.broadcast();
+  Stream<FallAlertStatusModel> get fallAlertStatusStream => _fallAlertStatusController.stream;
 
   StreamSubscription? _updatesSub;
 
@@ -89,20 +99,20 @@ class MqttGatewayService {
         isError: false,
       );
 
-      var effectiveUserId = (userId != null && userId!.isNotEmpty) ? userId! : '';
-      if (effectiveUserId.isEmpty && creds.userId != null && creds.userId!.isNotEmpty) {
-        effectiveUserId = creds.userId!;
+      var resolvedUserId = (userId != null && userId!.isNotEmpty) ? userId! : '';
+      if (resolvedUserId.isEmpty && creds.userId != null && creds.userId!.isNotEmpty) {
+        resolvedUserId = creds.userId!;
       }
-      if (effectiveUserId.isEmpty) {
+      if (resolvedUserId.isEmpty) {
         try {
           final tokenStorage = credentialsRepository.tokenStorage ?? TokenStorageService();
           final tokenUserId = await tokenStorage.getUserIdFromToken();
           if (tokenUserId != null && tokenUserId.isNotEmpty) {
-            effectiveUserId = tokenUserId;
+            resolvedUserId = tokenUserId;
           }
         } catch (_) {}
       }
-      if (effectiveUserId.isEmpty || effectiveUserId == 'unknown') {
+      if (resolvedUserId.isEmpty || resolvedUserId == 'unknown') {
         log?.call(
           'Connection rejected: no valid userId or session unresolved. Aborting to preserve multi-tenant isolation.',
           isError: true,
@@ -110,15 +120,17 @@ class MqttGatewayService {
         return false;
       }
 
-      final effectiveClientId = (clientId.isNotEmpty &&
-              (clientId.startsWith('healthkicks-mobile-$effectiveUserId') ||
-                  clientId.startsWith('healthkicks-session-$effectiveUserId')))
-          ? clientId
-          : 'healthkicks-mobile-$effectiveUserId-${generateSessionNonce()}';
+      _effectiveUserId = resolvedUserId;
 
-      final lwtTopic = 'healthkicks/v1/users/$effectiveUserId/gateway-status';
+      final effectiveClientId = (clientId.isNotEmpty &&
+              (clientId.startsWith('healthkicks-mobile-$resolvedUserId') ||
+                  clientId.startsWith('healthkicks-session-$resolvedUserId')))
+          ? clientId
+          : 'healthkicks-mobile-$resolvedUserId-${generateSessionNonce()}';
+
+      final lwtTopic = 'healthkicks/v1/users/$resolvedUserId/gateway-status';
       final lwtPayload = jsonEncode({
-        'user_id': effectiveUserId,
+        'user_id': resolvedUserId,
         'state': 'offline',
         'gateway': 'mobile',
       });
@@ -190,22 +202,37 @@ class MqttGatewayService {
     final log = onLog;
     final hapticTopic = 'healthkicks/v1/$deviceId/commands/haptic';
     final studioStartTopic = 'healthkicks/v1/$deviceId/commands/studio/start';
+    final uid = effectiveUserId;
 
     _client?.subscribe(hapticTopic, MqttQos.atLeastOnce);
     _client?.subscribe(studioStartTopic, MqttQos.atLeastOnce);
-
-    log?.call('Subscriptions renewed after auto-reconnect: $hapticTopic & $studioStartTopic', isError: false);
+    if (uid != null && uid.isNotEmpty) {
+      final fallStatusTopic = 'healthkicks/v1/users/$uid/fall-alert/status';
+      _client?.subscribe(fallStatusTopic, MqttQos.atLeastOnce);
+      log?.call(
+        'Subscriptions renewed after auto-reconnect: $hapticTopic, $studioStartTopic & $fallStatusTopic',
+        isError: false,
+      );
+    } else {
+      log?.call('Subscriptions renewed after auto-reconnect: $hapticTopic & $studioStartTopic', isError: false);
+    }
   }
 
   void _subscribeToCommands() {
     final log = onLog;
     final hapticTopic = 'healthkicks/v1/$deviceId/commands/haptic';
     final studioStartTopic = 'healthkicks/v1/$deviceId/commands/studio/start';
+    final uid = effectiveUserId;
 
     _client?.subscribe(hapticTopic, MqttQos.atLeastOnce);
     _client?.subscribe(studioStartTopic, MqttQos.atLeastOnce);
-
-    log?.call('Active subscriptions: $hapticTopic & $studioStartTopic', isError: false);
+    if (uid != null && uid.isNotEmpty) {
+      final fallStatusTopic = 'healthkicks/v1/users/$uid/fall-alert/status';
+      _client?.subscribe(fallStatusTopic, MqttQos.atLeastOnce);
+      log?.call('Active subscriptions: $hapticTopic, $studioStartTopic & $fallStatusTopic', isError: false);
+    } else {
+      log?.call('Active subscriptions: $hapticTopic & $studioStartTopic', isError: false);
+    }
 
     _updatesSub?.cancel();
     _updatesSub = _client?.updates?.listen((List<MqttReceivedMessage<MqttMessage>> messages) {
@@ -214,30 +241,92 @@ class MqttGatewayService {
         final payloadStr = MqttPublishPayload.bytesToStringAsString(
           recMessage.payload.message,
         );
-
-        if (msg.topic == hapticTopic) {
-          try {
-            final jsonMap = jsonDecode(payloadStr) as Map<String, dynamic>;
-            final command = HapticCommandModel.fromJson(jsonMap);
-            _hapticCommandsController.add(command);
-          } catch (e) {
-            log?.call('Error decoding haptic command: $e', isError: true);
-          }
-        } else if (msg.topic == studioStartTopic || msg.topic.endsWith('/commands/studio/start')) {
-          try {
-            final jsonMap = jsonDecode(payloadStr) as Map<String, dynamic>;
-            final command = StudioCommandModel.fromJson(jsonMap);
-            log?.call(
-              'Remote Studio command received (session: ${command.sessionId}, label: ${command.label}, duration: ${command.durationSec}s)',
-              isError: false,
-            );
-            _studioCommandsController.add(command);
-          } catch (e) {
-            log?.call('Error decoding remote Studio command: $e', isError: true);
-          }
-        }
+        handleIncomingPayload(msg.topic, payloadStr);
       }
     });
+  }
+
+  /// Processes an incoming MQTT message payload on [topic] and dispatches to the corresponding stream.
+  @visibleForTesting
+  void handleIncomingPayload(String topic, String payloadStr) {
+    final log = onLog;
+    final hapticTopic = 'healthkicks/v1/$deviceId/commands/haptic';
+    final studioStartTopic = 'healthkicks/v1/$deviceId/commands/studio/start';
+    final uid = effectiveUserId;
+    final fallStatusTopic = (uid != null && uid.isNotEmpty)
+        ? 'healthkicks/v1/users/$uid/fall-alert/status'
+        : null;
+
+    if (topic == hapticTopic) {
+      try {
+        final jsonMap = jsonDecode(payloadStr) as Map<String, dynamic>;
+        final command = HapticCommandModel.fromJson(jsonMap);
+        _hapticCommandsController.add(command);
+      } catch (e) {
+        log?.call('Error decoding haptic command: $e', isError: true);
+      }
+    } else if (topic == studioStartTopic || topic.endsWith('/commands/studio/start')) {
+      try {
+        final jsonMap = jsonDecode(payloadStr) as Map<String, dynamic>;
+        final command = StudioCommandModel.fromJson(jsonMap);
+        log?.call(
+          'Remote Studio command received (session: ${command.sessionId}, label: ${command.label}, duration: ${command.durationSec}s)',
+          isError: false,
+        );
+        _studioCommandsController.add(command);
+      } catch (e) {
+        log?.call('Error decoding remote Studio command: $e', isError: true);
+      }
+    } else if ((fallStatusTopic != null && topic == fallStatusTopic) ||
+        topic.endsWith('/fall-alert/status')) {
+      try {
+        final jsonMap = jsonDecode(payloadStr) as Map<String, dynamic>;
+        final statusModel = FallAlertStatusModel.fromJson(jsonMap);
+        log?.call(
+          'Fall alert status received (event: ${statusModel.eventId}, state: ${statusModel.state})',
+          isError: false,
+        );
+        _fallAlertStatusController.add(statusModel);
+      } catch (e) {
+        log?.call('Error decoding fall alert status: $e', isError: true);
+      }
+    }
+  }
+
+  /// Publishes a fall alert lifecycle event (`DETECTED`, `CONFIRM`, `CANCEL`) to AWS IoT Core (QoS 1).
+  /// Topic: `healthkicks/v1/users/{user_id}/events/fall-alert`
+  Future<bool> publishFallAlert(
+    FallAlertUplinkPayload payload, {
+    String? targetUserId,
+  }) async {
+    final log = onLog;
+    final uid = targetUserId ?? effectiveUserId;
+
+    if (!isConnected || _client == null || uid == null || uid.isEmpty) {
+      log?.call(
+        'Unable to publish fall alert (${payload.action}): MQTT not connected or userId missing.',
+        isError: false,
+      );
+      return false;
+    }
+
+    try {
+      final topic = 'healthkicks/v1/users/$uid/events/fall-alert';
+      final jsonString = jsonEncode(payload.toJson());
+
+      final builder = MqttClientPayloadBuilder();
+      builder.addString(jsonString);
+
+      _client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
+      log?.call(
+        'Fall alert published to $topic: ${payload.action} (event_id: ${payload.eventId})',
+        isError: false,
+      );
+      return true;
+    } catch (e) {
+      log?.call('Error publishing fall alert: $e', isError: true);
+      return false;
+    }
   }
 
   /// Publishes an activity detection event to AWS IoT Core (QoS 1).
@@ -384,5 +473,6 @@ class MqttGatewayService {
     _isConnected = false;
     _hapticCommandsController.close();
     _studioCommandsController.close();
+    _fallAlertStatusController.close();
   }
 }

@@ -23,6 +23,8 @@ void main() {
       expect(model.timestampEpochSec, equals(1726224000));
       expect(model.isFall, isFalse);
       expect(model.isHapticTriggered, isFalse);
+      expect(model.isOfflineBuffered, isFalse);
+      expect(model.isFallRecovery, isFalse);
 
       final mqtt = model.toMqttPayload('HK-1');
       expect(mqtt['device_id'], equals('HK-1'));
@@ -50,6 +52,7 @@ void main() {
       expect(model.confidencePercent, equals(92));
       expect(model.isFall, isTrue);
       expect(model.isHapticTriggered, isTrue);
+      expect(model.isOfflineBuffered, isFalse);
 
       final mqtt = model.toMqttPayload('HK-42');
       expect(mqtt['device_id'], equals('HK-42'));
@@ -58,6 +61,37 @@ void main() {
       expect(mqtt['timestamp'], equals(1726224050000));
       expect(mqtt['is_fall'], isTrue);
       expect(mqtt['haptic_triggered'], isTrue);
+    });
+
+    test('Correctly decodes isOfflineBuffered (bit 2 of flags = 0x04) and isFallRecovery (0x13)', () {
+      // Offline buffered fall: flags = 0x05 (bit 0 = fall, bit 2 = offline NVS buffered)
+      final offlineFallBytes = ByteData(7);
+      offlineFallBytes.setUint8(0, 0x12); // fall_lateral
+      offlineFallBytes.setUint8(1, 94);
+      offlineFallBytes.setUint32(2, 1726224100, Endian.big);
+      offlineFallBytes.setUint8(6, 0x05);
+
+      final offlineFall = ActivityDetectionModel.fromBytes(offlineFallBytes.buffer.asUint8List());
+      expect(offlineFall.stateCode, equals(0x12));
+      expect(offlineFall.eventType, equals('fall_lateral'));
+      expect(offlineFall.isFall, isTrue);
+      expect(offlineFall.isHapticTriggered, isFalse);
+      expect(offlineFall.isOfflineBuffered, isTrue);
+      expect(offlineFall.isFallRecovery, isFalse);
+
+      // Fall recovery event: stateCode = 0x13
+      final recoveryBytes = ByteData(7);
+      recoveryBytes.setUint8(0, 0x13); // fall_recovery
+      recoveryBytes.setUint8(1, 89);
+      recoveryBytes.setUint32(2, 1726224115, Endian.big);
+      recoveryBytes.setUint8(6, 0x00);
+
+      final recovery = ActivityDetectionModel.fromBytes(recoveryBytes.buffer.asUint8List());
+      expect(recovery.stateCode, equals(0x13));
+      expect(recovery.eventType, equals('fall_recovery'));
+      expect(recovery.isFallRecovery, isTrue);
+      expect(recovery.isFall, isFalse);
+      expect(recovery.isOfflineBuffered, isFalse);
     });
 
     test('Correctly decodes stairs_up (0x03) and stairs_down (0x04) activities', () {
@@ -136,6 +170,11 @@ void main() {
         if (entry.key == 0x00 || entry.key == 0x05) {
           expect(model.activityCategory, ActivityCategory.sedentary);
           expect(model.isSedentary, isTrue);
+        }
+        if (entry.key == 0x13) {
+          expect(model.isFallRecovery, isTrue);
+        } else {
+          expect(model.isFallRecovery, isFalse);
         }
       }
     });

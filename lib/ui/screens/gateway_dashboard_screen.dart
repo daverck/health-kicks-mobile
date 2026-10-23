@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../controllers/gateway_dashboard_controller.dart';
 import '../../core/config/app_config.dart';
 import '../../core/permissions/permission_service.dart';
+import '../../screens/fall_alert_screen.dart';
 import '../../services/auth/auth_service.dart';
 import '../../services/auth/token_storage_service.dart';
 import '../../services/ble/ble_connection_manager.dart';
@@ -27,6 +28,7 @@ import 'steps_history_screen.dart';
 /// Responsibilities:
 /// - **BLE Footwear Connection**: Scans, auto-reconnects, and consumes GATT telemetry from the ESP32-S3 shoe.
 /// - **Cloud MQTT Synchronization**: Relays sensor events and IMU frames over AWS IoT Core WebSockets SigV4.
+/// - **Fall Alerting**: Displays full-screen emergency overlay upon live fall detection and coordinates status updates.
 /// - **Studio & Calibration**: Triggers IMU calibration and biomechanical motion capture sessions.
 /// - **Step Counter & Odometer**: Computes daily steps via differential monotonic odometer storage.
 /// - **Background Surveillance**: Coordinates foreground/background life cycle state across app transitions.
@@ -266,7 +268,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
 
   @override
   Widget build(BuildContext context) {
-    final listenables = <Listenable>[_controller];
+    final listenables = <Listenable>[_controller, _controller.fallAlertController];
     if (widget.authService != null) {
       listenables.add(widget.authService!);
     }
@@ -276,58 +278,69 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
       builder: (context, _) {
         final role = widget.authService?.currentUser?.role;
         final isClinicianOrAdmin = role == 'admin' || role == 'clinician';
+        final showFallOverlay = _controller.fallAlertController.isAlertScreenVisible;
 
-        return Scaffold(
-          appBar: DashboardAppBar(
-            onOpenStepsHistory: _openStepsHistoryScreen,
-            onOpenDetectionEventsHistory: _openDetectionEventsHistoryScreen,
-            onOpenSettings: _openSettingsScreen,
-            onLogout: widget.onLogout,
-          ),
-          body: SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // 1. Discreet Status Indicators (Tappable to Settings)
-                  GatewayStatusRow(
-                    deviceId: _controller.deviceId,
-                    bleStatus: _controller.bleStatus,
-                    bleClient: _controller.bleClient,
-                    connectedDevice: _controller.connectedDevice,
-                    targetDeviceId: _controller.targetDeviceId,
-                    mtu: _controller.mtu,
-                    isMqttConnected: _controller.isMqttConnected,
-                    awsRegion: AppConfig.awsRegion,
-                    onTapSettings: _openSettingsScreen,
-                  ),
-                  const SizedBox(height: 10),
+        return Stack(
+          children: [
+            Scaffold(
+              appBar: DashboardAppBar(
+                onOpenStepsHistory: _openStepsHistoryScreen,
+                onOpenDetectionEventsHistory: _openDetectionEventsHistoryScreen,
+                onOpenSettings: _openSettingsScreen,
+                onLogout: widget.onLogout,
+              ),
+              body: SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // 1. Discreet Status Indicators (Tappable to Settings)
+                      GatewayStatusRow(
+                        deviceId: _controller.deviceId,
+                        bleStatus: _controller.bleStatus,
+                        bleClient: _controller.bleClient,
+                        connectedDevice: _controller.connectedDevice,
+                        targetDeviceId: _controller.targetDeviceId,
+                        mtu: _controller.mtu,
+                        isMqttConnected: _controller.isMqttConnected,
+                        awsRegion: AppConfig.awsRegion,
+                        onTapSettings: _openSettingsScreen,
+                      ),
+                      const SizedBox(height: 10),
 
-                  // 2. Step Counter Card
-                  StepCounterCard(
-                    stepData: _controller.latestStepData,
-                    onOpenHistory: _openStepsHistoryScreen,
-                  ),
-                  const SizedBox(height: 10),
+                      // 2. Step Counter Card
+                      StepCounterCard(
+                        stepData: _controller.latestStepData,
+                        onOpenHistory: _openStepsHistoryScreen,
+                      ),
+                      const SizedBox(height: 10),
 
-                  // 3. Recent Activities History Card
-                  RecentActivitiesCard(
-                    activities: _controller.recentActivities,
-                    onViewAll: _openDetectionEventsHistoryScreen,
-                  ),
-                  const SizedBox(height: 10),
+                      // 3. Recent Activities History Card
+                      RecentActivitiesCard(
+                        activities: _controller.recentActivities,
+                        onViewAll: _openDetectionEventsHistoryScreen,
+                      ),
+                      const SizedBox(height: 10),
 
-                  // 4. Action Test Controls
-                  DashboardQuickActions(
-                    onSendTestHaptic: _controller.sendTestHapticCommand,
-                    isClinicianOrAdmin: isClinicianOrAdmin,
-                    onOpenStudio: _showStudioSessionDialog,
+                      // 4. Action Test Controls
+                      DashboardQuickActions(
+                        onSendTestHaptic: _controller.sendTestHapticCommand,
+                        isClinicianOrAdmin: isClinicianOrAdmin,
+                        onOpenStudio: _showStudioSessionDialog,
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
-          ),
+            if (showFallOverlay)
+              Positioned.fill(
+                child: FallAlertScreen(
+                  controller: _controller.fallAlertController,
+                ),
+              ),
+          ],
         );
       },
     );
