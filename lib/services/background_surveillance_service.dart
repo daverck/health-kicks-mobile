@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/config/app_config.dart';
@@ -51,6 +52,7 @@ class BackgroundSurveillanceService extends ChangeNotifier {
 
   final void Function(String tag, String message, {bool isError})? onLog;
   final Duration disconnectTimeout;
+  final Future<bool> Function()? locationPermissionRequester;
 
   bool _isSurveillanceActive = false;
   bool _isInitialized = false;
@@ -61,6 +63,7 @@ class BackgroundSurveillanceService extends ChangeNotifier {
   BackgroundSurveillanceService({
     this.onLog,
     this.disconnectTimeout = AppConfig.bleDisconnectTimeout,
+    this.locationPermissionRequester,
   });
 
   bool get isSurveillanceActive => _isSurveillanceActive;
@@ -125,9 +128,18 @@ class BackgroundSurveillanceService extends ChangeNotifier {
     );
   }
 
-  /// Request Android notification and battery optimization exemptions.
+  /// Requests location, notification, and battery optimization permissions.
   Future<bool> requestPermissions() async {
     if (!isSupported) return true;
+
+    final hasLocationPermission = await requestLocationPermission();
+    if (!hasLocationPermission) {
+      _log(
+        'LOCATION',
+        'Permission de localisation refusée : la position GPS pourra être indisponible lors d’une alerte.',
+        isError: true,
+      );
+    }
 
     // Check notification permission for Android 13+
     final notifPermission = await FlutterForegroundTask.checkNotificationPermission();
@@ -146,6 +158,16 @@ class BackgroundSurveillanceService extends ChangeNotifier {
     }
 
     return true;
+  }
+
+  /// Requests foreground location access when Active Surveillance is enabled.
+  /// Location is optional for the service so denial does not prevent activation.
+  Future<bool> requestLocationPermission() async {
+    if (locationPermissionRequester != null) {
+      return locationPermissionRequester!();
+    }
+    final status = await Permission.locationWhenInUse.request();
+    return status.isGranted;
   }
 
   /// Enables or disables the Mode Surveillance Active.

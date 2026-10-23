@@ -33,23 +33,49 @@ class DefaultFallLocationProvider implements FallLocationProvider {
     Duration timeout = const Duration(seconds: 3),
   }) async {
     try {
+      return await _getCurrentLocation(timeout).timeout(
+        timeout,
+        onTimeout: () => null,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<FallAlertLocation?> _getCurrentLocation(Duration timeout) async {
+    try {
+      final stopwatch = Stopwatch()..start();
       final hasPermission = _checkPermission != null
-          ? await _checkPermission().timeout(const Duration(seconds: 1), onTimeout: () => false)
+          ? await _checkPermission().timeout(
+              timeout < const Duration(seconds: 1)
+                  ? timeout
+                  : const Duration(seconds: 1),
+              onTimeout: () => false,
+            )
           : await _defaultPermissionCheck();
 
       if (!hasPermission) {
         return null;
       }
 
+      final remainingTimeout = timeout - stopwatch.elapsed;
+      if (remainingTimeout <= Duration.zero) return null;
+      final nativeTimeout = remainingTimeout > const Duration(milliseconds: 150)
+          ? remainingTimeout - const Duration(milliseconds: 150)
+          : remainingTimeout;
+
       final Map<String, dynamic>? rawMap;
       if (_fetchRawLocation != null) {
-        rawMap = await _fetchRawLocation(timeout).timeout(timeout, onTimeout: () => null);
+        rawMap = await _fetchRawLocation(nativeTimeout).timeout(
+          remainingTimeout,
+          onTimeout: () => null,
+        );
       } else {
         rawMap = await _channel
             .invokeMapMethod<String, dynamic>('getCurrentLocation', {
-              'timeoutMs': timeout.inMilliseconds,
+              'timeoutMs': nativeTimeout.inMilliseconds,
             })
-            .timeout(timeout, onTimeout: () => null);
+            .timeout(remainingTimeout, onTimeout: () => null);
       }
 
       if (rawMap == null) return null;
@@ -83,9 +109,8 @@ class DefaultFallLocationProvider implements FallLocationProvider {
           .status
           .timeout(const Duration(seconds: 1));
       if (status.isGranted) return true;
-      final coarseOrAlways = await Permission.location
-          .status
-          .timeout(const Duration(seconds: 1));
+      final coarseOrAlways =
+          await Permission.location.status.timeout(const Duration(seconds: 1));
       return coarseOrAlways.isGranted;
     } catch (_) {
       return false;

@@ -39,6 +39,10 @@ class FallAlertController extends ChangeNotifier {
   FallAlertLocation? _lastLocation;
   bool _isConfirmSent = false;
   Timer? _countdownTimer;
+  Timer? _locationRefreshDelayTimer;
+  Completer<void>? _locationRefreshDelayCompleter;
+  Future<void>? _locationRefreshFuture;
+  String? _locationRefreshEventId;
   bool _isDisposed = false;
 
   final Set<String> _processedSmsCommandKeys = {};
@@ -152,6 +156,7 @@ class FallAlertController extends ChangeNotifier {
       if (isAlertActive && _activeEventId != null) {
         final eventId = _activeEventId!;
         _countdownTimer?.cancel();
+        _cancelLocationRefreshDelay();
         _state = 'CANCELLED';
         _isAlertScreenVisible = false;
         _activeEventId = null;
@@ -239,9 +244,10 @@ class FallAlertController extends ChangeNotifier {
       'Chute détectée en direct ($liveEventId) : ouverture de l\'écran d\'urgence (60 s).',
     );
 
-    final location = await locationProvider.getCurrentLocation(
-      timeout: const Duration(seconds: 3),
-    );
+    final location = await locationProvider.getCurrentLocation(timeout: const Duration(seconds: 3)).timeout(
+          const Duration(seconds: 3),
+          onTimeout: () => null,
+        );
     _lastLocation = location;
 
     final livePayload = FallAlertUplinkPayload.detected(
@@ -254,6 +260,9 @@ class FallAlertController extends ChangeNotifier {
       location: location,
     );
 
+    if (location == null) {
+      _startLocationRefresh(liveEventId);
+    }
     await _publishUplink(livePayload);
   }
 
@@ -261,6 +270,7 @@ class FallAlertController extends ChangeNotifier {
   Future<void> cancelByUser() async {
     if (_isDisposed) return;
     _countdownTimer?.cancel();
+    _cancelLocationRefreshDelay();
     final eventId = _activeEventId;
     _state = 'CANCELLED';
     _isAlertScreenVisible = false;
@@ -287,6 +297,7 @@ class FallAlertController extends ChangeNotifier {
     if (eventId == null || _state != 'PENDING') return;
 
     _countdownTimer?.cancel();
+    _cancelLocationRefreshDelay();
     _isConfirmSent = true;
     _state = 'ESCALATING';
     _remainingSeconds = 0;
@@ -298,9 +309,11 @@ class FallAlertController extends ChangeNotifier {
     );
 
     final location = _lastLocation ??
-        await locationProvider.getCurrentLocation(
-          timeout: const Duration(seconds: 2),
-        );
+        await locationProvider.getCurrentLocation(timeout: const Duration(seconds: 2)).timeout(
+              const Duration(seconds: 2),
+              onTimeout: () => null,
+            ) ??
+        _lastLocation;
     _lastLocation = location;
 
     final payload = FallAlertUplinkPayload.confirm(
@@ -308,6 +321,54 @@ class FallAlertController extends ChangeNotifier {
       location: location,
     );
     await _publishUplink(payload);
+  }
+
+  void _startLocationRefresh(String eventId) {
+    if (_locationRefreshEventId == eventId && _locationRefreshFuture != null) {
+      return;
+    }
+    _locationRefreshEventId = eventId;
+    _locationRefreshFuture = _refreshLocationUntilAvailable(eventId);
+    unawaited(_locationRefreshFuture);
+  }
+
+  Future<void> _refreshLocationUntilAvailable(String eventId) async {
+    while (!_isDisposed && _activeEventId == eventId && _state == 'PENDING') {
+      final location = await locationProvider.getCurrentLocation(timeout: const Duration(seconds: 3)).timeout(
+            const Duration(seconds: 3),
+            onTimeout: () => null,
+          );
+
+      if (_isDisposed || _activeEventId != eventId) return;
+      if (location != null) {
+        _lastLocation = location;
+        _notifySafely();
+        return;
+      }
+
+      await _waitForLocationRefreshRetry();
+    }
+  }
+
+  Future<void> _waitForLocationRefreshRetry() {
+    final completer = Completer<void>();
+    _locationRefreshDelayCompleter = completer;
+    _locationRefreshDelayTimer = Timer(const Duration(seconds: 2), () {
+      _locationRefreshDelayTimer = null;
+      _locationRefreshDelayCompleter = null;
+      if (!completer.isCompleted) completer.complete();
+    });
+    return completer.future;
+  }
+
+  void _cancelLocationRefreshDelay() {
+    _locationRefreshDelayTimer?.cancel();
+    _locationRefreshDelayTimer = null;
+    final completer = _locationRefreshDelayCompleter;
+    _locationRefreshDelayCompleter = null;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
   }
 
   /// Handles downlink status messages from `healthkicks/v1/users/{user_id}/fall-alert/status`.
@@ -369,6 +430,7 @@ class FallAlertController extends ChangeNotifier {
 
       case 'ESCALATING':
         _countdownTimer?.cancel();
+        _cancelLocationRefreshDelay();
         _state = 'ESCALATING';
         _remainingSeconds = 0;
         if (status.currentContactRank != null) {
@@ -383,6 +445,7 @@ class FallAlertController extends ChangeNotifier {
 
       case 'ACKNOWLEDGED':
         _countdownTimer?.cancel();
+        _cancelLocationRefreshDelay();
         _state = 'ACKNOWLEDGED';
         _remainingSeconds = 0;
         if (status.acknowledgedBy != null &&
@@ -395,6 +458,7 @@ class FallAlertController extends ChangeNotifier {
 
       case 'EXHAUSTED':
         _countdownTimer?.cancel();
+        _cancelLocationRefreshDelay();
         _state = 'EXHAUSTED';
         _remainingSeconds = 0;
         if (status.contactsTotal != null) {
@@ -407,6 +471,7 @@ class FallAlertController extends ChangeNotifier {
       case 'CANCELLED':
       case 'SUPPRESSED':
         _countdownTimer?.cancel();
+        _cancelLocationRefreshDelay();
         _state = normalizedState;
         _isAlertScreenVisible = false;
         _activeEventId = null;
@@ -487,6 +552,7 @@ class FallAlertController extends ChangeNotifier {
         _remainingSeconds = 0;
         _state = 'ESCALATING';
         timer.cancel();
+        _cancelLocationRefreshDelay();
         _notifySafely();
       }
     });
@@ -513,6 +579,7 @@ class FallAlertController extends ChangeNotifier {
   void dispose() {
     _isDisposed = true;
     _countdownTimer?.cancel();
+    _cancelLocationRefreshDelay();
     _statusSub?.cancel();
     super.dispose();
   }

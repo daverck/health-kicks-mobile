@@ -30,6 +30,20 @@ class FakeFallSmsSender implements FallSmsSender {
   }
 }
 
+class SequencedFallLocationProvider implements FallLocationProvider {
+  final List<FallAlertLocation?> locations;
+
+  SequencedFallLocationProvider(this.locations);
+
+  @override
+  Future<FallAlertLocation?> getCurrentLocation({
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    if (locations.isEmpty) return null;
+    return locations.removeAt(0);
+  }
+}
+
 void main() {
   group('FallAlertController lifecycle & SMS relay', () {
     const mockLocation = FallAlertLocation(
@@ -98,6 +112,37 @@ void main() {
       expect(sent.location?.lat, closeTo(50.8466, 0.0001));
       expect(sent.eventId, equals(controller.activeEventId));
 
+      controller.dispose();
+    });
+
+    test('Refines missing DETECTED location in the background and includes it in CONFIRM', () async {
+      final published = <FallAlertUplinkPayload>[];
+      final locationProvider = SequencedFallLocationProvider([
+        null,
+        mockLocation,
+      ]);
+      final controller = FallAlertController(
+        deviceId: 'HK-1',
+        locationProvider: locationProvider,
+        isMqttConnectedGetter: () => true,
+        onPublishUplink: (payload) async {
+          published.add(payload);
+          return true;
+        },
+      );
+
+      await controller.onActivityDetected(liveFallDetection);
+
+      expect(published.first.action, equals('DETECTED'));
+      expect(published.first.location, isNull);
+
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.lastLocation, equals(mockLocation));
+
+      await controller.confirmEmergencyNow();
+
+      expect(published.last.action, equals('CONFIRM'));
+      expect(published.last.location, equals(mockLocation));
       controller.dispose();
     });
 

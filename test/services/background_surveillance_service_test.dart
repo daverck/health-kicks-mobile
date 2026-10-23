@@ -18,6 +18,20 @@ void main() {
       expect(service.currentBleStatus, BleConnectionStatus.disconnected);
     });
 
+    test('Requests foreground location permission through the injected requester', () async {
+      var permissionRequested = false;
+      final service = BackgroundSurveillanceService(
+        locationPermissionRequester: () async {
+          permissionRequested = true;
+          return true;
+        },
+      );
+      addTearDown(service.dispose);
+
+      expect(await service.requestLocationPermission(), isTrue);
+      expect(permissionRequested, isTrue);
+    });
+
     test('Inactivity timer triggers stopSurveillance when timeout expires', () async {
       final logs = <String>[];
       final service = BackgroundSurveillanceService(
