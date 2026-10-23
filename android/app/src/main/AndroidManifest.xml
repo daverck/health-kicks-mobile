@@ -7,6 +7,10 @@
     <!-- Bluetooth Low Energy Hardware Feature -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true"/>
 
+    <!-- Emergency Fall Alert SMS Relay (Optional Telephony Hardware) -->
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
+
     <!-- Modern Bluetooth Permissions (Android 12 / API 31+) -->
     <!-- neverForLocation indicates no physical location is derived from BLE beacon scans -->
     <uses-permission

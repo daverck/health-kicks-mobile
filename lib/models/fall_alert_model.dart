@@ -1,5 +1,44 @@
-/// Models for the Fall Alerting MQTT Uplink and Downlink contracts.
+/// Models for the Fall Alerting MQTT Uplink and Downlink contracts (v1.1).
 /// Contract reference: contracts/fall_alerting.md (Section 3: Contrats MQTT IoT)
+enum FallAlertState {
+  pending('PENDING'),
+  escalating('ESCALATING'),
+  acknowledged('ACKNOWLEDGED'),
+  cancelled('CANCELLED'),
+  exhausted('EXHAUSTED'),
+  suppressed('SUPPRESSED'),
+  testSms('TEST_SMS');
+
+  final String value;
+  const FallAlertState(this.value);
+
+  static FallAlertState fromString(String raw) {
+    final normalized = raw.trim().toUpperCase();
+    for (final state in FallAlertState.values) {
+      if (state.value == normalized) return state;
+    }
+    return FallAlertState.pending;
+  }
+}
+
+enum FallAlertAction {
+  detected('DETECTED'),
+  confirm('CONFIRM'),
+  cancel('CANCEL'),
+  smsStatus('SMS_STATUS');
+
+  final String value;
+  const FallAlertAction(this.value);
+
+  static FallAlertAction fromString(String raw) {
+    final normalized = raw.trim().toUpperCase();
+    for (final action in FallAlertAction.values) {
+      if (action.value == normalized) return action;
+    }
+    return FallAlertAction.detected;
+  }
+}
+
 class FallAlertLocation {
   final double lat;
   final double lon;
@@ -44,10 +83,51 @@ class FallAlertLocation {
   }
 }
 
+/// SMS relay command embedded in a Downlink status payload (`sms_command`).
+class FallAlertSmsCommand {
+  final int? notificationId;
+  final int? contactId;
+  final String contactFirstName;
+  final String recipientPhone;
+  final String message;
+  final bool isTest;
+
+  const FallAlertSmsCommand({
+    this.notificationId,
+    this.contactId,
+    required this.contactFirstName,
+    required this.recipientPhone,
+    required this.message,
+    this.isTest = false,
+  });
+
+  factory FallAlertSmsCommand.fromJson(Map<String, dynamic> json) {
+    return FallAlertSmsCommand(
+      notificationId: (json['notification_id'] as num?)?.toInt(),
+      contactId: (json['contact_id'] as num?)?.toInt(),
+      contactFirstName: json['contact_first_name'] as String? ?? '',
+      recipientPhone: json['recipient_phone'] as String? ?? '',
+      message: json['message'] as String? ?? '',
+      isTest: json['is_test'] as bool? ?? false,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'notification_id': notificationId,
+      'contact_id': contactId,
+      'contact_first_name': contactFirstName,
+      'recipient_phone': recipientPhone,
+      'message': message,
+      'is_test': isTest,
+    };
+  }
+}
+
 /// Uplink payload published by mobile on `healthkicks/v1/users/{user_id}/events/fall-alert`.
 class FallAlertUplinkPayload {
   final String eventId;
-  final String action; // 'DETECTED' | 'CONFIRM' | 'CANCEL'
+  final String action; // 'DETECTED' | 'CONFIRM' | 'CANCEL' | 'SMS_STATUS'
   final String? deviceId;
   final String? eventType;
   final double? confidence;
@@ -55,6 +135,9 @@ class FallAlertUplinkPayload {
   final String? delivery; // 'live' | 'replayed'
   final FallAlertLocation? location;
   final String? cancelReason; // 'user_cancel' | 'fall_recovery'
+  final int? notificationId;
+  final String? smsStatus; // 'SENT' | 'FAILED'
+  final String? errorMessage;
   final int sentAt;
 
   const FallAlertUplinkPayload({
@@ -67,8 +150,13 @@ class FallAlertUplinkPayload {
     this.delivery,
     this.location,
     this.cancelReason,
+    this.notificationId,
+    this.smsStatus,
+    this.errorMessage,
     required this.sentAt,
   });
+
+  FallAlertAction get actionEnum => FallAlertAction.fromString(action);
 
   factory FallAlertUplinkPayload.detected({
     required String eventId,
@@ -82,7 +170,7 @@ class FallAlertUplinkPayload {
   }) {
     return FallAlertUplinkPayload(
       eventId: eventId,
-      action: 'DETECTED',
+      action: FallAlertAction.detected.value,
       deviceId: deviceId,
       eventType: eventType,
       confidence: confidence,
@@ -100,7 +188,7 @@ class FallAlertUplinkPayload {
   }) {
     return FallAlertUplinkPayload(
       eventId: eventId,
-      action: 'CONFIRM',
+      action: FallAlertAction.confirm.value,
       location: location,
       sentAt: sentAt ?? DateTime.now().toUtc().millisecondsSinceEpoch,
     );
@@ -113,8 +201,25 @@ class FallAlertUplinkPayload {
   }) {
     return FallAlertUplinkPayload(
       eventId: eventId,
-      action: 'CANCEL',
+      action: FallAlertAction.cancel.value,
       cancelReason: cancelReason,
+      sentAt: sentAt ?? DateTime.now().toUtc().millisecondsSinceEpoch,
+    );
+  }
+
+  factory FallAlertUplinkPayload.smsStatus({
+    required String eventId,
+    required int notificationId,
+    required bool sent,
+    String? errorMessage,
+    int? sentAt,
+  }) {
+    return FallAlertUplinkPayload(
+      eventId: eventId,
+      action: FallAlertAction.smsStatus.value,
+      notificationId: notificationId,
+      smsStatus: sent ? 'SENT' : 'FAILED',
+      errorMessage: errorMessage,
       sentAt: sentAt ?? DateTime.now().toUtc().millisecondsSinceEpoch,
     );
   }
@@ -131,6 +236,9 @@ class FallAlertUplinkPayload {
       delivery: json['delivery'] as String?,
       location: locRaw is Map<String, dynamic> ? FallAlertLocation.fromJson(locRaw) : null,
       cancelReason: json['cancel_reason'] as String?,
+      notificationId: (json['notification_id'] as num?)?.toInt(),
+      smsStatus: json['sms_status'] as String?,
+      errorMessage: json['error_message'] as String?,
       sentAt: (json['sent_at'] as num?)?.toInt() ?? 0,
     );
   }
@@ -160,6 +268,11 @@ class FallAlertUplinkPayload {
     }
     if (cancelReason != null) {
       map['cancel_reason'] = cancelReason;
+    }
+    if (action == 'SMS_STATUS' || notificationId != null || smsStatus != null) {
+      map['notification_id'] = notificationId;
+      map['sms_status'] = smsStatus;
+      map['error_message'] = errorMessage;
     }
     map['sent_at'] = sentAt;
     return map;
@@ -198,13 +311,14 @@ class FallAlertAcknowledgedBy {
 class FallAlertStatusModel {
   final String eventId;
   final int? alertId;
-  final String state; // 'PENDING' | 'ESCALATING' | 'ACKNOWLEDGED' | 'CANCELLED' | 'EXHAUSTED' | 'SUPPRESSED'
+  final String state; // 'PENDING' | 'ESCALATING' | 'ACKNOWLEDGED' | 'CANCELLED' | 'EXHAUSTED' | 'SUPPRESSED' | 'TEST_SMS'
   final int? currentContactRank;
   final int? contactsTotal;
   final FallAlertAcknowledgedBy? acknowledgedBy;
   final String? cancelReason;
   final DateTime? nextActionAt;
   final DateTime? updatedAt;
+  final FallAlertSmsCommand? smsCommand;
 
   const FallAlertStatusModel({
     required this.eventId,
@@ -216,7 +330,10 @@ class FallAlertStatusModel {
     this.cancelReason,
     this.nextActionAt,
     this.updatedAt,
+    this.smsCommand,
   });
+
+  FallAlertState get stateEnum => FallAlertState.fromString(state);
 
   bool get isPending => state == 'PENDING';
   bool get isEscalating => state == 'ESCALATING';
@@ -224,6 +341,7 @@ class FallAlertStatusModel {
   bool get isCancelled => state == 'CANCELLED';
   bool get isExhausted => state == 'EXHAUSTED';
   bool get isSuppressed => state == 'SUPPRESSED';
+  bool get isTestSms => state == 'TEST_SMS';
 
   factory FallAlertStatusModel.fromJson(Map<String, dynamic> json) {
     FallAlertAcknowledgedBy? ackBy;
@@ -232,6 +350,12 @@ class FallAlertStatusModel {
       ackBy = FallAlertAcknowledgedBy.fromJson(rawAck);
     } else if (rawAck is String && rawAck.isNotEmpty) {
       ackBy = FallAlertAcknowledgedBy(firstName: rawAck);
+    }
+
+    FallAlertSmsCommand? parsedSmsCmd;
+    final rawSmsCmd = json['sms_command'];
+    if (rawSmsCmd is Map<String, dynamic>) {
+      parsedSmsCmd = FallAlertSmsCommand.fromJson(rawSmsCmd);
     }
 
     DateTime? parseDate(dynamic raw) {
@@ -254,6 +378,7 @@ class FallAlertStatusModel {
       cancelReason: json['cancel_reason'] as String?,
       nextActionAt: parseDate(json['next_action_at']),
       updatedAt: parseDate(json['updated_at']),
+      smsCommand: parsedSmsCmd,
     );
   }
 
@@ -268,6 +393,9 @@ class FallAlertStatusModel {
       'cancel_reason': cancelReason,
       'next_action_at': nextActionAt?.toUtc().toIso8601String(),
       'updated_at': updatedAt?.toUtc().toIso8601String(),
+      if (smsCommand != null) 'sms_command': smsCommand!.toJson(),
     };
   }
 }
+
+typedef FallAlertDownlinkStatus = FallAlertStatusModel;

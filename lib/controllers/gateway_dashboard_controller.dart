@@ -309,6 +309,7 @@ class GatewayDashboardController extends ChangeNotifier {
     addLog('INIT', 'Démarrage de la passerelle HealthKicks...');
     _ensureBleManager();
     unawaited(connectMqtt());
+    unawaited(_fallAlertController.requestSmsPermission());
 
     try {
       final perms = await _permissionService.requestDetailedBlePermissions(

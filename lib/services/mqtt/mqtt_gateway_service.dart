@@ -293,7 +293,7 @@ class MqttGatewayService {
     }
   }
 
-  /// Publishes a fall alert lifecycle event (`DETECTED`, `CONFIRM`, `CANCEL`) to AWS IoT Core (QoS 1).
+  /// Publishes a fall alert lifecycle event (`DETECTED`, `CONFIRM`, `CANCEL`, `SMS_STATUS`) to AWS IoT Core (QoS 1).
   /// Topic: `healthkicks/v1/users/{user_id}/events/fall-alert`
   Future<bool> publishFallAlert(
     FallAlertUplinkPayload payload, {
@@ -328,6 +328,13 @@ class MqttGatewayService {
       return false;
     }
   }
+
+  /// Alias for [publishFallAlert].
+  Future<bool> publishFallAlertEvent(
+    FallAlertUplinkPayload payload, {
+    String? targetUserId,
+  }) =>
+      publishFallAlert(payload, targetUserId: targetUserId);
 
   /// Publishes an activity detection event to AWS IoT Core (QoS 1).
   Future<void> publishActivityDetection(ActivityDetectionModel detection) async {

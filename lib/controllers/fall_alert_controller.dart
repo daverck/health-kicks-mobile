@@ -7,16 +7,18 @@ import '../models/activity_detection_model.dart';
 import '../models/fall_alert_model.dart';
 import '../services/location/fall_location_provider.dart';
 import '../services/mqtt/mqtt_gateway_service.dart';
+import '../services/sms/fall_sms_sender.dart';
 
 const _uuid = Uuid();
 
 typedef FallAlertLogCallback = void Function(String tag, String message, {bool isError});
 
-/// Controller orchestrating the Fall Alerting lifecycle on the mobile gateway.
-/// Contract reference: contracts/fall_alerting.md (Sections 2, 3 & 7.B)
+/// Controller orchestrating the Fall Alerting lifecycle and native Android SMS relay on the mobile gateway.
+/// Contract reference: contracts/fall_alerting.md v1.1 (Sections 2, 3 & 7.B)
 class FallAlertController extends ChangeNotifier {
   final String deviceId;
   final FallLocationProvider locationProvider;
+  final FallSmsSender smsSender;
   final int initialCountdownSeconds;
   final Future<bool> Function(FallAlertUplinkPayload payload)? onPublishUplink;
   final bool Function()? isMqttConnectedGetter;
@@ -39,12 +41,14 @@ class FallAlertController extends ChangeNotifier {
   Timer? _countdownTimer;
   bool _isDisposed = false;
 
+  final Set<String> _processedSmsCommandKeys = {};
   final List<FallAlertUplinkPayload> _pendingReplayedPayloads = [];
   final List<FallAlertUplinkPayload> _publishedPayloads = [];
 
   FallAlertController({
     this.deviceId = 'HK-2',
     this.locationProvider = const DefaultFallLocationProvider(),
+    this.smsSender = const MethodChannelFallSmsSender(),
     this.initialCountdownSeconds = 60,
     this.onPublishUplink,
     this.isMqttConnectedGetter,
@@ -82,6 +86,15 @@ class FallAlertController extends ChangeNotifier {
       return _mqttService!.isConnected || _isMqttConnected;
     }
     return _isMqttConnected;
+  }
+
+  /// Requests Android `SEND_SMS` runtime permission via [smsSender].
+  Future<bool> requestSmsPermission() async {
+    try {
+      return await smsSender.requestSmsPermission();
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Binds this controller to an [MqttGatewayService] to publish uplink messages
@@ -301,7 +314,26 @@ class FallAlertController extends ChangeNotifier {
   void onDownlinkStatusReceived(FallAlertStatusModel status) {
     if (_isDisposed) return;
 
-    // Ignore stale terminal updates for a different alert when one is currently active
+    final normalizedState = status.state.toUpperCase();
+
+    // 1. Process embedded SMS command if present and not yet handled (idempotence)
+    if (status.smsCommand != null) {
+      final cmd = status.smsCommand!;
+      final smsKey = cmd.notificationId != null
+          ? 'notif:${cmd.notificationId}'
+          : 'event:${status.eventId}';
+      if (!_processedSmsCommandKeys.contains(smsKey)) {
+        _processedSmsCommandKeys.add(smsKey);
+        unawaited(_handleSmsCommand(status.eventId, cmd));
+      }
+    }
+
+    // 2. TEST_SMS downlinks must NEVER modify active alert state or open the emergency screen
+    if (normalizedState == 'TEST_SMS' || status.stateEnum == FallAlertState.testSms) {
+      return;
+    }
+
+    // 3. Ignore stale updates for a different alert when one is currently active
     if (_activeEventId != null &&
         status.eventId.isNotEmpty &&
         status.eventId != _activeEventId) {
@@ -312,7 +344,6 @@ class FallAlertController extends ChangeNotifier {
       _activeEventId = status.eventId;
     }
 
-    final normalizedState = status.state.toUpperCase();
     onLog?.call(
       'FALL_ALERT',
       'Statut downlink reçu : $normalizedState (rang: ${status.currentContactRank}/${status.contactsTotal})',
@@ -384,6 +415,41 @@ class FallAlertController extends ChangeNotifier {
     }
   }
 
+  Future<void> _handleSmsCommand(String eventId, FallAlertSmsCommand cmd) async {
+    onLog?.call(
+      'FALL_ALERT',
+      'Envoi SMS (${cmd.isTest ? "TEST" : "URGENCE"}) vers ${cmd.recipientPhone} (${cmd.contactFirstName})...',
+    );
+
+    final result = await smsSender.sendSms(
+      phone: cmd.recipientPhone,
+      message: cmd.message,
+    );
+
+    if (result.success) {
+      onLog?.call(
+        'FALL_ALERT',
+        'SMS remis au modem GSM Android pour ${cmd.contactFirstName}.',
+      );
+    } else {
+      onLog?.call(
+        'FALL_ALERT',
+        'Échec envoi SMS pour ${cmd.contactFirstName} : ${result.errorMessage ?? "erreur inconnue"}',
+        isError: true,
+      );
+    }
+
+    if (!cmd.isTest && cmd.notificationId != null) {
+      final statusPayload = FallAlertUplinkPayload.smsStatus(
+        eventId: eventId,
+        notificationId: cmd.notificationId!,
+        sent: result.success,
+        errorMessage: result.success ? null : result.errorMessage,
+      );
+      await _publishUplink(statusPayload);
+    }
+  }
+
   /// Dismisses the alert screen once the alert is acknowledged or finished.
   void dismissAlertScreen() {
     if (_isDisposed) return;
@@ -432,7 +498,7 @@ class FallAlertController extends ChangeNotifier {
       return await onPublishUplink!(payload);
     }
     if (_mqttService != null) {
-      return await _mqttService!.publishFallAlert(payload);
+      return await _mqttService!.publishFallAlertEvent(payload);
     }
     return false;
   }
