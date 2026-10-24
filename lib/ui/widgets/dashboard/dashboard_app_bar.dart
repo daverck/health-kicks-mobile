@@ -41,7 +41,7 @@ class DashboardAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      title: const Text('HealthKicks BLE-to-MQTT Gateway'),
+      title: const Text('HealthKicks'),
       actions: [
         IconButton(
           icon: const Icon(Icons.settings_outlined),

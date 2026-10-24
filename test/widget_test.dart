@@ -69,6 +69,6 @@ void main() {
     await tester.pumpWidget(HealthKicksApp(authService: authService));
     await tester.pumpAndSettle();
 
-    expect(find.text('HealthKicks BLE-to-MQTT Gateway'), findsOneWidget);
+    expect(find.text('HealthKicks'), findsOneWidget);
   });
 }

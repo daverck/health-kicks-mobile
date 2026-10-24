@@ -20,9 +20,9 @@ void main() {
     );
 
     // Verify app bar title is HealthKicks
-    expect(find.text('HealthKicks BLE-to-MQTT Gateway'), findsOneWidget);
-    // title verified above
-
+    expect(find.text('HealthKicks'), findsOneWidget);
+    expect(find.text('HealthKicks BLE-to-MQTT Gateway'), findsNothing);
+    
     expect(find.text('HK-2'), findsNothing);
     expect(find.byIcon(Icons.perm_identity), findsNothing);
 

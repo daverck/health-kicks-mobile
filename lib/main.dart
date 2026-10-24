@@ -65,7 +65,7 @@ class _HealthKicksAppState extends State<HealthKicksApp> {
       listenable: Listenable.merge([_themeService, _localeService]),
       builder: (context, _) {
         return MaterialApp(
-          title: 'HealthKicks Mobile',
+          title: 'HealthKicks',
           debugShowCheckedModeBanner: false,
           themeMode: _themeService.themeMode,
           theme: AppTheme.lightTheme,
