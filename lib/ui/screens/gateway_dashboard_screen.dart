@@ -319,6 +319,13 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
                       RecentActivitiesCard(
                         activities: _controller.recentActivities,
                         onViewAll: _openDetectionEventsHistoryScreen,
+                        canUseHitl: isClinicianOrAdmin,
+                        isHitlActive: _controller.hitlCoordinator.isHitlActive,
+                        hitlItems: _controller.hitlCoordinator.items,
+                        onToggleHitl: (val) => _controller.setHitlActive(val),
+                        onUpdateHitlLabel: (item, label) => _controller.hitlCoordinator.updateItemLabel(item.id, label),
+                        onConfirmHitl: (item) => _controller.confirmHitlItem(item),
+                        onDismissHitl: (item) => _controller.hitlCoordinator.dismissItem(item.id),
                       ),
                       const SizedBox(height: 10),
 

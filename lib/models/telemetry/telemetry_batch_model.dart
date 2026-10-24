@@ -113,6 +113,7 @@ class BatchMetadata {
   final String? sessionId;
   final String? label;
   final double? durationSec;
+  final bool isHitl;
 
   const BatchMetadata({
     required this.sampleCount,
@@ -122,6 +123,7 @@ class BatchMetadata {
     this.sessionId,
     this.label,
     this.durationSec,
+    this.isHitl = false,
   });
 
   factory BatchMetadata.fromJson(Map<String, dynamic> json) {
@@ -133,6 +135,7 @@ class BatchMetadata {
       sessionId: json['session_id'] as String?,
       label: json['label'] as String?,
       durationSec: (json['duration_sec'] as num?)?.toDouble(),
+      isHitl: json['is_hitl'] as bool? ?? false,
     );
   }
 
@@ -145,6 +148,7 @@ class BatchMetadata {
       if (sessionId != null) 'session_id': sessionId,
       if (label != null) 'label': label,
       if (durationSec != null) 'duration_sec': durationSec,
+      if (isHitl) 'is_hitl': true,
     };
   }
 }
@@ -176,6 +180,7 @@ class TelemetryBatch {
     return {
       'header': header.toJson(),
       'metadata': metadata.toJson(),
+      if (metadata.isHitl) 'is_hitl': true,
       'readings': readings.map((r) => r.toJson()).toList(),
     };
   }
@@ -240,10 +245,11 @@ class TelemetryBatch {
           sampleCount: telemetryItems.length,
           windowStart: windowStart,
           windowEnd: windowEnd,
-          flushTrigger: 'studio',
+          flushTrigger: session.isHitl ? 'hitl' : 'studio',
           sessionId: session.sessionId,
           label: session.label,
           durationSec: session.durationSec,
+          isHitl: session.isHitl,
         ),
         readings: telemetryItems,
       );

@@ -69,6 +69,10 @@ class AuthService extends ChangeNotifier {
   String? _tokenUserId;
   String? get currentUserId => _currentUser?.id.toString() ?? _tokenUserId;
 
+  bool get isAdmin => _currentUser?.role.toLowerCase() == 'admin';
+  bool get isClinician => _currentUser?.role.toLowerCase() == 'clinician';
+  bool get canUseHitl => isAdmin || isClinician;
+
   String? _lastError;
   String? get lastError => _lastError;
 

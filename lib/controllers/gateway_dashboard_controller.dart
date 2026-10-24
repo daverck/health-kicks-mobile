@@ -33,6 +33,10 @@ import '../services/step_sync_service.dart';
 import '../services/studio/studio_api_service.dart';
 import '../ui/widgets/studio_session_dialog.dart';
 import 'dashboard_odometer_coordinator.dart';
+import 'package:flutter/services.dart';
+import '../models/hitl/hitl_detection_item.dart';
+import '../services/audio/studio_audio_feedback_service.dart';
+import '../services/hitl/hitl_coordinator.dart';
 import 'fall_alert_controller.dart';
 
 /// Business controller managing the background lifecycle, BLE connection,
@@ -42,6 +46,9 @@ class GatewayDashboardController extends ChangeNotifier {
   final String targetDeviceId;
   final AuthService? authService;
   final FirmwareService _firmwareService;
+  late final HitlCoordinator _hitlCoordinator;
+  HitlCoordinator get hitlCoordinator => _hitlCoordinator;
+  final StudioAudioFeedbackService _audioFeedbackService;
   late final FallAlertController _fallAlertController;
   final bool _ownsFallAlertController;
 
@@ -93,11 +100,23 @@ class GatewayDashboardController extends ChangeNotifier {
     this.authService,
     FirmwareService? firmwareService,
     FallAlertController? fallAlertController,
+    HitlCoordinator? hitlCoordinator,
+    StudioAudioFeedbackService? audioFeedbackService,
     this.onShowSnackBar,
     this.onShowRecordingDialog,
     this.onPermissionDeniedAction,
   })  : _firmwareService = firmwareService ?? FirmwareService(),
+        _audioFeedbackService = audioFeedbackService ?? StudioAudioFeedbackService(),
         _ownsFallAlertController = fallAlertController == null {
+    _hitlCoordinator = hitlCoordinator ??
+        HitlCoordinator(
+          mqttService: _mqttService,
+          studioApiService: _studioApiService,
+          onLog: (msg, {bool isError = false}) {
+            addLog('HITL', msg, color: isError ? Colors.red : Colors.teal);
+          },
+        );
+    _hitlCoordinator.addListener(notifyListeners);
     _fallAlertController = fallAlertController ??
         FallAlertController(
           deviceId: deviceId,
@@ -614,6 +633,12 @@ class GatewayDashboardController extends ChangeNotifier {
           '${detection.eventType.toUpperCase()} (${detection.confidencePercent}%) | Chute=${detection.isFall} | Haptique=${detection.isHapticTriggered}',
         );
 
+        if (_hitlCoordinator.isHitlActive) {
+          _hitlCoordinator.registerDetection(detection);
+          unawaited(HapticFeedback.mediumImpact());
+          unawaited(_audioFeedbackService.playCountdownBeep());
+        }
+
         unawaited(_fallAlertController.onActivityDetected(
           detection,
           overrideDeviceId: deviceId,
@@ -654,6 +679,9 @@ class GatewayDashboardController extends ChangeNotifier {
           'Réassemblage : ${result.framesRecovered}/${result.totalAnnounced} trames | CRC32 validé : ${result.isCrcValid}',
           color: result.isSuccess ? Colors.green : Colors.red,
         );
+        if (_hitlCoordinator.isHitlActive) {
+          _hitlCoordinator.attachBurstReadings(result.readings);
+        }
       });
 
       _bleClient!.stepDataStream.listen((stepData) {
@@ -806,6 +834,20 @@ class GatewayDashboardController extends ChangeNotifier {
     } catch (e) {
       addLog('STUDIO', 'Échec lancement session Studio : $e', color: Colors.red);
     }
+  }
+
+  Future<void> setHitlActive(bool active) async {
+    final activeClient = _bleClientNotifier.value ?? _bleClient;
+    await _hitlCoordinator.setHitlActive(active, bleClient: activeClient);
+    notifyListeners();
+  }
+
+  Future<bool> confirmHitlItem(HitlDetectionItem item) async {
+    final success = await _hitlCoordinator.confirmAndPublish(item, deviceId: targetDeviceId);
+    if (success) {
+      onShowSnackBar?.call('Session [${item.selectedLabel}] validée et transmise !', backgroundColor: Colors.teal);
+    }
+    return success;
   }
 
   Future<void> calibrateSensor() async {

@@ -226,6 +226,16 @@ class BleFootwearClient {
     onLog?.call('Fall impact config sent: $cmd', isError: false);
   }
 
+  /// Sends the HITL mode configuration (`SET_HITL <0|1>`) to the footwear.
+  Future<void> sendHitlConfig(bool enabled) async {
+    if (_studioControlChar == null) {
+      throw StateError('Studio Control characteristic not initialized.');
+    }
+    final cmd = 'SET_HITL ${enabled ? 1 : 0}';
+    await _studioControlChar!.write(utf8.encode(cmd), withoutResponse: false);
+    onLog?.call('HITL mode config sent: $cmd', isError: false);
+  }
+
   /// Triggers a Studio recording session (`START <label> <sec> <id>`).
   Future<void> startStudioSession({
     required String label,

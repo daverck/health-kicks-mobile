@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/models/activity_detection_model.dart';
+import 'package:healthkicks_mobile/models/hitl/hitl_detection_item.dart';
 import 'package:healthkicks_mobile/ui/widgets/recent_activities_card.dart';
 
 void main() {
@@ -130,6 +131,82 @@ void main() {
     expect(find.text('Escaliers (Descente)'), findsOneWidget);
     expect(find.text('Calibration des capteurs'), findsOneWidget);
     expect(find.byIcon(Icons.tune_rounded), findsOneWidget);
+  });
+
+  testWidgets('RecentActivitiesCard displays HITL toggle when canUseHitl is true and handles toggle', (tester) async {
+    bool toggled = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RecentActivitiesCard(
+            activities: const [],
+            canUseHitl: true,
+            isHitlActive: false,
+            onToggleHitl: (val) => toggled = val,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Mode HITL (Labellisation)'), findsOneWidget);
+    final switchFinder = find.byType(Switch);
+    expect(switchFinder, findsOneWidget);
+
+    await tester.tap(switchFinder);
+    await tester.pump();
+    expect(toggled, isTrue);
+  });
+
+  testWidgets('RecentActivitiesCard displays HITL items with label selector and confirm button', (tester) async {
+    final detection = const ActivityDetectionModel(
+      stateCode: 0x01,
+      eventType: 'walk',
+      confidencePercent: 90,
+      timestampEpochSec: 1729800000,
+      isFall: false,
+      isHapticTriggered: false,
+    );
+
+    final item = HitlDetectionItem(
+      id: 'test-hitl-1',
+      timestamp: DateTime(2026, 10, 24, 14, 30, 0),
+      detectedLabel: 'walk',
+      confidencePercent: 90,
+      isFall: false,
+      rawDetection: detection,
+      isBurstReady: true,
+    );
+
+    HitlDetectionItem? confirmedItem;
+    HitlDetectionItem? dismissedItem;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: RecentActivitiesCard(
+              activities: const [],
+              canUseHitl: true,
+              isHitlActive: true,
+              hitlItems: [item],
+              onConfirmHitl: (i) => confirmedItem = i,
+              onDismissHitl: (i) => dismissedItem = i,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Détecté : walk (90%)'), findsOneWidget);
+    expect(find.text('Valider & Envoyer'), findsOneWidget);
+
+    await tester.tap(find.text('Valider & Envoyer'));
+    await tester.pump();
+    expect(confirmedItem, equals(item));
+
+    await tester.tap(find.byIcon(Icons.close));
+    await tester.pump();
+    expect(dismissedItem, equals(item));
   });
 }
 

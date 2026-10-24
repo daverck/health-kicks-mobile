@@ -13,6 +13,7 @@ class StudioSessionModel {
   final int sampleRateHz;
   final double startTimestampEpoch;
   final double durationSec;
+  final bool isHitl;
   final List<ImuReadingModel> readings;
 
   const StudioSessionModel({
@@ -22,6 +23,7 @@ class StudioSessionModel {
     this.sampleRateHz = 50,
     required this.startTimestampEpoch,
     this.durationSec = 5.0,
+    this.isHitl = false,
     required this.readings,
   });
 
@@ -33,6 +35,7 @@ class StudioSessionModel {
     int sampleRateHz = 50,
     double? startTimestampEpoch,
     double durationSec = 5.0,
+    bool isHitl = false,
     required List<ImuReadingModel> readings,
   }) {
     return StudioSessionModel(
@@ -43,6 +46,7 @@ class StudioSessionModel {
       startTimestampEpoch:
           startTimestampEpoch ?? DateTime.now().millisecondsSinceEpoch / 1000.0,
       durationSec: durationSec,
+      isHitl: isHitl,
       readings: readings,
     );
   }
@@ -68,6 +72,7 @@ class StudioSessionModel {
       'label': label,
       'duration_sec': durationSec,
       'sample_count': readings.length,
+      if (isHitl) 'is_hitl': true,
     };
   }
 }
