@@ -24,6 +24,7 @@ class FallAlertController extends ChangeNotifier {
   final bool Function()? isMqttConnectedGetter;
   final Future<void> Function()? onCall112;
   final FallAlertLogCallback? onLog;
+  final Future<void> Function(int notificationId, bool sent, String? errorMessage)? onSmsStatusReported;
 
   MqttGatewayService? _mqttService;
   StreamSubscription<FallAlertStatusModel>? _statusSub;
@@ -58,6 +59,7 @@ class FallAlertController extends ChangeNotifier {
     this.isMqttConnectedGetter,
     this.onCall112,
     this.onLog,
+    this.onSmsStatusReported,
     MqttGatewayService? mqttService,
   }) : _remainingSeconds = initialCountdownSeconds {
     if (mqttService != null) {
@@ -511,7 +513,36 @@ class FallAlertController extends ChangeNotifier {
         sent: result.success,
         errorMessage: result.success ? null : result.errorMessage,
       );
-      await _publishUplink(statusPayload);
+      final ok = await _publishUplink(statusPayload);
+      if (!ok) {
+        onLog?.call(
+          'FALL_ALERT',
+          'Échec publication MQTT SMS_STATUS (notif #${cmd.notificationId}), mise en file d\'attente.',
+          isError: true,
+        );
+        _pendingReplayedPayloads.add(statusPayload);
+      } else {
+        onLog?.call(
+          'FALL_ALERT',
+          'Rapport SMS_STATUS (${result.success ? "SENT" : "FAILED"}) notif #${cmd.notificationId} publié avec succès via MQTT.',
+        );
+      }
+
+      if (onSmsStatusReported != null) {
+        try {
+          await onSmsStatusReported!(
+            cmd.notificationId!,
+            result.success,
+            result.errorMessage,
+          );
+        } catch (e) {
+          onLog?.call(
+            'FALL_ALERT',
+            'Échec du signalement REST direct de l\'état SMS : $e',
+            isError: true,
+          );
+        }
+      }
     }
   }
 

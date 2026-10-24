@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../services/api/api_headers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -100,6 +103,7 @@ class GatewayDashboardController extends ChangeNotifier {
           onLog: (tag, msg, {bool isError = false}) {
             addLog(tag, msg, color: isError ? Colors.red : Colors.deepOrange);
           },
+          onSmsStatusReported: _reportSmsStatusToApi,
         );
     _fallAlertController.addListener(_onFallAlertUpdated);
   }
@@ -867,6 +871,46 @@ class GatewayDashboardController extends ChangeNotifier {
 
   Future<void> disconnectBle() async {
     await _bleManager?.disconnect();
+  }
+
+  Future<void> _reportSmsStatusToApi(
+    int notificationId,
+    bool sent,
+    String? errorMessage,
+  ) async {
+    try {
+      final token = await authService?.getValidAccessToken();
+      final baseUrl = authService?.backendBaseUrl ?? AppConfig.backendBaseUrl;
+      final uri = Uri.parse('$baseUrl/api/v1/fall-alerts/sms-status');
+      final headers = buildApiHeaders(token);
+      final body = jsonEncode({
+        'notification_id': notificationId,
+        'sms_status': sent ? 'SENT' : 'FAILED',
+        'error_message': errorMessage,
+        'sent_at': DateTime.now().toUtc().millisecondsSinceEpoch,
+      });
+      final res = await http
+          .post(uri, headers: headers, body: body)
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        addLog(
+          'FALL_ALERT',
+          'Statut SMS notif #$notificationId synchronisé avec succès via API REST direct.',
+        );
+      } else {
+        addLog(
+          'FALL_ALERT',
+          'Réponse API ($baseUrl/api/v1/fall-alerts/sms-status) code ${res.statusCode} pour statut SMS notif #$notificationId',
+          color: Colors.orange,
+        );
+      }
+    } catch (e) {
+      addLog(
+        'FALL_ALERT',
+        'Erreur synchronisation API REST statut SMS : $e',
+        color: Colors.orange,
+      );
+    }
   }
 
   @override
