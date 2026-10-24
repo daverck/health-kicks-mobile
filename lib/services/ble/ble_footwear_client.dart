@@ -216,6 +216,16 @@ class BleFootwearClient {
     );
   }
 
+  /// Sends the fall impact threshold configuration (`SET_FALL_IMPACT [impactMs2]`) to the footwear.
+  Future<void> sendFallImpactConfig(double impactMs2) async {
+    if (_studioControlChar == null) {
+      throw StateError('Studio Control characteristic not initialized.');
+    }
+    final cmd = 'SET_FALL_IMPACT ${impactMs2.toStringAsFixed(1)}';
+    await _studioControlChar!.write(utf8.encode(cmd), withoutResponse: false);
+    onLog?.call('Fall impact config sent: $cmd', isError: false);
+  }
+
   /// Triggers a Studio recording session (`START <label> <sec> <id>`).
   Future<void> startStudioSession({
     required String label,

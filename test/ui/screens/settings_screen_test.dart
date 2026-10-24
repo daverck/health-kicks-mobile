@@ -9,6 +9,8 @@ import 'package:healthkicks_mobile/services/ble/ble_connection_manager.dart';
 import 'package:healthkicks_mobile/services/locale_service.dart';
 import 'package:healthkicks_mobile/services/theme_service.dart';
 import 'package:healthkicks_mobile/ui/screens/settings_screen.dart';
+import 'package:healthkicks_mobile/ui/widgets/settings/settings_fall_sensitivity_card.dart';
+import 'package:healthkicks_mobile/ui/widgets/settings/settings_inactivity_card.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -297,16 +299,19 @@ void main() {
       expect(find.text('Répéter les alertes'), findsOneWidget);
       expect(find.text('50 min'), findsOneWidget);
       expect(find.text('10 min'), findsOneWidget);
-      expect(find.byType(Slider), findsNWidgets(2));
+      expect(find.descendant(of: find.byType(SettingsInactivityCard), matching: find.byType(Slider)), findsNWidgets(2));
+      expect(find.byType(SettingsFallSensitivityCard), findsOneWidget);
       expect(find.text('Synchronisé en direct avec la chaussure'), findsOneWidget);
 
       // Toggle repeat alerts off
+      await tester.ensureVisible(find.widgetWithText(SwitchListTile, 'Répéter les alertes'));
+      await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(SwitchListTile, 'Répéter les alertes'));
       await tester.pumpAndSettle();
 
       // Cooldown slider should now be hidden
       expect(find.text('Délai de répétition (Cooldown / Snooze)'), findsNothing);
-      expect(find.byType(Slider), findsOneWidget); // Only threshold slider remains
+      expect(find.descendant(of: find.byType(SettingsInactivityCard), matching: find.byType(Slider)), findsOneWidget);
     });
 
     testWidgets('SettingsScreen dynamically updates BLE status badge and buttons in real time when BleConnectionManager changes', (tester) async {

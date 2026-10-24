@@ -5,6 +5,7 @@ import '../../core/localization/app_localizations.dart';
 import '../../services/auth/auth_service.dart';
 import '../../services/background_surveillance_service.dart';
 import '../../services/inactivity_settings_service.dart';
+import '../../services/fall_sensitivity_settings_service.dart';
 import '../../services/ble/ble_connection_manager.dart';
 import '../../services/ble/ble_footwear_client.dart';
 import '../../services/locale_service.dart';
@@ -24,6 +25,7 @@ class SettingsScreen extends StatefulWidget {
   final AuthService? authService;
   final BackgroundSurveillanceService surveillanceService;
   final InactivitySettingsService? inactivitySettingsService;
+  final FallSensitivitySettingsService? fallSensitivitySettingsService;
   final ThemeService? themeService;
   final LocaleService? localeService;
   final FirmwareService? firmwareService;
@@ -51,6 +53,7 @@ class SettingsScreen extends StatefulWidget {
     this.authService,
     required this.surveillanceService,
     this.inactivitySettingsService,
+    this.fallSensitivitySettingsService,
     this.themeService,
     this.localeService,
     this.firmwareService,
@@ -80,6 +83,8 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late final InactivitySettingsService _inactivityService;
   bool _ownsInactivityService = false;
+  late final FallSensitivitySettingsService _fallSensitivityService;
+  bool _ownsFallSensitivityService = false;
   late final ThemeService _themeService;
   bool _ownsThemeService = false;
   late final LocaleService _localeService;
@@ -105,6 +110,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _inactivityService = InactivitySettingsService();
       _ownsInactivityService = true;
       unawaited(_inactivityService.loadSettings());
+    }
+
+    if (widget.fallSensitivitySettingsService != null) {
+      _fallSensitivityService = widget.fallSensitivitySettingsService!;
+    } else {
+      _fallSensitivityService = FallSensitivitySettingsService();
+      _ownsFallSensitivityService = true;
+      unawaited(_fallSensitivityService.loadSettings());
     }
 
     if (widget.themeService != null) {
@@ -217,6 +230,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     if (_ownsInactivityService) {
       _inactivityService.dispose();
+    }
+    if (_ownsFallSensitivityService) {
+      _fallSensitivityService.dispose();
     }
     if (_ownsThemeService) {
       _themeService.dispose();
@@ -398,6 +414,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               SettingsBiomechanicsSection(
                 surveillanceService: widget.surveillanceService,
                 inactivityService: _inactivityService,
+                fallSensitivityService: _fallSensitivityService,
                 themeService: _themeService,
                 localeService: _localeService,
                 bleClient: activeBleClient,

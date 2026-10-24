@@ -1,22 +1,26 @@
 import 'package:flutter/material.dart';
 import '../../../services/background_surveillance_service.dart';
 import '../../../services/ble/ble_footwear_client.dart';
+import '../../../services/fall_sensitivity_settings_service.dart';
 import '../../../services/inactivity_settings_service.dart';
 import '../../../services/integrations/health_connect_service.dart';
 import '../../../services/locale_service.dart';
 import '../../../services/theme_service.dart';
 import 'settings_appearance_section.dart';
+import 'settings_fall_sensitivity_card.dart';
 import 'settings_health_connect_card.dart';
 import 'settings_inactivity_card.dart';
 
 export 'settings_appearance_section.dart';
+export 'settings_fall_sensitivity_card.dart';
 export 'settings_health_connect_card.dart';
 export 'settings_inactivity_card.dart';
 
-/// Section widget bundling surveillance mode, inactivity alerts, sensor calibration, appearance/theme, and language settings.
+/// Section widget bundling surveillance mode, inactivity alerts, fall sensitivity, sensor calibration, appearance/theme, and language settings.
 class SettingsBiomechanicsSection extends StatelessWidget {
   final BackgroundSurveillanceService surveillanceService;
   final InactivitySettingsService inactivityService;
+  final FallSensitivitySettingsService fallSensitivityService;
   final ThemeService themeService;
   final LocaleService localeService;
   final BleFootwearClient? bleClient;
@@ -29,6 +33,7 @@ class SettingsBiomechanicsSection extends StatelessWidget {
     super.key,
     required this.surveillanceService,
     required this.inactivityService,
+    required this.fallSensitivityService,
     required this.themeService,
     required this.localeService,
     this.bleClient,
@@ -144,6 +149,26 @@ class SettingsBiomechanicsSection extends StatelessWidget {
               ),
             ),
           ),
+
+        const Divider(height: 32),
+
+        // Fall Sensitivity Category
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: Text(
+            'SENSIBILITÉ DÉTECTION DE CHUTE',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.1,
+            ),
+          ),
+        ),
+        SettingsFallSensitivityCard(
+          fallSensitivityService: fallSensitivityService,
+          bleClient: bleClient,
+          isBleReady: isBleReady,
+        ),
 
         const Divider(height: 32),
 

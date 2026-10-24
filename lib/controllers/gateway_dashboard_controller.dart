@@ -26,6 +26,7 @@ import '../services/ble/ble_footwear_client.dart';
 import '../services/firmware/firmware_service.dart';
 import '../services/gateway_coordinator.dart';
 import '../services/inactivity_settings_service.dart';
+import '../services/fall_sensitivity_settings_service.dart';
 import '../services/local_storage/step_storage_service.dart';
 import '../services/mqtt/mqtt_gateway_service.dart';
 import '../services/step_sync_service.dart';
@@ -48,6 +49,7 @@ class GatewayDashboardController extends ChangeNotifier {
   late final BackgroundSurveillanceService _surveillanceService;
   late final DashboardOdometerCoordinator _odometerCoordinator;
   late final InactivitySettingsService _inactivitySettingsService;
+  late final FallSensitivitySettingsService _fallSensitivitySettingsService;
 
   IotCredentialsRepository? _credentialsRepo;
   BleConnectionManager? _bleManager;
@@ -131,6 +133,7 @@ class GatewayDashboardController extends ChangeNotifier {
   StepSyncService get stepSyncService => _odometerCoordinator.syncService;
   DashboardOdometerCoordinator get odometerCoordinator => _odometerCoordinator;
   InactivitySettingsService get inactivitySettingsService => _inactivitySettingsService;
+  FallSensitivitySettingsService get fallSensitivitySettingsService => _fallSensitivitySettingsService;
   BackgroundSurveillanceService get surveillanceService => _surveillanceService;
 
   void _onFallAlertUpdated() {
@@ -146,6 +149,8 @@ class GatewayDashboardController extends ChangeNotifier {
 
     _inactivitySettingsService = InactivitySettingsService();
     unawaited(_inactivitySettingsService.loadSettings());
+    _fallSensitivitySettingsService = FallSensitivitySettingsService();
+    unawaited(_fallSensitivitySettingsService.loadSettings());
 
     _odometerCoordinator = DashboardOdometerCoordinator(
       deviceId: deviceId,
@@ -662,6 +667,12 @@ class GatewayDashboardController extends ChangeNotifier {
       }
 
       try {
+        unawaited(_fallSensitivitySettingsService.syncToBle(_bleClient!));
+      } catch (e) {
+        addLog('BLE', 'Erreur sync sensibilité chute : $e', color: Colors.orange);
+      }
+
+      try {
         _odometerCoordinator.flushSteps();
       } catch (e) {
         addLog('SYNC', 'Erreur synchronisation pas cloud : $e', color: Colors.orange);
@@ -924,6 +935,7 @@ class GatewayDashboardController extends ChangeNotifier {
     _bleManager?.removeListener(_onBleManagerUpdated);
     if (_isInitialized) {
       _inactivitySettingsService.dispose();
+    _fallSensitivitySettingsService.dispose();
       _odometerCoordinator.dispose();
       _surveillanceService.dispose();
     }

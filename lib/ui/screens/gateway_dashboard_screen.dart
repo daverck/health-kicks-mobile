@@ -235,6 +235,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           authService: widget.authService,
           surveillanceService: _controller.surveillanceService,
           inactivitySettingsService: _controller.inactivitySettingsService,
+          fallSensitivitySettingsService: _controller.fallSensitivitySettingsService,
           themeService: widget.themeService,
           localeService: widget.localeService,
           firmwareService: _controller.firmwareService,
