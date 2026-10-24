@@ -284,8 +284,6 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           children: [
             Scaffold(
               appBar: DashboardAppBar(
-                onOpenStepsHistory: _openStepsHistoryScreen,
-                onOpenDetectionEventsHistory: _openDetectionEventsHistoryScreen,
                 onOpenSettings: _openSettingsScreen,
                 onLogout: widget.onLogout,
               ),
