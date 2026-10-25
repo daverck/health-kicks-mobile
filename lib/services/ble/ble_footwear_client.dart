@@ -193,25 +193,19 @@ class BleFootwearClient {
     onLog?.call('Haptic command sent: int=${command.intensity}, dur=${command.durationMs}ms', isError: false);
   }
 
-  /// Sends the prolonged inactivity reminder configuration (6 bytes Big-Endian, Opcode 0x06).
+  /// Sends the prolonged inactivity reminder configuration (`SET_INACTIVITY <0|1> <threshold_sec> <cooldown_sec>`).
   Future<void> sendInactivityConfig({
     required bool enabled,
     required int thresholdSec,
     required int cooldownSec,
   }) async {
-    if (_hapticChar == null) {
-      throw StateError('Haptic Command characteristic not initialized.');
+    if (_studioControlChar == null) {
+      throw StateError('Device & Studio Control characteristic not initialized.');
     }
-    final bytes = Uint8List(6);
-    bytes[0] = BleConstants.commandSetInactivity;
-    bytes[1] = enabled ? 1 : 0;
-    bytes[2] = (thresholdSec >> 8) & 0xFF;
-    bytes[3] = thresholdSec & 0xFF;
-    bytes[4] = (cooldownSec >> 8) & 0xFF;
-    bytes[5] = cooldownSec & 0xFF;
-    await _hapticChar!.write(bytes, withoutResponse: false);
+    final cmd = 'SET_INACTIVITY ${enabled ? 1 : 0} $thresholdSec $cooldownSec';
+    await _studioControlChar!.write(utf8.encode(cmd), withoutResponse: false);
     onLog?.call(
-      'Inactivity config sent: enabled=$enabled, thresh=${thresholdSec}s, cool=${cooldownSec}s',
+      'Inactivity config sent: $cmd',
       isError: false,
     );
   }
@@ -273,22 +267,13 @@ class BleFootwearClient {
     );
   }
 
-  /// Sends zero/tilt calibration command to the footwear (Opcode 0x05 on 0003 or "CALIBRATE" on 0004).
+  /// Sends zero/tilt calibration command to the footwear (ASCII "CALIBRATE" on Characteristic 0004).
   Future<void> sendCalibrateZeroCommand() async {
-    if (_hapticChar != null) {
-      final bytes = Uint8List(4);
-      bytes[0] = BleConstants.commandCalibrateZero;
-      bytes[1] = 0x00;
-      bytes[2] = 0x00;
-      bytes[3] = 0x00;
-      await _hapticChar!.write(bytes, withoutResponse: false);
-      onLog?.call('Tilt calibration command (0x05) sent via Haptic characteristic.', isError: false);
-    } else if (_studioControlChar != null) {
-      await _studioControlChar!.write(utf8.encode('CALIBRATE'), withoutResponse: false);
-      onLog?.call('Tilt calibration command ("CALIBRATE") sent via Studio Control characteristic.', isError: false);
-    } else {
-      throw StateError('No writable characteristic available to send calibration command.');
+    if (_studioControlChar == null) {
+      throw StateError('Device & Studio Control characteristic not initialized.');
     }
+    await _studioControlChar!.write(utf8.encode('CALIBRATE'), withoutResponse: false);
+    onLog?.call('Tilt calibration command ("CALIBRATE") sent via Device & Studio Control characteristic.', isError: false);
   }
 
   void dispose() {

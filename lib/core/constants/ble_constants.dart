@@ -12,7 +12,7 @@ class BleConstants {
   /// Characteristic 2: Haptic Command (WRITE, WRITE WITHOUT RESPONSE)
   static const String hapticCommandCharUuid = '7a5a0003-c529-4d64-8848-18e5904de22a';
 
-  /// Characteristic 3: Studio Control (WRITE, NOTIFY)
+  /// Characteristic 3: Device & Studio Control (WRITE, NOTIFY)
   static const String studioControlCharUuid = '7a5a0004-c529-4d64-8848-18e5904de22a';
 
   /// Characteristic 4: Studio Data Burst (NOTIFY)
@@ -54,10 +54,11 @@ class BleConstants {
   static const int packetTypeDeltaChunk = 0x04;
   static const int packetTypeRleChunk = 0x05;
 
-  /// Command opcode to trigger level/tilt zero calibration (Characteristic 0003 & 0004)
+  /// DEPRECATED: Calibration and inactivity settings are now exclusively handled in ASCII on 0004 (Device & Studio Control)
+  @Deprecated('Use Device & Studio Control ASCII command CALIBRATE')
   static const int commandCalibrateZero = 0x05;
 
-  /// Command opcode to configure prolonged inactivity reminder (Characteristic 0003)
+  @Deprecated('Use Device & Studio Control ASCII command SET_INACTIVITY')
   static const int commandSetInactivity = 0x06;
 
   /// State code for prolonged inactivity alert (Characteristic 0002)

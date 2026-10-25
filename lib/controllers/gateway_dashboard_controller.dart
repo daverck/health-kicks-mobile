@@ -853,7 +853,7 @@ class GatewayDashboardController extends ChangeNotifier {
   Future<void> calibrateSensor() async {
     final activeClient = _bleClientNotifier.value ?? _bleClient;
     if (activeClient != null) {
-      addLog('CONFIG', 'Envoi ordre de calibration d\'assiette (0x05)...');
+      addLog('CONFIG', 'Envoi ordre de calibration d\'assiette (CALIBRATE)...');
       await activeClient.sendCalibrateZeroCommand();
       final activeCalib = ActivityDetectionModel(
         stateCode: 0xFD,

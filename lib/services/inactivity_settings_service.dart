@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'ble/ble_footwear_client.dart';
 
 /// Service managing prolonged inactivity (sedentary reminder) user preferences
-/// and synchronizing parameters with the HealthKicks footwear over BLE Characteristic 0003.
+/// and synchronizing parameters with the HealthKicks footwear over BLE Characteristic 0004 (Device & Studio Control).
 class InactivitySettingsService extends ChangeNotifier {
   static const String keyEnabled = 'inact_enabled';
   static const String keyRepeatEnabled = 'inact_repeat_enabled';
@@ -62,7 +62,7 @@ class InactivitySettingsService extends ChangeNotifier {
     await prefs.setInt(keyThresholdMin, _thresholdMinutes);
     await prefs.setInt(keyCooldownMin, _cooldownMinutes);
 
-    if (bleClient != null && bleClient.hasHaptic) {
+    if (bleClient != null && bleClient.hasStudioControl) {
       await syncToBle(bleClient);
     } else {
       _isSynced = false;
@@ -70,7 +70,7 @@ class InactivitySettingsService extends ChangeNotifier {
     }
   }
 
-  /// Pushes current inactivity settings payload (Opcode 0x06) to the footwear.
+  /// Pushes current inactivity settings payload (SET_INACTIVITY) to the footwear via Characteristic 0004.
   Future<bool> syncToBle(BleFootwearClient bleClient) async {
     try {
       await bleClient.sendInactivityConfig(
