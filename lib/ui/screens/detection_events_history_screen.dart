@@ -15,10 +15,11 @@ export '../widgets/events/detection_event_card.dart';
 export '../widgets/events/detection_event_detail_sheet.dart';
 export '../widgets/events/detection_event_skeleton.dart';
 export '../widgets/events/detection_filter_bar.dart';
+export '../widgets/events/unified_activity_card.dart';
 
 /// Screen displaying the historical list of detected biomechanical events and alerts
 /// with pagination, fast FilterChips, Pull-to-Refresh, bottom sheet inspection,
-/// and optional pinned Human-in-the-Loop (HITL) validation queue.
+/// and integrated Human-in-the-Loop (HITL) mode switching.
 class DetectionEventsHistoryScreen extends StatefulWidget {
   final EventHistoryNotifier? notifier;
   final EventHistoryService? service;
@@ -120,6 +121,8 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
       listenables.add(widget.hitlCoordinator!);
     }
 
+    final isHitlActive = widget.canUseHitl && (widget.hitlCoordinator?.isHitlActive ?? false);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Historique des Événements'),
@@ -130,21 +133,22 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 0. Optional Pinned HITL Validation Queue Banner & List
+              // 0. Compact HITL Switch & Clear-all Header
               if (widget.canUseHitl && widget.hitlCoordinator != null) ...[
-                _buildHitlSection(theme),
+                _buildHitlHeader(theme),
               ],
 
-              // 1. Horizontal Category Filter Chips Bar
-              DetectionFilterBar(
-                filters: _filters,
-                selectedCategory: _notifier.selectedCategory,
-                onSelected: (cat) => _notifier.setCategory(cat),
-              ),
+              // 1. Horizontal Category Filter Chips Bar (only when HITL is inactive)
+              if (!isHitlActive)
+                DetectionFilterBar(
+                  filters: _filters,
+                  selectedCategory: _notifier.selectedCategory,
+                  onSelected: (cat) => _notifier.setCategory(cat),
+                ),
 
-              // 2. Main Content Area (Shimmer, Empty, Error or List)
+              // 2. Main Content Area (switches between HITL queue and Historical stream)
               Expanded(
-                child: _buildBodyContent(theme),
+                child: isHitlActive ? _buildHitlBody(theme) : _buildHistoricalBody(theme),
               ),
             ],
           );
@@ -153,14 +157,14 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
     );
   }
 
-  Widget _buildHitlSection(ThemeData theme) {
+  Widget _buildHitlHeader(ThemeData theme) {
     final coord = widget.hitlCoordinator!;
     final isActive = coord.isHitlActive;
     final items = coord.items;
 
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: isActive
             ? theme.colorScheme.primaryContainer.withValues(alpha: 0.35)
@@ -170,30 +174,60 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
           color: isActive ? theme.colorScheme.primary.withValues(alpha: 0.35) : Colors.transparent,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.verified_user_rounded,
-                    size: 16,
-                    color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+              Icon(
+                Icons.verified_user_rounded,
+                size: 18,
+                color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Mode HITL (Labellisation)',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              if (isActive && items.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Mode HITL (Labellisation)',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                  child: Text(
+                    '${items.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
+            ],
+          ),
+          Row(
+            children: [
+              if (isActive && items.isNotEmpty) ...[
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    visualDensity: VisualDensity.compact,
+                    foregroundColor: theme.colorScheme.error,
+                  ),
+                  onPressed: () => coord.clear(),
+                  icon: const Icon(Icons.delete_sweep_rounded, size: 16),
+                  label: const Text('Tout effacer', style: TextStyle(fontSize: 11)),
+                ),
+                const SizedBox(width: 4),
+              ],
               Transform.scale(
                 scale: 0.75,
                 child: Switch(
@@ -203,63 +237,78 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
               ),
             ],
           ),
-          if (isActive) ...[
-            if (items.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'En attente de validation (${items.length})',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                    ),
-                  ),
-                  TextButton.icon(
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      visualDensity: VisualDensity.compact,
-                      foregroundColor: theme.colorScheme.error,
-                    ),
-                    onPressed: () => coord.clear(),
-                    icon: const Icon(Icons.delete_sweep_rounded, size: 16),
-                    label: const Text('Tout effacer', style: TextStyle(fontSize: 11)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  final isSelected = _selectedEventId == item.id;
-                  return UnifiedActivityCard(
-                    hitlItem: item,
-                    isSelected: isSelected,
-                    onTap: () {
-                      setState(() {
-                        _selectedEventId = item.id;
-                      });
-                    },
-                    onUpdateHitlLabel: (it, label) => coord.updateItemLabel(it.id, label),
-                    onConfirmHitl: (it) => widget.onConfirmHitl?.call(it),
-                    onDismissHitl: (it) => coord.dismissItem(it.id),
-                  );
-                },
-              ),
-              const SizedBox(height: 4),
-            ],
-          ],
         ],
       ),
     );
   }
 
-  Widget _buildBodyContent(ThemeData theme) {
+  Widget _buildHitlBody(ThemeData theme) {
+    final coord = widget.hitlCoordinator!;
+    final items = coord.items;
+
+    if (items.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer.withValues(alpha: 0.4),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.touch_app_rounded,
+                  size: 44,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Mode HITL actif (File vide)',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Chaque nouvelle transition détectée par l\'ESP32 capturera 4s (76 trames IMU) pour validation ou requalification.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final item = items[index];
+        final isSelected = _selectedEventId == item.id;
+        return UnifiedActivityCard(
+          hitlItem: item,
+          isSelected: isSelected,
+          onTap: () {
+            setState(() {
+              _selectedEventId = item.id;
+            });
+          },
+          onUpdateHitlLabel: (it, label) => coord.updateItemLabel(it.id, label),
+          onConfirmHitl: (it) => widget.onConfirmHitl?.call(it),
+          onDismissHitl: (it) => coord.dismissItem(it.id),
+        );
+      },
+    );
+  }
+
+  Widget _buildHistoricalBody(ThemeData theme) {
     if (_notifier.isLoading && _notifier.events.isEmpty) {
       return _buildSkeletonLoader();
     }
@@ -351,11 +400,14 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  'Les alertes et événements biomécaniques enregistrés pour cette catégorie s\'afficheront ici.',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey.shade600,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                  child: Text(
+                    'Les alertes et événements biomécaniques enregistrés pour cette catégorie s\'afficheront ici.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey.shade600,
+                    ),
                   ),
                 ),
               ],
@@ -387,15 +439,16 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
                   'Erreur de chargement',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
+                    color: Colors.red,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24.0),
                   child: Text(
-                    _notifier.errorMessage ?? 'Impossible de récupérer l\'historique.',
+                    _notifier.errorMessage ?? 'Une erreur réseau est survenue.',
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall?.copyWith(
+                    style: theme.textTheme.bodyMedium?.copyWith(
                       color: Colors.grey.shade600,
                     ),
                   ),

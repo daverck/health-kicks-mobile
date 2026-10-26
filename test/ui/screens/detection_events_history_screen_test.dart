@@ -1,3 +1,4 @@
+import 'package:healthkicks_mobile/services/hitl/hitl_coordinator.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -223,6 +224,49 @@ void main() {
 
       await streamController.close();
     });
+
+    testWidgets('Switches main body to HITL queue when HITL mode is active', (tester) async {
+      final fakeService = FakeEventHistoryService(mockedEvents: sampleEvents);
+      final coordinator = HitlCoordinator();
+      await coordinator.setHitlActive(true);
+
+      const detection = ActivityDetectionModel(
+        stateCode: 0x01,
+        eventType: 'walk',
+        confidencePercent: 93,
+        timestampEpochSec: 1726999400,
+        isFall: false,
+        isHapticTriggered: false,
+      );
+      final item = coordinator.registerDetection(detection);
+      item.isBurstReady = true;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DetectionEventsHistoryScreen(
+            service: fakeService,
+            hitlCoordinator: coordinator,
+            canUseHitl: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // HITL header present with count 1 and clear button
+      expect(find.text('Mode HITL (Labellisation)'), findsOneWidget);
+      expect(find.text('Tout effacer'), findsOneWidget);
+
+      // The main body displays the HITL item, and FilterBar is hidden in HITL mode
+      expect(find.text('Détecté : walk (93%)'), findsOneWidget);
+      expect(find.text('Tous'), findsNothing);
+
+      // Clear all empties the queue
+      await tester.tap(find.text('Tout effacer'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Mode HITL actif (File vide)'), findsOneWidget);
+    });
   });
 }
+
 
