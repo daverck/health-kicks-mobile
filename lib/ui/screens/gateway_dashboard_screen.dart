@@ -208,6 +208,9 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
   }
 
   void _openDetectionEventsHistoryScreen() {
+    final role = widget.authService?.currentUser?.role;
+    final isClinicianOrAdmin = role == 'admin' || role == 'clinician';
+
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => DetectionEventsHistoryScreen(
@@ -219,6 +222,10 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           deviceId: _controller.deviceId,
           liveActivities: _controller.recentActivities,
           activityStream: _controller.activityStream,
+          hitlCoordinator: _controller.hitlCoordinator,
+          canUseHitl: isClinicianOrAdmin,
+          onToggleHitl: (val) => _controller.setHitlActive(val),
+          onConfirmHitl: (item) => _controller.confirmHitlItem(item),
         ),
       ),
     );
@@ -326,6 +333,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
                         onUpdateHitlLabel: (item, label) => _controller.hitlCoordinator.updateItemLabel(item.id, label),
                         onConfirmHitl: (item) => _controller.confirmHitlItem(item),
                         onDismissHitl: (item) => _controller.hitlCoordinator.dismissItem(item.id),
+                        onClearHitl: () => _controller.hitlCoordinator.clear(),
                       ),
                       const SizedBox(height: 10),
 

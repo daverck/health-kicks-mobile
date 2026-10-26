@@ -61,6 +61,7 @@ class DetectionFilterBar extends StatelessWidget {
               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               color: isSelected ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface,
             ),
+            showCheckmark: false,
             selectedColor: theme.colorScheme.primary,
             checkmarkColor: theme.colorScheme.onPrimary,
             onSelected: (selected) {

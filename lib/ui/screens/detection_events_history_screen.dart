@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../models/activity_detection_model.dart';
 import '../../models/detection_event.dart';
+import '../../models/hitl/hitl_detection_item.dart';
 import '../../services/event_history_notifier.dart';
 import '../../services/event_history_service.dart';
-import '../widgets/events/detection_event_card.dart';
+import '../../services/hitl/hitl_coordinator.dart';
 import '../widgets/events/detection_event_detail_sheet.dart';
 import '../widgets/events/detection_event_skeleton.dart';
 import '../widgets/events/detection_filter_bar.dart';
+import '../widgets/events/unified_activity_card.dart';
 
 export '../widgets/events/detection_event_card.dart';
 export '../widgets/events/detection_event_detail_sheet.dart';
@@ -15,13 +17,20 @@ export '../widgets/events/detection_event_skeleton.dart';
 export '../widgets/events/detection_filter_bar.dart';
 
 /// Screen displaying the historical list of detected biomechanical events and alerts
-/// with pagination, fast FilterChips, Pull-to-Refresh, and detailed bottom sheet inspection.
+/// with pagination, fast FilterChips, Pull-to-Refresh, bottom sheet inspection,
+/// and optional pinned Human-in-the-Loop (HITL) validation queue.
 class DetectionEventsHistoryScreen extends StatefulWidget {
   final EventHistoryNotifier? notifier;
   final EventHistoryService? service;
   final String? deviceId;
   final List<ActivityDetectionModel>? liveActivities;
   final Stream<ActivityDetectionModel>? activityStream;
+
+  // Optional HITL coordination
+  final HitlCoordinator? hitlCoordinator;
+  final bool canUseHitl;
+  final ValueChanged<bool>? onToggleHitl;
+  final void Function(HitlDetectionItem item)? onConfirmHitl;
 
   const DetectionEventsHistoryScreen({
     super.key,
@@ -30,6 +39,10 @@ class DetectionEventsHistoryScreen extends StatefulWidget {
     this.deviceId,
     this.liveActivities,
     this.activityStream,
+    this.hitlCoordinator,
+    this.canUseHitl = false,
+    this.onToggleHitl,
+    this.onConfirmHitl,
   });
 
   @override
@@ -39,6 +52,7 @@ class DetectionEventsHistoryScreen extends StatefulWidget {
 class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScreen> {
   late final EventHistoryNotifier _notifier;
   final ScrollController _scrollController = ScrollController();
+  String? _selectedEventId;
 
   final List<CategoryFilterOption> _filters = const [
     CategoryFilterOption(id: 'all', label: 'Tous', icon: Icons.select_all_rounded),
@@ -101,17 +115,26 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final listenables = <Listenable>[_notifier];
+    if (widget.hitlCoordinator != null) {
+      listenables.add(widget.hitlCoordinator!);
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Historique des Événements'),
       ),
       body: ListenableBuilder(
-        listenable: _notifier,
+        listenable: Listenable.merge(listenables),
         builder: (context, _) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // 0. Optional Pinned HITL Validation Queue Banner & List
+              if (widget.canUseHitl && widget.hitlCoordinator != null) ...[
+                _buildHitlSection(theme),
+              ],
+
               // 1. Horizontal Category Filter Chips Bar
               DetectionFilterBar(
                 filters: _filters,
@@ -126,6 +149,112 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildHitlSection(ThemeData theme) {
+    final coord = widget.hitlCoordinator!;
+    final isActive = coord.isHitlActive;
+    final items = coord.items;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isActive
+            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.35)
+            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.20),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isActive ? theme.colorScheme.primary.withValues(alpha: 0.35) : Colors.transparent,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.verified_user_rounded,
+                    size: 16,
+                    color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Mode HITL (Labellisation)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              Transform.scale(
+                scale: 0.75,
+                child: Switch(
+                  value: isActive,
+                  onChanged: widget.onToggleHitl,
+                ),
+              ),
+            ],
+          ),
+          if (isActive) ...[
+            if (items.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'En attente de validation (${items.length})',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      visualDensity: VisualDensity.compact,
+                      foregroundColor: theme.colorScheme.error,
+                    ),
+                    onPressed: () => coord.clear(),
+                    icon: const Icon(Icons.delete_sweep_rounded, size: 16),
+                    label: const Text('Tout effacer', style: TextStyle(fontSize: 11)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  final isSelected = _selectedEventId == item.id;
+                  return UnifiedActivityCard(
+                    hitlItem: item,
+                    isSelected: isSelected,
+                    onTap: () {
+                      setState(() {
+                        _selectedEventId = item.id;
+                      });
+                    },
+                    onUpdateHitlLabel: (it, label) => coord.updateItemLabel(it.id, label),
+                    onConfirmHitl: (it) => widget.onConfirmHitl?.call(it),
+                    onDismissHitl: (it) => coord.dismissItem(it.id),
+                  );
+                },
+              ),
+              const SizedBox(height: 4),
+            ],
+          ],
+        ],
       ),
     );
   }
@@ -165,9 +294,17 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
           }
 
           final event = _notifier.events[index];
-          return DetectionEventCard(
+          final isSelected = _selectedEventId == event.id;
+
+          return UnifiedActivityCard(
             event: event,
-            onTap: () => _showEventDetails(context, event),
+            isSelected: isSelected,
+            onTap: () {
+              setState(() {
+                _selectedEventId = event.id;
+              });
+              _showEventDetails(context, event);
+            },
           );
         },
       ),
@@ -201,7 +338,7 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    Icons.event_available_rounded,
+                    Icons.event_busy_rounded,
                     size: 48,
                     color: theme.colorScheme.primary,
                   ),
@@ -214,21 +351,12 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
                   ),
                 ),
                 const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                  child: Text(
-                    'Les alertes et événements biomécaniques enregistrés pour cette catégorie s\'afficheront ici.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey.shade600,
-                    ),
+                Text(
+                  'Les alertes et événements biomécaniques enregistrés pour cette catégorie s\'afficheront ici.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey.shade600,
                   ),
-                ),
-                const SizedBox(height: 20),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Actualiser'),
-                  onPressed: () => _notifier.refresh(),
                 ),
               ],
             ),
@@ -246,36 +374,39 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
         children: [
           SizedBox(height: MediaQuery.of(context).size.height * 0.18),
           Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.cloud_off_rounded, size: 48, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Erreur de chargement',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red,
-                    ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.cloud_off_rounded,
+                  size: 48,
+                  color: Colors.redAccent,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Erreur de chargement',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _notifier.errorMessage ?? 'Une erreur réseau est survenue.',
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Text(
+                    _notifier.errorMessage ?? 'Impossible de récupérer l\'historique.',
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium?.copyWith(
+                    style: theme.textTheme.bodySmall?.copyWith(
                       color: Colors.grey.shade600,
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  FilledButton.icon(
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Réessayer'),
-                    onPressed: () => _notifier.loadInitial(),
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () => _notifier.loadInitial(),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Réessayer'),
+                ),
+              ],
             ),
           ),
         ],

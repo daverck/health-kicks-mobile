@@ -208,5 +208,82 @@ void main() {
     await tester.pump();
     expect(dismissedItem, equals(item));
   });
+
+  testWidgets('RecentActivitiesCard handles clear all HITL items callback', (tester) async {
+    const detection = ActivityDetectionModel(
+      stateCode: 0x01,
+      eventType: 'walk',
+      confidencePercent: 90,
+      timestampEpochSec: 1726999200,
+      isFall: false,
+      isHapticTriggered: false,
+    );
+
+    final item = HitlDetectionItem(
+      id: 'test-hitl-1',
+      timestamp: DateTime(2026, 10, 24, 14, 30, 0),
+      detectedLabel: 'walk',
+      confidencePercent: 90,
+      isFall: false,
+      rawDetection: detection,
+      isBurstReady: true,
+    );
+
+    bool clearAllCalled = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: RecentActivitiesCard(
+              activities: const [],
+              canUseHitl: true,
+              isHitlActive: true,
+              hitlItems: [item],
+              onClearHitl: () => clearAllCalled = true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Tout effacer'), findsOneWidget);
+    await tester.tap(find.text('Tout effacer'));
+    await tester.pump();
+    expect(clearAllCalled, isTrue);
+  });
+
+  testWidgets('RecentActivitiesCard highlights selected card on tap', (tester) async {
+    const activities = [
+      ActivityDetectionModel(
+        stateCode: 0x01,
+        eventType: 'walk',
+        confidencePercent: 95,
+        timestampEpochSec: 1726999200,
+        isFall: false,
+        isHapticTriggered: false,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: RecentActivitiesCard(
+            activities: activities,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Actif'), findsNothing);
+
+    // Tap card
+    await tester.tap(find.text('Marche'));
+    await tester.pump();
+
+    // Now highlighted with 'Actif' badge
+    expect(find.text('Actif'), findsOneWidget);
+  });
 }
+
 
