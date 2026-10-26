@@ -107,33 +107,42 @@ class _RecentActivitiesCardState extends State<RecentActivitiesCard> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.verified_user_rounded,
-                          size: 16,
-                          color: widget.isHitlActive
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Mode HITL (Labellisation)',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.verified_user_rounded,
+                            size: 16,
                             color: widget.isHitlActive
                                 ? theme.colorScheme.primary
                                 : theme.colorScheme.onSurfaceVariant,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              'Mode HITL (Labellisation)',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: widget.isHitlActive
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    Transform.scale(
-                      scale: 0.75,
-                      child: Switch(
-                        value: widget.isHitlActive,
-                        onChanged: widget.onToggleHitl,
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      height: 28,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Switch(
+                          value: widget.isHitlActive,
+                          onChanged: widget.onToggleHitl,
+                        ),
                       ),
                     ),
                   ],

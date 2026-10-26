@@ -164,7 +164,7 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
 
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: isActive
             ? theme.colorScheme.primaryContainer.withValues(alpha: 0.35)
@@ -174,48 +174,81 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
           color: isActive ? theme.colorScheme.primary.withValues(alpha: 0.35) : Colors.transparent,
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(
-                Icons.verified_user_rounded,
-                size: 18,
-                color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+              Expanded(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.verified_user_rounded,
+                      size: 18,
+                      color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Mode HITL (Labellisation)',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    if (isActive && items.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '${items.length}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
               const SizedBox(width: 8),
-              Text(
-                'Mode HITL (Labellisation)',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+              SizedBox(
+                height: 28,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Switch(
+                    value: isActive,
+                    onChanged: widget.onToggleHitl,
+                  ),
                 ),
               ),
-              if (isActive && items.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '${items.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
             ],
           ),
-          Row(
-            children: [
-              if (isActive && items.isNotEmpty) ...[
+          if (isActive && items.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${items.length} détection${items.length > 1 ? "s" : ""} en attente',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
                 TextButton.icon(
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -226,17 +259,9 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
                   icon: const Icon(Icons.delete_sweep_rounded, size: 16),
                   label: const Text('Tout effacer', style: TextStyle(fontSize: 11)),
                 ),
-                const SizedBox(width: 4),
               ],
-              Transform.scale(
-                scale: 0.75,
-                child: Switch(
-                  value: isActive,
-                  onChanged: widget.onToggleHitl,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ],
       ),
     );
