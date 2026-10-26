@@ -284,6 +284,50 @@ void main() {
     // Now highlighted with 'Actif' badge
     expect(find.text('Actif'), findsOneWidget);
   });
+
+  testWidgets('RecentActivitiesCard highlights HITL card when opening label dropdown select', (tester) async {
+    const detection = ActivityDetectionModel(
+      stateCode: 0x01,
+      eventType: 'walk',
+      confidencePercent: 90,
+      timestampEpochSec: 1726999200,
+      isFall: false,
+      isHapticTriggered: false,
+    );
+
+    final item = HitlDetectionItem(
+      id: 'test-hitl-select-1',
+      timestamp: DateTime(2026, 10, 24, 14, 30, 0),
+      detectedLabel: 'walk',
+      confidencePercent: 90,
+      isFall: false,
+      rawDetection: detection,
+      isBurstReady: true,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RecentActivitiesCard(
+            activities: const [],
+            canUseHitl: true,
+            isHitlActive: true,
+            hitlItems: [item],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Actif'), findsNothing);
+
+    // Tap dropdown button
+    await tester.tap(find.byType(DropdownButton<String>));
+    await tester.pump();
+
+    // Now highlighted with 'Actif' badge
+    expect(find.text('Actif'), findsOneWidget);
+  });
 }
+
 
 

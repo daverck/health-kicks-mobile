@@ -434,7 +434,9 @@ class UnifiedActivityCard extends StatelessWidget {
                                                 ),
                                               );
                                             }).toList(),
+                                            onTap: onTap,
                                             onChanged: (newVal) {
+                                              onTap?.call();
                                               if (newVal != null) {
                                                 onUpdateHitlLabel?.call(hitlItem!, newVal);
                                               }
@@ -483,7 +485,10 @@ class UnifiedActivityCard extends StatelessWidget {
                                     visualDensity: VisualDensity.compact,
                                     backgroundColor: Colors.teal.shade700,
                                   ),
-                                  onPressed: () => onConfirmHitl?.call(hitlItem!),
+                                  onPressed: () {
+                                    onTap?.call();
+                                    onConfirmHitl?.call(hitlItem!);
+                                  },
                                   icon: const Icon(Icons.send_rounded, size: 13),
                                   label: const Text('Valider & Envoyer', style: TextStyle(fontSize: 11)),
                                 )
