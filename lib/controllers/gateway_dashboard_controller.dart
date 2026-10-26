@@ -55,8 +55,8 @@ class GatewayDashboardController extends ChangeNotifier {
   final PermissionService _permissionService = PermissionService();
   late final BackgroundSurveillanceService _surveillanceService;
   late final DashboardOdometerCoordinator _odometerCoordinator;
-  late final InactivitySettingsService _inactivitySettingsService;
-  late final FallSensitivitySettingsService _fallSensitivitySettingsService;
+  final InactivitySettingsService _inactivitySettingsService;
+  final FallSensitivitySettingsService _fallSensitivitySettingsService;
 
   IotCredentialsRepository? _credentialsRepo;
   BleConnectionManager? _bleManager;
@@ -82,7 +82,6 @@ class GatewayDashboardController extends ChangeNotifier {
   final List<ActivityDetectionModel> _recentActivities = [];
   final StreamController<ActivityDetectionModel> _activityStreamController = StreamController<ActivityDetectionModel>.broadcast();
   DateTime? _lastInactivityToastTime;
-  DateTime? _lastActiveMovementTime;
   bool isRecordingDialogVisible = false;
   String _lastStudioActivityKey = 'walk';
   String _lastStudioCustomLabel = '';
@@ -104,12 +103,16 @@ class GatewayDashboardController extends ChangeNotifier {
     FallAlertController? fallAlertController,
     HitlCoordinator? hitlCoordinator,
     StudioAudioFeedbackService? audioFeedbackService,
+    InactivitySettingsService? inactivitySettingsService,
+    FallSensitivitySettingsService? fallSensitivitySettingsService,
     this.onShowSnackBar,
     this.onDismissSnackBar,
     this.onShowRecordingDialog,
     this.onPermissionDeniedAction,
   })  : _firmwareService = firmwareService ?? FirmwareService(),
         _audioFeedbackService = audioFeedbackService ?? StudioAudioFeedbackService(),
+        _inactivitySettingsService = inactivitySettingsService ?? InactivitySettingsService(),
+        _fallSensitivitySettingsService = fallSensitivitySettingsService ?? FallSensitivitySettingsService(),
         _ownsFallAlertController = fallAlertController == null {
     _hitlCoordinator = hitlCoordinator ??
         HitlCoordinator(
@@ -150,11 +153,6 @@ class GatewayDashboardController extends ChangeNotifier {
   String get lastStudioActivityKey => _lastStudioActivityKey;
   String get lastStudioCustomLabel => _lastStudioCustomLabel;
 
-  @visibleForTesting
-  DateTime? get lastActiveMovementTime => _lastActiveMovementTime;
-
-  @visibleForTesting
-  set lastActiveMovementTime(DateTime? time) => _lastActiveMovementTime = time;
 
   @visibleForTesting
   void handleActivityDetection(ActivityDetectionModel detection) {
@@ -164,34 +162,12 @@ class GatewayDashboardController extends ChangeNotifier {
 
     final isMovementActive = !detection.isSedentary && detection.eventType != 'inactivity_alert';
     if (isMovementActive) {
-      _lastActiveMovementTime = DateTime.now();
       // Automatically cancel any active inactivity alert / toast
       onDismissSnackBar?.call();
     }
 
     if (detection.eventType == 'inactivity_alert') {
-      // Never record inactivity reminder as a HITL activity to classify
-      // If HITL is actively running, ignore inactivity alerts
-      if (_hitlCoordinator.isHitlActive) {
-        addLog("INACTIVITY", "Alerte d'inactivite ignoree : session HITL en cours");
-        return;
-      }
-
-      if (detection.isOfflineBuffered) {
-        addLog("INACTIVITY", "Alerte d'inactivite differee (offline) ignoree");
-        return;
-      }
-
       final now = DateTime.now();
-      if (_lastActiveMovementTime != null &&
-          now.difference(_lastActiveMovementTime!).inSeconds < 60) {
-        addLog(
-          'INACTIVITY',
-          "Alerte d'inactivite obsolete annulee (activite recente detectee il y a ${now.difference(_lastActiveMovementTime!).inSeconds} s)",
-        );
-        return;
-      }
-
       if (_lastInactivityToastTime == null ||
           now.difference(_lastInactivityToastTime!).inSeconds >= 30) {
         _lastInactivityToastTime = now;
@@ -246,9 +222,14 @@ class GatewayDashboardController extends ChangeNotifier {
     _isInitialized = true;
     unawaited(checkForFirmwareUpdate());
 
-    _inactivitySettingsService = InactivitySettingsService();
+    _surveillanceService = BackgroundSurveillanceService(
+      onLog: (tag, msg, {bool isError = false}) {
+        addLog(tag, msg, color: isError ? Colors.red : Colors.cyan);
+      },
+    );
+    _surveillanceService.initialize();
+
     unawaited(_inactivitySettingsService.loadSettings());
-    _fallSensitivitySettingsService = FallSensitivitySettingsService();
     unawaited(_fallSensitivitySettingsService.loadSettings());
 
     _odometerCoordinator = DashboardOdometerCoordinator(
@@ -261,13 +242,6 @@ class GatewayDashboardController extends ChangeNotifier {
     );
     _odometerCoordinator.initialize();
     unawaited(loadLastStudioActivity());
-
-    _surveillanceService = BackgroundSurveillanceService(
-      onLog: (tag, msg, {bool isError = false}) {
-        addLog(tag, msg, color: isError ? Colors.red : Colors.cyan);
-      },
-    );
-    _surveillanceService.initialize();
 
     _ensureBleManager();
     _initGateway();

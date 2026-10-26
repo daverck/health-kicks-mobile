@@ -88,9 +88,8 @@ void main() {
     });
   });
 
-
   group('GatewayDashboardController inactivity alert handling', () {
-    test('inactivity_alert is ignored and NOT registered when HITL is active', () {
+    test('inactivity_alert triggers SnackBar even when HITL is active', () {
       String? snackBarMessage;
       final controller = GatewayDashboardController(
         onShowSnackBar: (msg, {backgroundColor}) => snackBarMessage = msg,
@@ -111,16 +110,12 @@ void main() {
 
       controller.handleActivityDetection(inactDetection);
 
-      expect(snackBarMessage, isNull);
+      expect(snackBarMessage, isNotNull);
       expect(controller.hitlCoordinator.items, isEmpty);
-      expect(
-        controller.logs.any((l) => l.message.contains("session HITL en cours")),
-        isTrue,
-      );
       controller.dispose();
     });
 
-    test('inactivity_alert is ignored when recent active movement occurred (< 60s)', () {
+    test('inactivity_alert triggers SnackBar even after active movement', () {
       String? snackBarMessage;
       final controller = GatewayDashboardController(
         onShowSnackBar: (msg, {backgroundColor}) => snackBarMessage = msg,
@@ -136,9 +131,8 @@ void main() {
         isHapticTriggered: false,
       );
       controller.handleActivityDetection(walkDetection);
-      expect(controller.lastActiveMovementTime, isNotNull);
 
-      // Now receive an inactivity alert 5 seconds later
+      // Now receive an inactivity alert
       const inactDetection = ActivityDetectionModel(
         stateCode: 0x20,
         eventType: 'inactivity_alert',
@@ -149,11 +143,7 @@ void main() {
       );
       controller.handleActivityDetection(inactDetection);
 
-      expect(snackBarMessage, isNull);
-      expect(
-        controller.logs.any((l) => l.message.contains("obsolete annulee")),
-        isTrue,
-      );
+      expect(snackBarMessage, isNotNull);
       controller.dispose();
     });
 
@@ -177,7 +167,7 @@ void main() {
       controller.dispose();
     });
 
-    test('inactivity_alert is ignored when marked as offline buffered', () {
+    test('inactivity_alert triggers SnackBar even when marked as offline buffered', () {
       String? snackBarMessage;
       final controller = GatewayDashboardController(
         onShowSnackBar: (msg, {backgroundColor}) => snackBarMessage = msg,
@@ -194,11 +184,7 @@ void main() {
       );
 
       controller.handleActivityDetection(bufferedInact);
-      expect(snackBarMessage, isNull);
-      expect(
-        controller.logs.any((l) => l.message.contains("differee (offline) ignoree")),
-        isTrue,
-      );
+      expect(snackBarMessage, isNotNull);
       controller.dispose();
     });
   });
