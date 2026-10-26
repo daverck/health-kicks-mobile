@@ -362,77 +362,88 @@ class UnifiedActivityCard extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              if (hitlItem!.isSynchronized)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        ActivityVisualMeta.fromEventType(context, hitlItem!.selectedLabel).icon,
-                                        size: 14,
-                                        color: ActivityVisualMeta.fromEventType(context, hitlItem!.selectedLabel).color,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        hitlItem!.selectedLabel,
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          color: theme.colorScheme.onSurface,
+                              Expanded(
+                                child: hitlItem!.isSynchronized
+                                    ? Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                                          borderRadius: BorderRadius.circular(6),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              else
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-                                  decoration: BoxDecoration(
-                                    color: theme.colorScheme.surface,
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
-                                    ),
-                                  ),
-                                  child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: hitlAvailableLabels.contains(hitlItem!.selectedLabel)
-                                        ? hitlItem!.selectedLabel
-                                        : hitlAvailableLabels.first,
-                                    isDense: true,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: theme.colorScheme.onSurface,
-                                    ),
-                                    items: hitlAvailableLabels.map((l) {
-                                      final optMeta = ActivityVisualMeta.fromEventType(context, l);
-                                      return DropdownMenuItem(
-                                        value: l,
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            Icon(optMeta.icon, size: 14, color: optMeta.color),
-                                            const SizedBox(width: 6),
-                                            Text(l),
+                                            Icon(
+                                              ActivityVisualMeta.fromEventType(context, hitlItem!.selectedLabel).icon,
+                                              size: 14,
+                                              color: ActivityVisualMeta.fromEventType(context, hitlItem!.selectedLabel).color,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Flexible(
+                                              child: Text(
+                                                hitlItem!.selectedLabel,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: theme.colorScheme.onSurface,
+                                                ),
+                                              ),
+                                            ),
                                           ],
                                         ),
-                                      );
-                                    }).toList(),
-                                    onChanged: (newVal) {
-                                      if (newVal != null) {
-                                        onUpdateHitlLabel?.call(hitlItem!, newVal);
-                                      }
-                                    },
-                                  ),
-                                ),
+                                      )
+                                    : Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: theme.colorScheme.surface,
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(
+                                            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
+                                          ),
+                                        ),
+                                        child: DropdownButtonHideUnderline(
+                                          child: DropdownButton<String>(
+                                            isExpanded: true,
+                                            iconSize: 18,
+                                            value: hitlAvailableLabels.contains(hitlItem!.selectedLabel)
+                                                ? hitlItem!.selectedLabel
+                                                : hitlAvailableLabels.first,
+                                            isDense: true,
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: theme.colorScheme.onSurface,
+                                            ),
+                                            items: hitlAvailableLabels.map((l) {
+                                              final optMeta = ActivityVisualMeta.fromEventType(context, l);
+                                              return DropdownMenuItem(
+                                                value: l,
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(optMeta.icon, size: 14, color: optMeta.color),
+                                                    const SizedBox(width: 4),
+                                                    Flexible(
+                                                      child: Text(
+                                                        l,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            }).toList(),
+                                            onChanged: (newVal) {
+                                              if (newVal != null) {
+                                                onUpdateHitlLabel?.call(hitlItem!, newVal);
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                      ),
                               ),
-                              const Spacer(),
+                              const SizedBox(width: 8),
                               if (hitlItem!.isPublishing)
                                 const SizedBox(
                                   width: 18,
@@ -468,7 +479,7 @@ class UnifiedActivityCard extends StatelessWidget {
                               else if (hitlItem!.isBurstReady)
                                 FilledButton.icon(
                                   style: FilledButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     visualDensity: VisualDensity.compact,
                                     backgroundColor: Colors.teal.shade700,
                                   ),
