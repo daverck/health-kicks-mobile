@@ -82,6 +82,7 @@ class GatewayDashboardController extends ChangeNotifier {
   final List<ActivityDetectionModel> _recentActivities = [];
   final StreamController<ActivityDetectionModel> _activityStreamController = StreamController<ActivityDetectionModel>.broadcast();
   DateTime? _lastInactivityToastTime;
+  DateTime? _lastActiveMovementTime;
   bool isRecordingDialogVisible = false;
   String _lastStudioActivityKey = 'walk';
   String _lastStudioCustomLabel = '';
@@ -91,6 +92,7 @@ class GatewayDashboardController extends ChangeNotifier {
 
   // Callbacks to UI
   void Function(String message, {Color? backgroundColor})? onShowSnackBar;
+  VoidCallback? onDismissSnackBar;
   void Function({required String label, required double durationSec})? onShowRecordingDialog;
   VoidCallback? onPermissionDeniedAction;
 
@@ -103,6 +105,7 @@ class GatewayDashboardController extends ChangeNotifier {
     HitlCoordinator? hitlCoordinator,
     StudioAudioFeedbackService? audioFeedbackService,
     this.onShowSnackBar,
+    this.onDismissSnackBar,
     this.onShowRecordingDialog,
     this.onPermissionDeniedAction,
   })  : _firmwareService = firmwareService ?? FirmwareService(),
@@ -146,6 +149,83 @@ class GatewayDashboardController extends ChangeNotifier {
   List<LogEntry> get logs => _logs;
   String get lastStudioActivityKey => _lastStudioActivityKey;
   String get lastStudioCustomLabel => _lastStudioCustomLabel;
+
+  @visibleForTesting
+  DateTime? get lastActiveMovementTime => _lastActiveMovementTime;
+
+  @visibleForTesting
+  set lastActiveMovementTime(DateTime? time) => _lastActiveMovementTime = time;
+
+  @visibleForTesting
+  void handleActivityDetection(ActivityDetectionModel detection) {
+    if (detection.activityCategory != ActivityCategory.other) {
+      _isUserSeated = detection.isSeated;
+    }
+
+    final isMovementActive = !detection.isSedentary && detection.eventType != 'inactivity_alert';
+    if (isMovementActive) {
+      _lastActiveMovementTime = DateTime.now();
+      // Automatically cancel any active inactivity alert / toast
+      onDismissSnackBar?.call();
+    }
+
+    if (detection.eventType == 'inactivity_alert') {
+      // Never record inactivity reminder as a HITL activity to classify
+      // If HITL is actively running, ignore inactivity alerts
+      if (_hitlCoordinator.isHitlActive) {
+        addLog("INACTIVITY", "Alerte d'inactivite ignoree : session HITL en cours");
+        return;
+      }
+
+      if (detection.isOfflineBuffered) {
+        addLog("INACTIVITY", "Alerte d'inactivite differee (offline) ignoree");
+        return;
+      }
+
+      final now = DateTime.now();
+      if (_lastActiveMovementTime != null &&
+          now.difference(_lastActiveMovementTime!).inSeconds < 60) {
+        addLog(
+          'INACTIVITY',
+          "Alerte d'inactivite obsolete annulee (activite recente detectee il y a ${now.difference(_lastActiveMovementTime!).inSeconds} s)",
+        );
+        return;
+      }
+
+      if (_lastInactivityToastTime == null ||
+          now.difference(_lastInactivityToastTime!).inSeconds >= 30) {
+        _lastInactivityToastTime = now;
+        onShowSnackBar?.call(
+          _inactivitySettingsService.inactivityAlertMessage(isSeated: _isUserSeated),
+          backgroundColor: Colors.deepOrange.shade700,
+        );
+      }
+      return;
+    }
+
+    _recentActivities.insert(0, detection);
+    if (_recentActivities.length > 20) {
+      _recentActivities.removeLast();
+    }
+    notifyListeners();
+    _activityStreamController.add(detection);
+
+    addLog(
+      'ACTIVITY',
+      '${detection.eventType.toUpperCase()} (${detection.confidencePercent}%) | Chute=${detection.isFall} | Haptique=${detection.isHapticTriggered}',
+    );
+
+    if (_hitlCoordinator.isHitlActive) {
+      _hitlCoordinator.registerDetection(detection);
+      unawaited(HapticFeedback.mediumImpact());
+      unawaited(_audioFeedbackService.playCountdownBeep());
+    }
+
+    unawaited(_fallAlertController.onActivityDetected(
+      detection,
+      overrideDeviceId: deviceId,
+    ));
+  }
   GatewayCoordinator? get coordinator => _coordinator;
   FirmwareService get firmwareService => _firmwareService;
   StepStorageService get stepStorageService => _odometerCoordinator.storageService;
@@ -617,44 +697,7 @@ class GatewayDashboardController extends ChangeNotifier {
         }));
       }
 
-      _bleClient!.activityStream.listen((detection) {
-        if (detection.activityCategory != ActivityCategory.other) {
-          _isUserSeated = detection.isSeated;
-        }
-        _recentActivities.insert(0, detection);
-        if (_recentActivities.length > 20) {
-          _recentActivities.removeLast();
-        }
-        notifyListeners();
-        _activityStreamController.add(detection);
-
-        addLog(
-          'ACTIVITY',
-          '${detection.eventType.toUpperCase()} (${detection.confidencePercent}%) | Chute=${detection.isFall} | Haptique=${detection.isHapticTriggered}',
-        );
-
-        if (_hitlCoordinator.isHitlActive) {
-          _hitlCoordinator.registerDetection(detection);
-          unawaited(HapticFeedback.mediumImpact());
-          unawaited(_audioFeedbackService.playCountdownBeep());
-        }
-
-        unawaited(_fallAlertController.onActivityDetected(
-          detection,
-          overrideDeviceId: deviceId,
-        ));
-
-        if (detection.eventType == 'inactivity_alert') {
-          final now = DateTime.now();
-          if (_lastInactivityToastTime == null || now.difference(_lastInactivityToastTime!).inSeconds >= 30) {
-            _lastInactivityToastTime = now;
-            onShowSnackBar?.call(
-              _inactivitySettingsService.inactivityAlertMessage(isSeated: _isUserSeated),
-              backgroundColor: Colors.deepOrange.shade700,
-            );
-          }
-        }
-      });
+      _bleClient!.activityStream.listen(handleActivityDetection);
 
       _bleClient!.studioStatusStream.listen((statusMsg) {
         addLog('STUDIO', 'Signal d\'état : $statusMsg');

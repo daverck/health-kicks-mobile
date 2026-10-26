@@ -74,8 +74,14 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
             SnackBar(
               content: Text(msg),
               backgroundColor: backgroundColor,
+              duration: const Duration(seconds: 4),
             ),
           );
+        },
+        onDismissSnackBar: () {
+          if (mounted) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          }
         },
         onShowRecordingDialog: ({required label, required durationSec}) {
           _showActiveRecordingDialog(label: label, durationSec: durationSec);

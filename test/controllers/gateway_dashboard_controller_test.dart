@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/controllers/gateway_dashboard_controller.dart';
+import 'package:healthkicks_mobile/models/activity_detection_model.dart';
 import 'package:healthkicks_mobile/models/firmware_release_model.dart';
 import 'package:healthkicks_mobile/services/firmware/firmware_service.dart';
 
@@ -83,6 +84,121 @@ void main() {
       await controller.checkForFirmwareUpdate();
 
       expect(notificationShown, isFalse);
+      controller.dispose();
+    });
+  });
+
+
+  group('GatewayDashboardController inactivity alert handling', () {
+    test('inactivity_alert is ignored and NOT registered when HITL is active', () {
+      String? snackBarMessage;
+      final controller = GatewayDashboardController(
+        onShowSnackBar: (msg, {backgroundColor}) => snackBarMessage = msg,
+      );
+
+      // Enable HITL mode
+      controller.hitlCoordinator.setHitlActive(true);
+      expect(controller.hitlCoordinator.isHitlActive, isTrue);
+
+      const inactDetection = ActivityDetectionModel(
+        stateCode: 0x20,
+        eventType: 'inactivity_alert',
+        confidencePercent: 100,
+        timestampEpochSec: 1729000000,
+        isFall: false,
+        isHapticTriggered: true,
+      );
+
+      controller.handleActivityDetection(inactDetection);
+
+      expect(snackBarMessage, isNull);
+      expect(controller.hitlCoordinator.items, isEmpty);
+      expect(
+        controller.logs.any((l) => l.message.contains("session HITL en cours")),
+        isTrue,
+      );
+      controller.dispose();
+    });
+
+    test('inactivity_alert is ignored when recent active movement occurred (< 60s)', () {
+      String? snackBarMessage;
+      final controller = GatewayDashboardController(
+        onShowSnackBar: (msg, {backgroundColor}) => snackBarMessage = msg,
+      );
+
+      // Simulate a recent walk detection
+      const walkDetection = ActivityDetectionModel(
+        stateCode: 0x01,
+        eventType: 'walk',
+        confidencePercent: 95,
+        timestampEpochSec: 1729000010,
+        isFall: false,
+        isHapticTriggered: false,
+      );
+      controller.handleActivityDetection(walkDetection);
+      expect(controller.lastActiveMovementTime, isNotNull);
+
+      // Now receive an inactivity alert 5 seconds later
+      const inactDetection = ActivityDetectionModel(
+        stateCode: 0x20,
+        eventType: 'inactivity_alert',
+        confidencePercent: 100,
+        timestampEpochSec: 1729000015,
+        isFall: false,
+        isHapticTriggered: true,
+      );
+      controller.handleActivityDetection(inactDetection);
+
+      expect(snackBarMessage, isNull);
+      expect(
+        controller.logs.any((l) => l.message.contains("obsolete annulee")),
+        isTrue,
+      );
+      controller.dispose();
+    });
+
+    test('active movement automatically invokes onDismissSnackBar', () {
+      var dismissedCount = 0;
+      final controller = GatewayDashboardController(
+        onDismissSnackBar: () => dismissedCount++,
+      );
+
+      const walkDetection = ActivityDetectionModel(
+        stateCode: 0x01,
+        eventType: 'walk',
+        confidencePercent: 90,
+        timestampEpochSec: 1729000000,
+        isFall: false,
+        isHapticTriggered: false,
+      );
+
+      controller.handleActivityDetection(walkDetection);
+      expect(dismissedCount, 1);
+      controller.dispose();
+    });
+
+    test('inactivity_alert is ignored when marked as offline buffered', () {
+      String? snackBarMessage;
+      final controller = GatewayDashboardController(
+        onShowSnackBar: (msg, {backgroundColor}) => snackBarMessage = msg,
+      );
+
+      const bufferedInact = ActivityDetectionModel(
+        stateCode: 0x20,
+        eventType: 'inactivity_alert',
+        confidencePercent: 100,
+        timestampEpochSec: 1729000000,
+        isFall: false,
+        isHapticTriggered: true,
+        isOfflineBuffered: true,
+      );
+
+      controller.handleActivityDetection(bufferedInact);
+      expect(snackBarMessage, isNull);
+      expect(
+        controller.logs.any((l) => l.message.contains("differee (offline) ignoree")),
+        isTrue,
+      );
       controller.dispose();
     });
   });
