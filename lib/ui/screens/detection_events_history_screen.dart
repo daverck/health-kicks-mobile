@@ -138,13 +138,12 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
                 _buildHitlHeader(theme),
               ],
 
-              // 1. Horizontal Category Filter Chips Bar (only when HITL is inactive)
-              if (!isHitlActive)
-                DetectionFilterBar(
-                  filters: _filters,
-                  selectedCategory: _notifier.selectedCategory,
-                  onSelected: (cat) => _notifier.setCategory(cat),
-                ),
+              // 1. Horizontal Category Filter Chips Bar (applies to both nominal and HITL items)
+              DetectionFilterBar(
+                filters: _filters,
+                selectedCategory: _notifier.selectedCategory,
+                onSelected: (cat) => _notifier.setCategory(cat),
+              ),
 
               // 2. Main Content Area (switches between HITL queue and Historical stream)
               Expanded(
@@ -269,9 +268,13 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
 
   Widget _buildHitlBody(ThemeData theme) {
     final coord = widget.hitlCoordinator!;
-    final items = coord.items;
+    final allItems = coord.items;
+    final selectedCategory = _notifier.selectedCategory;
 
-    if (items.isEmpty) {
+    // Filter HITL items according to selected category
+    final items = allItems.where((item) => _matchesHitlCategory(item, selectedCategory)).toList();
+
+    if (allItems.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
@@ -310,6 +313,34 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
       );
     }
 
+    if (items.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.filter_list_off_rounded,
+                size: 40,
+                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Aucune détection HITL pour ce filtre',
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${allItems.length} détection${allItems.length > 1 ? "s" : ""} présente${allItems.length > 1 ? "s" : ""} dans d\'autres catégories.',
+                style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
@@ -331,6 +362,23 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
         );
       },
     );
+  }
+
+  bool _matchesHitlCategory(HitlDetectionItem item, String category) {
+    if (category == 'all') return true;
+    final eventType = item.detectedLabel.toLowerCase();
+    if (category == 'falls') {
+      return item.isFall || (eventType.contains('fall') && eventType != 'fall_recovery');
+    }
+    if (category == 'impacts') {
+      return eventType.contains('impact') ||
+          eventType == 'free_fall' ||
+          eventType == 'stumble_recover';
+    }
+    if (category == 'activity') {
+      return !item.isFall && !(eventType.contains('fall') && eventType != 'fall_recovery');
+    }
+    return true;
   }
 
   Widget _buildHistoricalBody(ThemeData theme) {

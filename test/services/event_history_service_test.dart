@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:healthkicks_mobile/models/activity_detection_model.dart';
 import 'package:healthkicks_mobile/services/auth/token_storage_service.dart';
 import 'package:healthkicks_mobile/services/event_history_notifier.dart';
 import 'package:healthkicks_mobile/services/event_history_service.dart';
@@ -271,6 +272,50 @@ void main() {
       expect(notifier.selectedCategory, 'falls');
       expect(notifier.events.length, 1);
       expect(notifier.events.first.id, 'evt-falls-1');
+    });
+
+    test('retains live session activities across category switching', () async {
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'items': [],
+            'total': 0,
+            'has_more': false,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final service = EventHistoryService(
+        backendBaseUrl: 'https://test.healthkicks.org',
+        httpClient: mockClient,
+        tokenStorage: tokenStorage,
+      );
+
+      final notifier = EventHistoryNotifier(service: service);
+
+      // Add a live walk activity
+      notifier.addLiveActivity(const ActivityDetectionModel(
+        stateCode: 0x01,
+        eventType: 'walk',
+        confidencePercent: 92,
+        timestampEpochSec: 1726999400,
+        isFall: false,
+        isHapticTriggered: false,
+      ));
+
+      expect(notifier.events.length, 1);
+      expect(notifier.events.first.eventType, 'walk');
+
+      // Switch to falls -> walk is filtered out, list is empty
+      await notifier.setCategory('falls');
+      expect(notifier.events, isEmpty);
+
+      // Switch back to all -> walk reappears and was not lost
+      await notifier.setCategory('all');
+      expect(notifier.events.length, 1);
+      expect(notifier.events.first.eventType, 'walk');
     });
 
     test('loadMore appends next page items without duplicates', () async {

@@ -256,9 +256,20 @@ void main() {
       expect(find.text('Mode HITL (Labellisation)'), findsOneWidget);
       expect(find.text('Tout effacer'), findsOneWidget);
 
-      // The main body displays the HITL item, and FilterBar is hidden in HITL mode
+      // FilterBar is visible and filters HITL items
+      expect(find.text('Tous'), findsOneWidget);
       expect(find.text('Détecté : walk (93%)'), findsOneWidget);
-      expect(find.text('Tous'), findsNothing);
+
+      // Switching category to impacts hides walk, but does not delete it
+      await tester.tap(find.text('Impacts'));
+      await tester.pumpAndSettle();
+      expect(find.text('Détecté : walk (93%)'), findsNothing);
+      expect(find.text('Aucune détection HITL pour ce filtre'), findsOneWidget);
+
+      // Switching back to Tous restores the detection
+      await tester.tap(find.text('Tous'));
+      await tester.pumpAndSettle();
+      expect(find.text('Détecté : walk (93%)'), findsOneWidget);
 
       // Clear all empties the queue
       await tester.tap(find.text('Tout effacer'));

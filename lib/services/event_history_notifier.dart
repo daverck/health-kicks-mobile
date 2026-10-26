@@ -11,6 +11,7 @@ class EventHistoryNotifier extends ChangeNotifier {
   final String? deviceId;
 
   List<DetectionEvent> _events = [];
+  final List<DetectionEvent> _liveSessionEvents = [];
   bool _isLoading = false;
   bool _isLoadingMore = false;
   bool _hasMore = true;
@@ -29,8 +30,11 @@ class EventHistoryNotifier extends ChangeNotifier {
     Stream<ActivityDetectionModel>? activityStream,
   }) : _service = service {
     if (liveActivities != null && liveActivities.isNotEmpty) {
-      _events = liveActivities
-          .map((a) => DetectionEvent.fromActivityDetection(a, deviceId: deviceId ?? 'HK-2'))
+      _liveSessionEvents.addAll(
+        liveActivities.map((a) => DetectionEvent.fromActivityDetection(a, deviceId: deviceId ?? 'HK-2')),
+      );
+      _events = _liveSessionEvents
+          .where((e) => e.matchesCategory(_selectedCategory))
           .toList();
     }
     if (activityStream != null) {
@@ -64,10 +68,12 @@ class EventHistoryNotifier extends ChangeNotifier {
         deviceId: deviceId,
       );
 
-      final liveSessionEvents = _events.where((e) => e.id.startsWith('live_')).toList();
+      final matchingLiveEvents = _liveSessionEvents
+          .where((e) => e.matchesCategory(_selectedCategory))
+          .toList();
       final cloudIds = response.events.map((e) => e.id).toSet();
       final merged = [
-        ...liveSessionEvents.where((e) => !cloudIds.contains(e.id)),
+        ...matchingLiveEvents.where((e) => !cloudIds.contains(e.id)),
         ...response.events,
       ];
       _events = merged;
@@ -98,10 +104,12 @@ class EventHistoryNotifier extends ChangeNotifier {
         deviceId: deviceId,
       );
 
-      final liveSessionEvents = _events.where((e) => e.id.startsWith('live_')).toList();
+      final matchingLiveEvents = _liveSessionEvents
+          .where((e) => e.matchesCategory(_selectedCategory))
+          .toList();
       final cloudIds = response.events.map((e) => e.id).toSet();
       final merged = [
-        ...liveSessionEvents.where((e) => !cloudIds.contains(e.id)),
+        ...matchingLiveEvents.where((e) => !cloudIds.contains(e.id)),
         ...response.events,
       ];
       _events = merged;
@@ -155,13 +163,22 @@ class EventHistoryNotifier extends ChangeNotifier {
   Future<void> setCategory(String category) async {
     if (_selectedCategory == category) return;
     _selectedCategory = category;
-    _events = [];
+    // Retain matching live session events immediately so UI is responsive
+    _events = _liveSessionEvents
+        .where((e) => e.matchesCategory(_selectedCategory))
+        .toList();
+    notifyListeners();
     await loadInitial();
   }
 
   /// Real-time insertion of a live detected activity.
   void addLiveActivity(ActivityDetectionModel activity) {
     final event = DetectionEvent.fromActivityDetection(activity, deviceId: deviceId ?? 'HK-2');
+    _liveSessionEvents.removeWhere((e) => e.id == event.id);
+    _liveSessionEvents.insert(0, event);
+    if (_liveSessionEvents.length > 50) {
+      _liveSessionEvents.removeLast();
+    }
     if (event.matchesCategory(_selectedCategory)) {
       _events.removeWhere((e) => e.id == event.id);
       _events.insert(0, event);
@@ -171,6 +188,7 @@ class EventHistoryNotifier extends ChangeNotifier {
 
   void clear() {
     _events = [];
+    _liveSessionEvents.clear();
     _isLoading = false;
     _isLoadingMore = false;
     _hasMore = true;
