@@ -621,9 +621,10 @@ class GatewayDashboardController extends ChangeNotifier {
 
     _studioSavedSub = _coordinator!.studioSessionSavedStream.listen((savedSession) {
       final shortId = savedSession.sessionId.length > 8 ? savedSession.sessionId.substring(0, 8) : savedSession.sessionId;
-      onShowSnackBar?.call(
-        'Session Studio synchronisée ($shortId, ${savedSession.readings.length} trames)',
-        backgroundColor: const Color(0xFF0F766E),
+      addLog(
+        'STUDIO',
+        'Session Studio $shortId synchronisée (${savedSession.readings.length} trames)',
+        color: const Color(0xFF0F766E),
       );
     });
 
@@ -886,11 +887,7 @@ class GatewayDashboardController extends ChangeNotifier {
   }
 
   Future<bool> confirmHitlItem(HitlDetectionItem item) async {
-    final success = await _hitlCoordinator.confirmAndPublish(item, deviceId: targetDeviceId);
-    if (success) {
-      onShowSnackBar?.call('Session [${item.selectedLabel}] validée et transmise !', backgroundColor: Colors.teal);
-    }
-    return success;
+    return _hitlCoordinator.confirmAndPublish(item, deviceId: targetDeviceId);
   }
 
   Future<void> calibrateSensor() async {

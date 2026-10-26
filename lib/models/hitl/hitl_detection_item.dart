@@ -17,6 +17,7 @@ class HitlDetectionItem {
   List<ImuReadingModel> readings;
   bool isBurstReady;
   bool isPublishing;
+  bool isSynchronized;
 
   HitlDetectionItem({
     required this.id,
@@ -29,6 +30,7 @@ class HitlDetectionItem {
     List<ImuReadingModel>? readings,
     this.isBurstReady = false,
     this.isPublishing = false,
+    this.isSynchronized = false,
   })  : selectedLabel = selectedLabel ?? detectedLabel,
         readings = readings ?? [];
 

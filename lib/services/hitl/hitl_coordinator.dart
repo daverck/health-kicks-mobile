@@ -144,7 +144,11 @@ class HitlCoordinator extends ChangeNotifier {
         'Session HITL confirmée et publiée avec succès [${session.label}] (${session.sessionId.substring(0, 8)})',
       );
 
-      _items.removeWhere((i) => i.id == item.id);
+      final idx = _items.indexWhere((i) => i.id == item.id);
+      if (idx != -1) {
+        _items[idx].isPublishing = false;
+        _items[idx].isSynchronized = true;
+      }
       notifyListeners();
       return true;
     } catch (e) {

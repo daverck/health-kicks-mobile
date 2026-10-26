@@ -212,9 +212,17 @@ class UnifiedActivityCard extends StatelessWidget {
                                         const SizedBox(width: 4),
                                         const Icon(Icons.vibration_rounded, size: 14, color: Colors.amber),
                                       ],
+                                      if (hitlItem?.isSynchronized == true) ...[
+                                        const SizedBox(width: 4),
+                                        const Icon(Icons.cloud_done_rounded, size: 14, color: Colors.teal),
+                                      ],
                                       if (isValidated) ...[
                                         const SizedBox(width: 4),
                                         const Icon(Icons.verified_rounded, size: 14, color: Colors.blue),
+                                      ],
+                                      if (event != null && !event!.id.startsWith('live_')) ...[
+                                        const SizedBox(width: 4),
+                                        const Icon(Icons.cloud_done_rounded, size: 14, color: Colors.teal),
                                       ],
                                       if (isSelected) ...[
                                         const SizedBox(width: 6),
@@ -354,16 +362,44 @@ class UnifiedActivityCard extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.surface,
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
+                              if (hitlItem!.isSynchronized)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                                    borderRadius: BorderRadius.circular(6),
                                   ),
-                                ),
-                                child: DropdownButtonHideUnderline(
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        ActivityVisualMeta.fromEventType(context, hitlItem!.selectedLabel).icon,
+                                        size: 14,
+                                        color: ActivityVisualMeta.fromEventType(context, hitlItem!.selectedLabel).color,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        hitlItem!.selectedLabel,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: theme.colorScheme.onSurface,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.surface,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
+                                    ),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
                                   child: DropdownButton<String>(
                                     value: hitlAvailableLabels.contains(hitlItem!.selectedLabel)
                                         ? hitlItem!.selectedLabel
@@ -402,6 +438,32 @@ class UnifiedActivityCard extends StatelessWidget {
                                   width: 18,
                                   height: 18,
                                   child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              else if (hitlItem!.isSynchronized)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.teal.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: Colors.teal.withValues(alpha: 0.35),
+                                    ),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.cloud_done_rounded, size: 14, color: Colors.teal),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Synchronisé',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.teal,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 )
                               else if (hitlItem!.isBurstReady)
                                 FilledButton.icon(

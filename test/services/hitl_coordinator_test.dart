@@ -97,6 +97,26 @@ void main() {
       coordinator.dismissItem(registered.id);
       expect(coordinator.itemCount, equals(0));
     });
+    test('confirmAndPublish marks item as synchronized', () async {
+      await coordinator.setHitlActive(true);
+
+      final registered = coordinator.registerDetection(const ActivityDetectionModel(
+        stateCode: 0x01,
+        eventType: 'walk',
+        confidencePercent: 90,
+        timestampEpochSec: 1729800000,
+        isFall: false,
+        isHapticTriggered: false,
+      ));
+
+      expect(registered.isSynchronized, isFalse);
+
+      final result = await coordinator.confirmAndPublish(registered, deviceId: 'HK-SHOE-TEST');
+      expect(result, isTrue);
+      expect(coordinator.itemCount, equals(1));
+      expect(coordinator.items.first.isSynchronized, isTrue);
+    });
   });
 }
+
 

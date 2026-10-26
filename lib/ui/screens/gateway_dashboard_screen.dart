@@ -70,11 +70,14 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         authService: widget.authService,
         onShowSnackBar: (msg, {backgroundColor}) {
           if (!mounted) return;
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(msg),
               backgroundColor: backgroundColor,
-              duration: const Duration(seconds: 4),
+              duration: const Duration(milliseconds: 2500),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
             ),
           );
         },

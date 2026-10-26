@@ -38,6 +38,7 @@ class GatewayCoordinator {
   String? _currentStudioSessionId;
   String? _activeLocalSessionId;
   bool _isStudioRecordingActive = false;
+  bool _isHitlBurst = false;
   String? _currentStudioLabel;
   double _currentStudioStartTimestamp = 0;
   double _currentStudioDurationSec = 5.0;
@@ -97,6 +98,9 @@ class GatewayCoordinator {
             DateTime.now().millisecondsSinceEpoch / 1000.0;
       } else if (status.startsWith('FINISHED')) {
         final parts = status.split(' ');
+        if (parts.length >= 3 && parts[2].startsWith('hitl-')) {
+          _isHitlBurst = true;
+        }
         if (parts.length >= 4) {
           final actualDuration = double.tryParse(parts[3]);
           if (actualDuration != null &&
@@ -113,6 +117,7 @@ class GatewayCoordinator {
           isError: status.startsWith('ERROR'),
         );
         _isStudioRecordingActive = false;
+    _isHitlBurst = false;
         _activeLocalSessionId = null;
         _currentStudioSessionId = null;
       }
@@ -130,6 +135,16 @@ class GatewayCoordinator {
         onLog?.call(
           'No IMU samples contained in received burst.',
           isError: true,
+        );
+        return;
+      }
+
+      if (_isHitlBurst || (_currentStudioSessionId?.startsWith('hitl-') ?? false)) {
+        _isHitlBurst = false;
+        _currentStudioSessionId = null;
+        onLog?.call(
+          'HITL burst received (${result.framesRecovered} frames) -> delegated to HITL coordinator, skipped Studio MQTT publish.',
+          isError: false,
         );
         return;
       }
@@ -173,6 +188,7 @@ class GatewayCoordinator {
         _currentStudioSessionId = null;
         _activeLocalSessionId = null;
         _isStudioRecordingActive = false;
+    _isHitlBurst = false;
       }
     });
   }
@@ -263,6 +279,7 @@ class GatewayCoordinator {
   /// Stops routing and optionally notifies "offline" status of BLE device on AWS IoT Core.
   void stopRouting({bool notifyOffline = true}) {
     _isStudioRecordingActive = false;
+    _isHitlBurst = false;
     if (notifyOffline) {
       unawaited(publishBleStatus(online: false));
     }
