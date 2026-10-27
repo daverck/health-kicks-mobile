@@ -43,14 +43,10 @@ class MqttGatewayService {
     final authUser = authUserProvider?.call() ??
         authService?.currentUser ??
         credentialsRepository.authService?.currentUser;
-    if (authUser?.uuid != null && authUser!.uuid!.isNotEmpty) {
+    if (authUser != null && authUser.uuid.isNotEmpty) {
       return authUser.uuid;
     }
-    if (authUser?.effectiveUserUuid != null && authUser!.effectiveUserUuid.isNotEmpty) {
-      return authUser.effectiveUserUuid;
-    }
-    final credsUser = credentialsRepository.currentCredentials?.userUuid ??
-        credentialsRepository.currentCredentials?.userId;
+    final credsUser = credentialsRepository.currentCredentials?.userUuid;
     if (credsUser != null && credsUser.isNotEmpty) {
       return credsUser;
     }
@@ -136,8 +132,8 @@ class MqttGatewayService {
           credentialsRepository.authService?.currentUser;
 
       // 1. Explicit UUID from AuthUser
-      if (authUser?.uuid != null && authUser!.uuid!.isNotEmpty) {
-        resolvedUserId = authUser.uuid!;
+      if (authUser != null && authUser.uuid.isNotEmpty) {
+        resolvedUserId = authUser.uuid;
       }
       // 2. Explicit userUuid from STS credentials
       if (resolvedUserId.isEmpty && creds.userUuid != null && creds.userUuid!.isNotEmpty) {
@@ -147,11 +143,7 @@ class MqttGatewayService {
       if (resolvedUserId.isEmpty && userId != null && _isUuid(userId)) {
         resolvedUserId = userId!;
       }
-      // 4. Check if creds.userId is a UUID
-      if (resolvedUserId.isEmpty && creds.userId != null && _isUuid(creds.userId)) {
-        resolvedUserId = creds.userId!;
-      }
-      // 5. Check if JWT 'sub' claim from tokenStorage is a UUID
+      // 4. Check if JWT 'sub' claim from tokenStorage is a UUID
       if (resolvedUserId.isEmpty) {
         try {
           final tokenStorage = credentialsRepository.tokenStorage ?? TokenStorageService();
@@ -161,19 +153,11 @@ class MqttGatewayService {
           }
         } catch (_) {}
       }
-      // 6. Fallback to effectiveUserUuid (which falls back to id.toString())
-      if (resolvedUserId.isEmpty && authUser?.effectiveUserUuid != null && authUser!.effectiveUserUuid.isNotEmpty) {
-        resolvedUserId = authUser.effectiveUserUuid;
-      }
-      // 7. Fallback to creds.userId
-      if (resolvedUserId.isEmpty && creds.userId != null && creds.userId!.isNotEmpty) {
-        resolvedUserId = creds.userId!;
-      }
-      // 8. Fallback to passed userId
+      // 5. Fallback to passed userId
       if (resolvedUserId.isEmpty && userId != null && userId!.isNotEmpty) {
         resolvedUserId = userId!;
       }
-      // 9. Fallback to tokenStorage any sub
+      // 6. Fallback to tokenStorage any sub
       if (resolvedUserId.isEmpty) {
         try {
           final tokenStorage = credentialsRepository.tokenStorage ?? TokenStorageService();

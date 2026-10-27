@@ -152,7 +152,7 @@ void main() {
           expect(request.headers['Authorization'], equals('Bearer jwt_pkce_access_123'));
           return http.Response(
             jsonEncode({
-              'id': 99,
+              'uuid': 'user-uuid-99',
               'email': 'pkce_user@example.com',
               'name': 'PKCE User',
               'role': 'user',
@@ -188,7 +188,7 @@ void main() {
       expect(capturedExchangeBody!['code_verifier'], equals(generatedVerifier));
       expect(authService.pendingCodeVerifier, isNull);
       expect(authService.state, equals(AuthState.authenticated));
-      expect(authService.currentUser?.id, equals(99));
+      expect(authService.currentUser?.uuid, equals('user-uuid-99'));
       expect(authService.currentUser?.email, equals('pkce_user@example.com'));
       expect(await tokenStorage.getAccessToken(), equals('jwt_pkce_access_123'));
       expect(await tokenStorage.getRefreshToken(), equals('jwt_pkce_refresh_456'));
@@ -210,7 +210,7 @@ void main() {
           expect(request.headers['Authorization'], equals('Bearer jwt_access_abc'));
           return http.Response(
             jsonEncode({
-              'id': 42,
+              'uuid': 'user-uuid-42',
               'email': 'sso_user@example.com',
               'name': 'SSO User',
               'role': 'user',
@@ -237,7 +237,7 @@ void main() {
 
       expect(result, isTrue);
       expect(authService.state, equals(AuthState.authenticated));
-      expect(authService.currentUser?.id, equals(42));
+      expect(authService.currentUser?.uuid, equals('user-uuid-42'));
       expect(authService.currentUser?.email, equals('sso_user@example.com'));
       expect(await tokenStorage.getAccessToken(), equals('jwt_access_abc'));
       expect(await tokenStorage.getRefreshToken(), equals('jwt_refresh_xyz'));
@@ -393,7 +393,6 @@ void main() {
 
     test('AuthUser - deserializes uuid and pseudonym, and resolves effectiveUserUuid correctly', () {
       final userWithUuid = AuthUser.fromJson({
-        'id': 42,
         'uuid': 'c2d1b09e-5e8b-4b8a-9c7f-1d4e5f6a7b8c',
         'pseudonym': 'SUBJ-42A1B2C3',
         'email': 'user@example.com',
@@ -401,20 +400,19 @@ void main() {
         'is_active': true,
       });
 
-      expect(userWithUuid.id, equals(42));
       expect(userWithUuid.uuid, equals('c2d1b09e-5e8b-4b8a-9c7f-1d4e5f6a7b8c'));
       expect(userWithUuid.pseudonym, equals('SUBJ-42A1B2C3'));
       expect(userWithUuid.effectiveUserUuid, equals('c2d1b09e-5e8b-4b8a-9c7f-1d4e5f6a7b8c'));
 
-      final legacyUserWithoutUuid = AuthUser.fromJson({
-        'id': 99,
+      final userWithoutOptional = AuthUser.fromJson({
+        'uuid': 'user-uuid-99',
         'email': 'legacy@example.com',
         'role': 'admin',
       });
 
-      expect(legacyUserWithoutUuid.uuid, isNull);
-      expect(legacyUserWithoutUuid.pseudonym, isNull);
-      expect(legacyUserWithoutUuid.effectiveUserUuid, equals('99'));
+      expect(userWithoutOptional.uuid, equals('user-uuid-99'));
+      expect(userWithoutOptional.pseudonym, isEmpty);
+      expect(userWithoutOptional.effectiveUserUuid, equals('user-uuid-99'));
     });
   });
 }

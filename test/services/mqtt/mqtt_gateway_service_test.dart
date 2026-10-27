@@ -88,7 +88,6 @@ void main() {
       const testUuid = 'c2d1b09e-5e8b-4b8a-9c7f-1d4e5f6a7b8c';
 
       final userWithUuid = AuthUser(
-        id: 42,
         uuid: testUuid,
         pseudonym: 'SUBJ-42A1B2C3',
         email: 'user@example.com',

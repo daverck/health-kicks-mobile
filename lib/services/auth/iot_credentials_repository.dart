@@ -146,7 +146,7 @@ class IotCredentialsRepository {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         var credentials = IoTCredentials.fromJson(data);
-        if (credentials.userId == null && credentials.userUuid == null) {
+        if (credentials.userUuid == null) {
           final resolvedUserUuid = authService?.currentUser?.effectiveUserUuid ??
               (await tokenStorage?.getUserIdFromToken());
           if (resolvedUserUuid != null && resolvedUserUuid.isNotEmpty) {
@@ -157,8 +157,7 @@ class IotCredentialsRepository {
               expiration: credentials.expiration,
               iotEndpoint: credentials.iotEndpoint,
               region: credentials.region,
-              userId: resolvedUserUuid,
-              userUuid: IoTCredentials.isUuid(resolvedUserUuid) ? resolvedUserUuid : null,
+              userUuid: resolvedUserUuid,
             );
           }
         }

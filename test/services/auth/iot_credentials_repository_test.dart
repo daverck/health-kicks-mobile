@@ -47,31 +47,20 @@ void main() {
       );
       expect(soonExpiringCreds.isExpired, isTrue);
 
-      final credsWithUser = IoTCredentials.fromJson({
-        ...validJson,
-        'user_id': '42',
-      });
-      expect(credsWithUser.userId, equals('42'));
-      expect(credsWithUser.userUuid, isNull);
-      expect(credsWithUser.effectiveUserUuid, equals('42'));
-      expect(credsWithUser.toJson()['user_id'], equals('42'));
-
       const testUuid = 'b6d37617-e43e-4613-a75e-5fb7e96b3495';
       final credsWithUuid = IoTCredentials.fromJson({
         ...validJson,
         'user_uuid': testUuid,
       });
       expect(credsWithUuid.userUuid, equals(testUuid));
+      expect(credsWithUuid.userId, equals(testUuid));
       expect(credsWithUuid.effectiveUserUuid, equals(testUuid));
       expect(credsWithUuid.toJson()['user_uuid'], equals(testUuid));
 
-      final credsWithUuidInUserId = IoTCredentials.fromJson({
-        ...validJson,
-        'user_id': testUuid,
-      });
-      expect(credsWithUuidInUserId.userId, equals(testUuid));
-      expect(credsWithUuidInUserId.userUuid, equals(testUuid));
-      expect(credsWithUuidInUserId.effectiveUserUuid, equals(testUuid));
+      final credsWithoutUser = IoTCredentials.fromJson(validJson);
+      expect(credsWithoutUser.userUuid, isNull);
+      expect(credsWithoutUser.userId, isNull);
+      expect(credsWithoutUser.effectiveUserUuid, isNull);
     });
 
     test('fetchCredentials - Fetches credentials via HTTP POST and caches them', () async {

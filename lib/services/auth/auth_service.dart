@@ -19,9 +19,8 @@ enum AuthState {
 
 /// Authenticated user model on the mobile application side.
 class AuthUser {
-  final int id;
-  final String? uuid;
-  final String? pseudonym;
+  final String uuid;
+  final String pseudonym;
   final String email;
   final String? name;
   final String? avatarUrl;
@@ -29,9 +28,8 @@ class AuthUser {
   final bool isActive;
 
   const AuthUser({
-    required this.id,
-    this.uuid,
-    this.pseudonym,
+    required this.uuid,
+    this.pseudonym = '',
     required this.email,
     this.name,
     this.avatarUrl,
@@ -39,15 +37,13 @@ class AuthUser {
     this.isActive = true,
   });
 
-  String get effectiveUserUuid =>
-      (uuid != null && uuid!.isNotEmpty) ? uuid! : id.toString();
+  String get effectiveUserUuid => uuid;
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
     return AuthUser(
-      id: (json['id'] as num?)?.toInt() ?? 0,
-      uuid: json['uuid'] as String?,
-      pseudonym: json['pseudonym'] as String?,
-      email: json['email'] as String,
+      uuid: json['uuid'] as String? ?? '',
+      pseudonym: json['pseudonym'] as String? ?? '',
+      email: json['email'] as String? ?? '',
       name: json['name'] as String?,
       avatarUrl: json['avatar_url'] as String?,
       role: json['role'] as String? ?? 'user',
