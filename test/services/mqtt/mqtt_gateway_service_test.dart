@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/models/fall_alert_model.dart';
+import 'package:healthkicks_mobile/services/auth/auth_service.dart';
 import 'package:healthkicks_mobile/services/auth/iot_credentials_model.dart';
 import 'package:healthkicks_mobile/services/auth/iot_credentials_repository.dart';
 import 'package:healthkicks_mobile/services/auth/token_storage_service.dart';
@@ -9,8 +10,13 @@ import 'package:healthkicks_mobile/services/mqtt/mqtt_gateway_service.dart';
 class FakeCredentialsRepository implements IotCredentialsRepository {
   @override
   final TokenStorageService? tokenStorage;
+  @override
+  final AuthService? authService;
 
-  FakeCredentialsRepository({this.tokenStorage});
+  @override
+  IoTCredentials? get currentCredentials => null;
+
+  FakeCredentialsRepository({this.tokenStorage, this.authService});
 
   @override
   Future<IoTCredentials> fetchCredentials({String? deviceId, bool forceRefresh = false}) async {
@@ -58,21 +64,53 @@ void main() {
       expect(RegExp(r'^[0-9a-f]{8}$').hasMatch(nonce), isTrue);
     });
 
-    test('LWT topic and payload target user gateway (user_id)', () {
-      const testUserId = '123';
-      const expectedTopic = 'healthkicks/v1/users/$testUserId/gateway-status';
+    test('LWT topic and payload target user gateway (user_uuid & user_id)', () {
+      const testUserUuid = '7d2a5f4e-3c2b-4a1d-9e8f-0a1b2c3d4e5f';
+      const expectedTopic = 'healthkicks/v1/users/$testUserUuid/gateway-status';
 
       final expectedPayload = jsonEncode({
-        'user_id': testUserId,
+        'user_uuid': testUserUuid,
+        'user_id': testUserUuid,
         'state': 'offline',
         'gateway': 'mobile',
       });
 
       final decoded = jsonDecode(expectedPayload) as Map<String, dynamic>;
-      expect(decoded['user_id'], equals('123'));
+      expect(decoded['user_uuid'], equals(testUserUuid));
+      expect(decoded['user_id'], equals(testUserUuid));
       expect(decoded['state'], equals('offline'));
       expect(decoded['gateway'], equals('mobile'));
-      expect(expectedTopic, equals('healthkicks/v1/users/123/gateway-status'));
+      expect(expectedTopic, equals('healthkicks/v1/users/$testUserUuid/gateway-status'));
+    });
+
+    test('effectiveUserId prioritizes authUser UUID over numeric userId and resolves topics', () {
+      final fakeRepo = FakeCredentialsRepository();
+      const testUuid = 'c2d1b09e-5e8b-4b8a-9c7f-1d4e5f6a7b8c';
+
+      final userWithUuid = AuthUser(
+        id: 42,
+        uuid: testUuid,
+        pseudonym: 'SUBJ-42A1B2C3',
+        email: 'user@example.com',
+        role: 'user',
+      );
+
+      final serviceWithAuthUser = MqttGatewayService(
+        deviceId: 'HK-2',
+        userId: '42',
+        credentialsRepository: fakeRepo,
+        authUserProvider: () => userWithUuid,
+      );
+
+      expect(serviceWithAuthUser.effectiveUserId, equals(testUuid));
+
+      final serviceWithUuidDirectly = MqttGatewayService(
+        deviceId: 'HK-2',
+        userId: testUuid,
+        credentialsRepository: fakeRepo,
+      );
+
+      expect(serviceWithUuidDirectly.effectiveUserId, equals(testUuid));
     });
 
     test('Unitary BLE status: compliant format for healthkicks/v1/{device_id}/status', () {

@@ -145,7 +145,23 @@ class IotCredentialsRepository {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final credentials = IoTCredentials.fromJson(data);
+        var credentials = IoTCredentials.fromJson(data);
+        if (credentials.userId == null && credentials.userUuid == null) {
+          final resolvedUserUuid = authService?.currentUser?.effectiveUserUuid ??
+              (await tokenStorage?.getUserIdFromToken());
+          if (resolvedUserUuid != null && resolvedUserUuid.isNotEmpty) {
+            credentials = IoTCredentials(
+              accessKeyId: credentials.accessKeyId,
+              secretAccessKey: credentials.secretAccessKey,
+              sessionToken: credentials.sessionToken,
+              expiration: credentials.expiration,
+              iotEndpoint: credentials.iotEndpoint,
+              region: credentials.region,
+              userId: resolvedUserUuid,
+              userUuid: IoTCredentials.isUuid(resolvedUserUuid) ? resolvedUserUuid : null,
+            );
+          }
+        }
         _cachedCredentials = credentials;
         _lastCachedDeviceId = deviceId;
 

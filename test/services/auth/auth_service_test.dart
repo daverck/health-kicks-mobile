@@ -390,5 +390,31 @@ void main() {
       expect(authService.currentUser?.role, 'clinician');
       expect(profileRequests, 2);
     });
+
+    test('AuthUser - deserializes uuid and pseudonym, and resolves effectiveUserUuid correctly', () {
+      final userWithUuid = AuthUser.fromJson({
+        'id': 42,
+        'uuid': 'c2d1b09e-5e8b-4b8a-9c7f-1d4e5f6a7b8c',
+        'pseudonym': 'SUBJ-42A1B2C3',
+        'email': 'user@example.com',
+        'role': 'user',
+        'is_active': true,
+      });
+
+      expect(userWithUuid.id, equals(42));
+      expect(userWithUuid.uuid, equals('c2d1b09e-5e8b-4b8a-9c7f-1d4e5f6a7b8c'));
+      expect(userWithUuid.pseudonym, equals('SUBJ-42A1B2C3'));
+      expect(userWithUuid.effectiveUserUuid, equals('c2d1b09e-5e8b-4b8a-9c7f-1d4e5f6a7b8c'));
+
+      final legacyUserWithoutUuid = AuthUser.fromJson({
+        'id': 99,
+        'email': 'legacy@example.com',
+        'role': 'admin',
+      });
+
+      expect(legacyUserWithoutUuid.uuid, isNull);
+      expect(legacyUserWithoutUuid.pseudonym, isNull);
+      expect(legacyUserWithoutUuid.effectiveUserUuid, equals('99'));
+    });
   });
 }

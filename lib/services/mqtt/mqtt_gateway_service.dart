@@ -10,6 +10,7 @@ import '../../models/fall_alert_model.dart';
 import '../../models/haptic_command_model.dart';
 import '../../models/studio_command_model.dart';
 import '../../models/studio_session_model.dart';
+import '../auth/auth_service.dart';
 import '../auth/iot_credentials_repository.dart';
 import '../auth/token_storage_service.dart';
 
@@ -22,6 +23,8 @@ class MqttGatewayService {
   final String? userId;
   final String clientId;
   final IotCredentialsRepository credentialsRepository;
+  final AuthService? authService;
+  final AuthUser? Function()? authUserProvider;
   final MqttLogCallback? onLog;
   final VoidCallback? onConnectionRestored;
 
@@ -33,10 +36,35 @@ class MqttGatewayService {
       _client != null &&
       _client!.connectionStatus?.state == MqttConnectionState.connected;
 
-  String? get effectiveUserId =>
-      (_effectiveUserId != null && _effectiveUserId!.isNotEmpty)
-          ? _effectiveUserId
-          : userId;
+  String? get effectiveUserId {
+    if (_effectiveUserId != null && _effectiveUserId!.isNotEmpty) {
+      return _effectiveUserId;
+    }
+    final authUser = authUserProvider?.call() ??
+        authService?.currentUser ??
+        credentialsRepository.authService?.currentUser;
+    if (authUser?.uuid != null && authUser!.uuid!.isNotEmpty) {
+      return authUser.uuid;
+    }
+    if (authUser?.effectiveUserUuid != null && authUser!.effectiveUserUuid.isNotEmpty) {
+      return authUser.effectiveUserUuid;
+    }
+    final credsUser = credentialsRepository.currentCredentials?.userUuid ??
+        credentialsRepository.currentCredentials?.userId;
+    if (credsUser != null && credsUser.isNotEmpty) {
+      return credsUser;
+    }
+    return userId;
+  }
+
+  static final RegExp _uuidRegex = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
+  static bool _isUuid(String? str) {
+    if (str == null || str.isEmpty) return false;
+    return _uuidRegex.hasMatch(str.trim());
+  }
 
   final _hapticCommandsController = StreamController<HapticCommandModel>.broadcast();
   Stream<HapticCommandModel> get hapticCommandStream => _hapticCommandsController.stream;
@@ -60,6 +88,8 @@ class MqttGatewayService {
     required this.deviceId,
     this.userId,
     required this.credentialsRepository,
+    this.authService,
+    this.authUserProvider,
     String? clientId,
     this.onLog,
     this.onConnectionRestored,
@@ -99,10 +129,51 @@ class MqttGatewayService {
         isError: false,
       );
 
-      var resolvedUserId = (userId != null && userId!.isNotEmpty) ? userId! : '';
+      var resolvedUserId = '';
+
+      final authUser = authUserProvider?.call() ??
+          authService?.currentUser ??
+          credentialsRepository.authService?.currentUser;
+
+      // 1. Explicit UUID from AuthUser
+      if (authUser?.uuid != null && authUser!.uuid!.isNotEmpty) {
+        resolvedUserId = authUser.uuid!;
+      }
+      // 2. Explicit userUuid from STS credentials
+      if (resolvedUserId.isEmpty && creds.userUuid != null && creds.userUuid!.isNotEmpty) {
+        resolvedUserId = creds.userUuid!;
+      }
+      // 3. Check if passed userId is a UUID
+      if (resolvedUserId.isEmpty && userId != null && _isUuid(userId)) {
+        resolvedUserId = userId!;
+      }
+      // 4. Check if creds.userId is a UUID
+      if (resolvedUserId.isEmpty && creds.userId != null && _isUuid(creds.userId)) {
+        resolvedUserId = creds.userId!;
+      }
+      // 5. Check if JWT 'sub' claim from tokenStorage is a UUID
+      if (resolvedUserId.isEmpty) {
+        try {
+          final tokenStorage = credentialsRepository.tokenStorage ?? TokenStorageService();
+          final tokenUserId = await tokenStorage.getUserIdFromToken();
+          if (tokenUserId != null && _isUuid(tokenUserId)) {
+            resolvedUserId = tokenUserId;
+          }
+        } catch (_) {}
+      }
+      // 6. Fallback to effectiveUserUuid (which falls back to id.toString())
+      if (resolvedUserId.isEmpty && authUser?.effectiveUserUuid != null && authUser!.effectiveUserUuid.isNotEmpty) {
+        resolvedUserId = authUser.effectiveUserUuid;
+      }
+      // 7. Fallback to creds.userId
       if (resolvedUserId.isEmpty && creds.userId != null && creds.userId!.isNotEmpty) {
         resolvedUserId = creds.userId!;
       }
+      // 8. Fallback to passed userId
+      if (resolvedUserId.isEmpty && userId != null && userId!.isNotEmpty) {
+        resolvedUserId = userId!;
+      }
+      // 9. Fallback to tokenStorage any sub
       if (resolvedUserId.isEmpty) {
         try {
           final tokenStorage = credentialsRepository.tokenStorage ?? TokenStorageService();
@@ -112,6 +183,7 @@ class MqttGatewayService {
           }
         } catch (_) {}
       }
+
       if (resolvedUserId.isEmpty || resolvedUserId == 'unknown') {
         log?.call(
           'Connection rejected: no valid userId or session unresolved. Aborting to preserve multi-tenant isolation.',
@@ -130,6 +202,7 @@ class MqttGatewayService {
 
       final lwtTopic = 'healthkicks/v1/users/$resolvedUserId/gateway-status';
       final lwtPayload = jsonEncode({
+        'user_uuid': resolvedUserId,
         'user_id': resolvedUserId,
         'state': 'offline',
         'gateway': 'mobile',
@@ -464,8 +537,44 @@ class MqttGatewayService {
   Future<void> publishGatewayStatus({required bool online}) =>
       publishDeviceStatus(online: online);
 
+  /// Publishes gateway status on the user topic: `healthkicks/v1/users/{uid}/gateway-status`.
+  Future<void> publishUserGatewayStatus({
+    required bool online,
+    String? targetUserId,
+  }) async {
+    final log = onLog;
+    final uid = targetUserId ?? effectiveUserId;
+
+    if (!isConnected || _client == null || uid == null || uid.isEmpty) {
+      return;
+    }
+
+    try {
+      final topic = 'healthkicks/v1/users/$uid/gateway-status';
+      final payload = jsonEncode({
+        'user_uuid': uid,
+        'user_id': uid,
+        'state': online ? 'online' : 'offline',
+        'gateway': 'mobile',
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+      });
+
+      final builder = MqttClientPayloadBuilder();
+      builder.addString(payload);
+
+      _client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
+      log?.call(
+        'User gateway status ($uid -> ${online ? "online" : "offline"}) published to $topic',
+        isError: false,
+      );
+    } catch (e) {
+      log?.call('Error publishing user gateway status: $e', isError: false);
+    }
+  }
+
   void disconnect() {
     publishGatewayStatus(online: false);
+    publishUserGatewayStatus(online: false);
     _updatesSub?.cancel();
     _updatesSub = null;
     if (_client != null) {

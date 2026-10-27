@@ -506,6 +506,7 @@ class GatewayDashboardController extends ChangeNotifier {
         deviceId: deviceId,
         userId: currentUserId,
         credentialsRepository: _credentialsRepo!,
+        authService: authService,
         onLog: (msg, {bool isError = false}) {
           addLog('MQTT', msg, color: isError ? Colors.red : Colors.teal);
         },

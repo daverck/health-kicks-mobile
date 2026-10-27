@@ -20,6 +20,8 @@ enum AuthState {
 /// Authenticated user model on the mobile application side.
 class AuthUser {
   final int id;
+  final String? uuid;
+  final String? pseudonym;
   final String email;
   final String? name;
   final String? avatarUrl;
@@ -28,6 +30,8 @@ class AuthUser {
 
   const AuthUser({
     required this.id,
+    this.uuid,
+    this.pseudonym,
     required this.email,
     this.name,
     this.avatarUrl,
@@ -35,9 +39,14 @@ class AuthUser {
     this.isActive = true,
   });
 
+  String get effectiveUserUuid =>
+      (uuid != null && uuid!.isNotEmpty) ? uuid! : id.toString();
+
   factory AuthUser.fromJson(Map<String, dynamic> json) {
     return AuthUser(
       id: json['id'] as int,
+      uuid: json['uuid'] as String?,
+      pseudonym: json['pseudonym'] as String?,
       email: json['email'] as String,
       name: json['name'] as String?,
       avatarUrl: json['avatar_url'] as String?,
@@ -67,7 +76,7 @@ class AuthService extends ChangeNotifier {
   AuthUser? get currentUser => _currentUser;
 
   String? _tokenUserId;
-  String? get currentUserId => _currentUser?.id.toString() ?? _tokenUserId;
+  String? get currentUserId => _currentUser?.effectiveUserUuid ?? _tokenUserId;
 
   bool get isAdmin => _currentUser?.role.toLowerCase() == 'admin';
   bool get isClinician => _currentUser?.role.toLowerCase() == 'clinician';
@@ -445,7 +454,7 @@ class AuthService extends ChangeNotifier {
       _currentUser = AuthUser.fromJson(
         jsonDecode(response.body) as Map<String, dynamic>,
       );
-      _tokenUserId = _currentUser!.id.toString();
+      _tokenUserId = _currentUser!.effectiveUserUuid;
       notifyListeners();
       return true;
     } catch (e) {

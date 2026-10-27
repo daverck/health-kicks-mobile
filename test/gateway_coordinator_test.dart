@@ -104,6 +104,9 @@ class FakeMqttGatewayService implements MqttGatewayService {
   }
 
   @override
+  Future<void> publishUserGatewayStatus({required bool online, String? targetUserId}) async {}
+
+  @override
   Future<bool> connect({MqttLogCallback? onLog}) async => true;
 
   @override

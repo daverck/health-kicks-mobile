@@ -150,5 +150,19 @@ void main() {
       final userId = await service.getUserIdFromToken();
       expect(userId, equals('108'));
     });
+
+    test('parseUserId and getUserIdFromToken extract UUID string with hyphens from sub claim', () async {
+      const uuidString = '550e8400-e29b-41d4-a716-446655440000';
+      // payload = {"sub":"550e8400-e29b-41d4-a716-446655440000","role":"user"}
+      // base64Url of that is: eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJyb2xlIjoidXNlciJ9
+      const uuidJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJyb2xlIjoidXNlciJ9.mockSignature';
+
+      final parsed = TokenStorageService.parseUserId(uuidJwt);
+      expect(parsed, equals(uuidString));
+
+      await service.saveTokens(accessToken: uuidJwt);
+      final retrieved = await service.getUserIdFromToken();
+      expect(retrieved, equals(uuidString));
+    });
   });
 }

@@ -10,6 +10,7 @@ class IoTCredentials {
   final String iotEndpoint;
   final String region;
   final String? userId;
+  final String? userUuid;
 
   const IoTCredentials({
     required this.accessKeyId,
@@ -19,7 +20,20 @@ class IoTCredentials {
     required this.iotEndpoint,
     required this.region,
     this.userId,
+    this.userUuid,
   });
+
+  static final RegExp _uuidRegex = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
+  /// Returns true if [value] is a valid UUID string (8-4-4-4-12 hex).
+  static bool isUuid(String? value) =>
+      value != null && _uuidRegex.hasMatch(value.trim());
+
+  /// Returns the effective UUID if available, otherwise falls back to userId.
+  String? get effectiveUserUuid =>
+      (userUuid != null && userUuid!.isNotEmpty) ? userUuid : userId;
 
   /// Indicates whether credentials are expired or about to expire.
   /// A 5-minute (300 seconds) safety margin is applied to anticipate
@@ -34,7 +48,11 @@ class IoTCredentials {
   factory IoTCredentials.fromJson(Map<String, dynamic> json) {
     final rawEndpoint = (json['iot_endpoint'] as String?)?.trim() ?? '';
     final rawRegion = (json['region'] as String?)?.trim() ?? '';
+    final rawUserUuid = (json['user_uuid'] != null) ? json['user_uuid'].toString() : null;
     final rawUserId = (json['user_id'] != null) ? json['user_id'].toString() : null;
+
+    final resolvedUuid = rawUserUuid ?? (isUuid(rawUserId) ? rawUserId : null);
+    final resolvedUserId = rawUserId ?? rawUserUuid;
 
     return IoTCredentials(
       accessKeyId: json['access_key_id'] as String,
@@ -43,7 +61,8 @@ class IoTCredentials {
       expiration: DateTime.parse(json['expiration'] as String),
       iotEndpoint: rawEndpoint.isNotEmpty ? rawEndpoint : AppConfig.awsIotEndpoint,
       region: rawRegion.isNotEmpty ? rawRegion : AppConfig.awsRegion,
-      userId: rawUserId,
+      userId: resolvedUserId,
+      userUuid: resolvedUuid,
     );
   }
 
@@ -57,11 +76,12 @@ class IoTCredentials {
       'iot_endpoint': iotEndpoint,
       'region': region,
       if (userId != null) 'user_id': userId,
+      if (userUuid != null) 'user_uuid': userUuid,
     };
   }
 
   @override
   String toString() {
-    return 'IoTCredentials(accessKeyId: $accessKeyId, endpoint: $iotEndpoint, region: $region, expiration: $expiration, isExpired: $isExpired, userId: $userId)';
+    return 'IoTCredentials(accessKeyId: $accessKeyId, endpoint: $iotEndpoint, region: $region, expiration: $expiration, isExpired: $isExpired, userId: $userId, userUuid: $userUuid)';
   }
 }
