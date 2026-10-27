@@ -1,7 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/models/activity_detection_model.dart';
 import 'package:healthkicks_mobile/models/imu_reading_model.dart';
+import 'package:healthkicks_mobile/models/studio_session_model.dart';
 import 'package:healthkicks_mobile/services/hitl/hitl_coordinator.dart';
+import 'package:healthkicks_mobile/services/mqtt/mqtt_gateway_service.dart';
+
+class FakeMqttGatewayService implements MqttGatewayService {
+  final List<StudioSessionModel> publishedSessions = [];
+
+  @override
+  Future<void> publishStudioSession(StudioSessionModel session) async {
+    publishedSessions.add(session);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 void main() {
   group('HitlCoordinator', () {
@@ -97,7 +111,18 @@ void main() {
       coordinator.dismissItem(registered.id);
       expect(coordinator.itemCount, equals(0));
     });
-    test('confirmAndPublish marks item as synchronized', () async {
+
+    test('updates services dynamically via updateServices', () {
+      final fakeMqtt = FakeMqttGatewayService();
+      expect(coordinator.mqttService, isNull);
+
+      coordinator.updateServices(mqttService: fakeMqtt);
+      expect(coordinator.mqttService, equals(fakeMqtt));
+    });
+
+    test('confirmAndPublish publishes to MQTT using item ID and marks item as synchronized', () async {
+      final fakeMqtt = FakeMqttGatewayService();
+      coordinator.updateServices(mqttService: fakeMqtt);
       await coordinator.setHitlActive(true);
 
       final registered = coordinator.registerDetection(const ActivityDetectionModel(
@@ -115,8 +140,9 @@ void main() {
       expect(result, isTrue);
       expect(coordinator.itemCount, equals(1));
       expect(coordinator.items.first.isSynchronized, isTrue);
+      expect(fakeMqtt.publishedSessions.length, equals(1));
+      expect(fakeMqtt.publishedSessions.first.sessionId, equals(registered.id));
+      expect(fakeMqtt.publishedSessions.first.isHitl, isTrue);
     });
   });
 }
-
-

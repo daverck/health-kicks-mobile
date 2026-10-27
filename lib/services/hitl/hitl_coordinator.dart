@@ -21,8 +21,8 @@ class HitlCoordinator extends ChangeNotifier {
   final List<HitlDetectionItem> _items = [];
   bool _isHitlActive = false;
 
-  final MqttGatewayService? _mqttService;
-  final StudioApiService? _studioApiService;
+  MqttGatewayService? _mqttService;
+  StudioApiService? _studioApiService;
   final void Function(String message, {bool isError})? onLog;
 
   HitlCoordinator({
@@ -35,6 +35,21 @@ class HitlCoordinator extends ChangeNotifier {
   bool get isHitlActive => _isHitlActive;
   List<HitlDetectionItem> get items => List.unmodifiable(_items);
   int get itemCount => _items.length;
+  MqttGatewayService? get mqttService => _mqttService;
+  StudioApiService? get studioApiService => _studioApiService;
+
+  /// Updates live backend and MQTT services when initialized or restored by the gateway.
+  void updateServices({
+    MqttGatewayService? mqttService,
+    StudioApiService? studioApiService,
+  }) {
+    if (mqttService != null) {
+      _mqttService = mqttService;
+    }
+    if (studioApiService != null) {
+      _studioApiService = studioApiService;
+    }
+  }
 
   /// Activates or deactivates HITL mode, optionally synchronizing with the connected footwear.
   Future<void> setHitlActive(bool active, {BleFootwearClient? bleClient}) async {
@@ -104,7 +119,7 @@ class HitlCoordinator extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Confirms and publishes the HITL session to AWS IoT Core (DynamoDB) and the backend API (Aurora).
+  /// Confirms and publishes the HITL session to AWS IoT Core (DynamoDB) and Aurora (via telemetry webhook).
   Future<bool> confirmAndPublish(
     HitlDetectionItem item, {
     required String deviceId,
@@ -118,26 +133,15 @@ class HitlCoordinator extends ChangeNotifier {
     try {
       final session = item.toStudioSession(
         deviceId: deviceId,
-        sessionId: _uuid.v4(),
+        sessionId: item.id,
         durationSec: 4.0,
       );
 
-      // 1. MQTT publication towards AWS IoT Core & DynamoDB
+      // MQTT publication towards AWS IoT Core & DynamoDB with is_hitl = true
+      // The Lambda flattener forwards telemetry to the backend ingest webhook
+      // which registers the session with the exact session.sessionId in Aurora.
       if (_mqttService != null) {
-        await _mqttService.publishStudioSession(session);
-      }
-
-      // 2. REST API registration if available
-      if (_studioApiService != null) {
-        try {
-          await _studioApiService.startStudioSession(
-            deviceId: deviceId,
-            label: session.label,
-            durationSec: session.durationSec,
-          );
-        } catch (_) {
-          // REST registration is best-effort; raw telemetry MQTT is primary source of truth
-        }
+        await _mqttService!.publishStudioSession(session);
       }
 
       onLog?.call(
@@ -168,4 +172,3 @@ class HitlCoordinator extends ChangeNotifier {
     notifyListeners();
   }
 }
-

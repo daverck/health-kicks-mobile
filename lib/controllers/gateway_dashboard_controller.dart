@@ -584,6 +584,11 @@ class GatewayDashboardController extends ChangeNotifier {
       },
     );
 
+    _hitlCoordinator.updateServices(
+      mqttService: _mqttService,
+      studioApiService: _studioApiService,
+    );
+
     _coordinator = GatewayCoordinator(
       bleClient: _bleClient!,
       mqttService: _mqttService!,
