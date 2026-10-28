@@ -6,11 +6,13 @@ class StudioActivityOption {
   final String key;
   final String label;
   final String emoji;
+  final bool isEdgeAi;
 
   const StudioActivityOption({
     required this.key,
     required this.label,
     required this.emoji,
+    this.isEdgeAi = true,
   });
 
   String get displayText => '$label $emoji';
@@ -45,29 +47,31 @@ class StudioSessionDialog extends StatefulWidget {
   });
 
   static const List<StudioActivityOption> defaultActivities = [
-    StudioActivityOption(key: 'walk', label: 'Marche', emoji: '🚶'),
-    StudioActivityOption(key: 'run', label: 'Course', emoji: '🏃'),
-    StudioActivityOption(key: 'stairs', label: 'Escaliers', emoji: '🪜'),
+    StudioActivityOption(key: 'walk', label: 'Marche', emoji: '🚶', isEdgeAi: true),
+    StudioActivityOption(key: 'run', label: 'Course', emoji: '🏃', isEdgeAi: true),
+    StudioActivityOption(key: 'stairs', label: 'Escaliers', emoji: '🪜', isEdgeAi: true),
     StudioActivityOption(
-        key: 'stairs_up', label: 'Escaliers (Montée)', emoji: '↗️'),
+        key: 'stairs_up', label: 'Escaliers (Montée)', emoji: '↗️', isEdgeAi: true),
     StudioActivityOption(
-        key: 'stairs_down', label: 'Escaliers (Descente)', emoji: '↘️'),
-    StudioActivityOption(key: 'idle', label: 'Repos / Assis', emoji: '🪑'),
+        key: 'stairs_down', label: 'Escaliers (Descente)', emoji: '↘️', isEdgeAi: true),
+    StudioActivityOption(key: 'idle', label: 'Repos / Assis', emoji: '🪑', isEdgeAi: true),
     StudioActivityOption(
-        key: 'sit_down', label: "S'asseoir (Transition)", emoji: '🪑'),
-    StudioActivityOption(key: 'jump', label: 'Saut', emoji: '🦘'),
+        key: 'sit_down', label: "S'asseoir (Transition)", emoji: '🪑', isEdgeAi: true),
     StudioActivityOption(
-        key: 'stumble_recover', label: 'Trébuchement rattrapé', emoji: '⚠️'),
+        key: 'stand_up', label: 'Se lever (Transition)', emoji: '🧍', isEdgeAi: true),
+    StudioActivityOption(key: 'jump', label: 'Saut', emoji: '🦘', isEdgeAi: false),
     StudioActivityOption(
-        key: 'fall_forward', label: 'Chute avant', emoji: '⤵️'),
+        key: 'stumble_recover', label: 'Trébuchement rattrapé', emoji: '⚠️', isEdgeAi: true),
     StudioActivityOption(
-        key: 'fall_backward', label: 'Chute arrière', emoji: '⤴️'),
+        key: 'fall_forward', label: 'Chute avant', emoji: '⤵️', isEdgeAi: true),
     StudioActivityOption(
-        key: 'fall_lateral', label: 'Chute latérale', emoji: '↔️'),
+        key: 'fall_backward', label: 'Chute arrière', emoji: '⤴️', isEdgeAi: true),
     StudioActivityOption(
-        key: 'fall_recovery', label: 'Chute relevée', emoji: '🔄'),
+        key: 'fall_lateral', label: 'Chute latérale', emoji: '↔️', isEdgeAi: true),
     StudioActivityOption(
-        key: 'custom', label: 'Autre / Personnalisé', emoji: '🏷️'),
+        key: 'fall_recovery', label: 'Chute relevée', emoji: '🔄', isEdgeAi: true),
+    StudioActivityOption(
+        key: 'custom', label: 'Autre / Personnalisé', emoji: '🏷️', isEdgeAi: false),
   ];
 
   static const double fixedDurationSec = 5.0;
@@ -173,6 +177,28 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
     );
   }
 
+  Widget _buildActivityCategoryBadge(bool isEdgeAi) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: isEdgeAi ? const Color(0xFFE8F5E9) : const Color(0xFFF3E5F5),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: isEdgeAi ? const Color(0xFFA5D6A7) : const Color(0xFFCE93D8),
+          width: 0.8,
+        ),
+      ),
+      child: Text(
+        isEdgeAi ? '⚡ Edge AI' : '🧪 R&D',
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: isEdgeAi ? const Color(0xFF1B5E20) : const Color(0xFF4A148C),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -206,6 +232,7 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
             DropdownButtonFormField<String>(
               key: ValueKey(_selectedActivityKey),
               initialValue: _selectedActivityKey,
+              isExpanded: true,
               decoration: InputDecoration(
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -216,7 +243,19 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
               items: StudioSessionDialog.defaultActivities.map((opt) {
                 return DropdownMenuItem<String>(
                   value: opt.key,
-                  child: Text(opt.displayText),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          opt.displayText,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildActivityCategoryBadge(opt.isEdgeAi),
+                    ],
+                  ),
                 );
               }).toList(),
               onChanged: (val) {
@@ -250,8 +289,8 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
                       : option.label;
 
                   return SizedBox(
-                    width: 120,
-                    height: 56,
+                    width: 126,
+                    height: 58,
                     child: Material(
                       color: isSelected
                           ? theme.colorScheme.primaryContainer
@@ -264,7 +303,7 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
                           _selectedActivityKey = key;
                         }),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
@@ -273,16 +312,35 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
                                   : theme.colorScheme.outlineVariant,
                             ),
                           ),
-                          child: Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text(option.emoji),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  label,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.labelMedium,
+                              Row(
+                                children: [
+                                  Text(option.emoji),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      label,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.labelMedium?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                option.isEdgeAi ? '⚡ Edge AI' : '🧪 R&D',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: option.isEdgeAi
+                                      ? const Color(0xFF2E7D32)
+                                      : const Color(0xFF6A1B9A),
                                 ),
                               ),
                             ],
