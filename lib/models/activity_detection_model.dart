@@ -40,6 +40,7 @@ class ActivityDetectionModel {
       case 'sit_down':
       case 'sit':
         return ActivityCategory.sedentary;
+      case 'stand_up':
       case 'walk':
       case 'walking':
       case 'run':
@@ -130,6 +131,8 @@ class ActivityDetectionModel {
         return 'stairs_down';
       case 0x05:
         return 'sit_down';
+      case BleConstants.stateCodeStandUp:
+        return 'stand_up';
       case 0x10:
         return 'fall_forward';
       case 0x11:

@@ -71,6 +71,7 @@ class BleConstants {
   static const int stateCodeStairsUp = 0x03;
   static const int stateCodeStairsDown = 0x04;
   static const int stateCodeSitDown = 0x05;
+  static const int stateCodeStandUp = 0x06;
   static const int stateCodeFallForward = 0x10;
   static const int stateCodeFallBackward = 0x11;
   static const int stateCodeFallLateral = 0x12;
