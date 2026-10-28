@@ -78,7 +78,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Scroll dropdown to reveal 'custom' at the bottom of the list
-      await tester.drag(find.byType(Scrollable).last, const Offset(0, -300));
+      await tester.drag(find.byType(Scrollable).last, const Offset(0, -800));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Autre / Personnalisé 🏷️').last);
