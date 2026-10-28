@@ -175,6 +175,12 @@ class AppLocalizations {
       case 'sit_down':
       case 'sit':
         return translate('evt_sit_down');
+      case 'lying_supine':
+        return translate('evt_lying_supine');
+      case 'lying_prone':
+        return translate('evt_lying_prone');
+      case 'lying_lateral':
+        return translate('evt_lying_lateral');
       case 'jump':
         return translate('evt_jump');
       case 'activity_transition':
@@ -291,6 +297,9 @@ class AppLocalizations {
       'evt_calibration': 'Calibration des capteurs',
       'evt_idle': 'Immobile',
       'evt_sit_down': 'Position assise',
+      'evt_lying_supine': 'Couché dorsal',
+      'evt_lying_prone': 'Couché frontal',
+      'evt_lying_lateral': 'Couché latéral',
       'evt_jump': 'Saut',
       'evt_activity_transition': 'Transition d\'activité',
     },
@@ -400,6 +409,9 @@ class AppLocalizations {
       'evt_calibration': 'Sensor calibration',
       'evt_idle': 'Idle',
       'evt_sit_down': 'Seated',
+      'evt_lying_supine': 'Lying supine',
+      'evt_lying_prone': 'Lying prone',
+      'evt_lying_lateral': 'Lying lateral',
       'evt_jump': 'Jump',
       'evt_activity_transition': 'Activity transition',
     },
@@ -509,6 +521,9 @@ class AppLocalizations {
       'evt_calibration': 'Sensorkalibratie',
       'evt_idle': 'Stilstaand / Zittend',
       'evt_sit_down': 'Zittend',
+      'evt_lying_supine': 'Rugligging',
+      'evt_lying_prone': 'Buikligging',
+      'evt_lying_lateral': 'Zijligging',
       'evt_jump': 'Sprong',
       'evt_activity_transition': 'Activiteitsovergang',
     },
@@ -618,6 +633,9 @@ class AppLocalizations {
       'evt_calibration': 'Calibración de sensores',
       'evt_idle': 'En reposo / Sentado',
       'evt_sit_down': 'Sentado',
+      'evt_lying_supine': 'Decúbito supino',
+      'evt_lying_prone': 'Decúbito prono',
+      'evt_lying_lateral': 'Decúbito lateral',
       'evt_jump': 'Salto',
       'evt_activity_transition': 'Transición de actividad',
     },
@@ -727,6 +745,9 @@ class AppLocalizations {
       'evt_calibration': 'Sensorkalibrierung',
       'evt_idle': 'Ruhe / Sitzen',
       'evt_sit_down': 'Sitzend',
+      'evt_lying_supine': 'Rückenlage',
+      'evt_lying_prone': 'Bauchlage',
+      'evt_lying_lateral': 'Seitenlage',
       'evt_jump': 'Sprung',
       'evt_activity_transition': 'Aktivitätsübergang',
     },
@@ -835,6 +856,9 @@ class AppLocalizations {
       'evt_calibration': 'معايرة الحساسات',
       'evt_idle': 'راحة / جلوس',
       'evt_sit_down': 'جالس',
+      'evt_lying_supine': 'استلقاء على الظهر',
+      'evt_lying_prone': 'استلقاء على البطن',
+      'evt_lying_lateral': 'استلقاء جانبي',
       'evt_jump': 'قفز',
       'evt_activity_transition': 'تغير النشاط',
     },
@@ -942,6 +966,9 @@ class AppLocalizations {
       'evt_calibration': '传感器校准',
       'evt_idle': '静止休息 / 坐姿',
       'evt_sit_down': '坐姿',
+      'evt_lying_supine': '仰卧',
+      'evt_lying_prone': '俯卧',
+      'evt_lying_lateral': '侧卧',
       'evt_jump': '跳跃',
       'evt_activity_transition': '活动状态转换',
     },

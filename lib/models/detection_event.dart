@@ -192,6 +192,12 @@ class DetectionEvent {
       case 'sit_down':
       case 'sit':
         return 'Position assise';
+      case 'lying_supine':
+        return 'Couché dorsal';
+      case 'lying_prone':
+        return 'Couché frontal';
+      case 'lying_lateral':
+        return 'Couché latéral';
       case 'jump':
         return 'Saut';
       case 'activity_transition':
@@ -233,7 +239,9 @@ class DetectionEvent {
       case EventSeverity.warning:
         return Icons.error_outline_rounded;
       case EventSeverity.info:
-        if (eventType.contains('walk') || eventType.contains('run')) {
+        if (eventType.startsWith('lying_') || eventType == 'lie_down') {
+          return Icons.bed_rounded;
+        } else if (eventType.contains('walk') || eventType.contains('run')) {
           return Icons.directions_walk_rounded;
         } else if (eventType.contains('stairs')) {
           return Icons.stairs_rounded;

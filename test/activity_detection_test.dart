@@ -147,6 +147,10 @@ void main() {
         0x03: 'stairs_up',
         0x04: 'stairs_down',
         0x05: 'sit_down',
+        0x06: 'stand_up',
+        0x07: 'lying_supine',
+        0x08: 'lying_prone',
+        0x09: 'lying_lateral',
         0x10: 'fall_forward',
         0x11: 'fall_backward',
         0x12: 'fall_lateral',
@@ -167,9 +171,12 @@ void main() {
         final model = ActivityDetectionModel.fromBytes(byteData.buffer.asUint8List());
         expect(model.stateCode, equals(entry.key));
         expect(model.eventType, equals(entry.value));
-        if (entry.key == 0x00 || entry.key == 0x05) {
+        if (entry.key == 0x00 || entry.key == 0x05 || entry.key == 0x07 || entry.key == 0x08 || entry.key == 0x09) {
           expect(model.activityCategory, ActivityCategory.sedentary);
           expect(model.isSedentary, isTrue);
+        }
+        if (entry.key >= 0x07 && entry.key <= 0x09) {
+          expect(model.isLying, isTrue);
         }
         if (entry.key == 0x13) {
           expect(model.isFallRecovery, isTrue);

@@ -115,6 +115,27 @@ class ActivityVisualMeta {
           color: const Color(0xFF059669), // Emerald 600
         );
 
+      case 'lying_supine':
+        return ActivityVisualMeta(
+          label: tr('lying_supine', 'Couché dorsal'),
+          icon: Icons.bed_rounded,
+          color: const Color(0xFF6366F1), // Indigo 500
+        );
+
+      case 'lying_prone':
+        return ActivityVisualMeta(
+          label: tr('lying_prone', 'Couché frontal'),
+          icon: Icons.bed_rounded,
+          color: const Color(0xFF8B5CF6), // Purple 500
+        );
+
+      case 'lying_lateral':
+        return ActivityVisualMeta(
+          label: tr('lying_lateral', 'Couché latéral'),
+          icon: Icons.bed_rounded,
+          color: const Color(0xFFA855F7), // Purple 400
+        );
+
       case 'jump':
         return ActivityVisualMeta(
           label: tr('jump', 'Saut'),

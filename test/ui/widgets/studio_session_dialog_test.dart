@@ -30,10 +30,10 @@ void main() {
       expect(lieDown.isEdgeAi, isFalse);
 
       final lyingSupine = activities.firstWhere((a) => a.key == 'lying_supine');
-      expect(lyingSupine.isEdgeAi, isFalse);
+      expect(lyingSupine.isEdgeAi, isTrue);
 
       final lyingProne = activities.firstWhere((a) => a.key == 'lying_prone');
-      expect(lyingProne.isEdgeAi, isFalse);
+      expect(lyingProne.isEdgeAi, isTrue);
 
       final lyingLateral = activities.firstWhere((a) => a.key == 'lying_lateral');
       expect(lyingLateral.isEdgeAi, isFalse);

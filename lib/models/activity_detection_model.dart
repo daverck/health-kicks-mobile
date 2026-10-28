@@ -16,6 +16,7 @@ class ActivityDetectionModel {
   final bool isOfflineBuffered;
 
   bool get isSeated => eventType == 'sit_down';
+  bool get isLying => eventType.startsWith('lying_');
 
   bool get isSedentary => activityCategory == ActivityCategory.sedentary;
 
@@ -39,6 +40,10 @@ class ActivityDetectionModel {
       case 'idle':
       case 'sit_down':
       case 'sit':
+      case 'lying_supine':
+      case 'lying_prone':
+      case 'lying_lateral':
+      case 'lie_down':
         return ActivityCategory.sedentary;
       case 'stand_up':
       case 'walk':
@@ -133,6 +138,12 @@ class ActivityDetectionModel {
         return 'sit_down';
       case BleConstants.stateCodeStandUp:
         return 'stand_up';
+      case BleConstants.stateCodeLyingSupine:
+        return 'lying_supine';
+      case BleConstants.stateCodeLyingProne:
+        return 'lying_prone';
+      case BleConstants.stateCodeLyingLateral:
+        return 'lying_lateral';
       case 0x10:
         return 'fall_forward';
       case 0x11:
