@@ -131,8 +131,11 @@ class HitlCoordinator extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final normalizedDeviceId = deviceId.startsWith('HealthKicks-')
+          ? deviceId.replaceFirst('HealthKicks-', '')
+          : deviceId;
       final session = item.toStudioSession(
-        deviceId: deviceId,
+        deviceId: normalizedDeviceId,
         sessionId: item.id,
         durationSec: 4.0,
       );

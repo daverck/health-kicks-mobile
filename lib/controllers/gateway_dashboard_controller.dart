@@ -867,7 +867,7 @@ class GatewayDashboardController extends ChangeNotifier {
   }
 
   Future<bool> confirmHitlItem(HitlDetectionItem item) async {
-    return _hitlCoordinator.confirmAndPublish(item, deviceId: targetDeviceId);
+    return _hitlCoordinator.confirmAndPublish(item, deviceId: deviceId);
   }
 
   Future<void> calibrateSensor() async {
