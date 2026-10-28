@@ -25,6 +25,18 @@ void main() {
 
       final custom = activities.firstWhere((a) => a.key == 'custom');
       expect(custom.isEdgeAi, isFalse);
+
+      final lieDown = activities.firstWhere((a) => a.key == 'lie_down');
+      expect(lieDown.isEdgeAi, isFalse);
+
+      final lyingSupine = activities.firstWhere((a) => a.key == 'lying_supine');
+      expect(lyingSupine.isEdgeAi, isFalse);
+
+      final lyingProne = activities.firstWhere((a) => a.key == 'lying_prone');
+      expect(lyingProne.isEdgeAi, isFalse);
+
+      final lyingLateral = activities.firstWhere((a) => a.key == 'lying_lateral');
+      expect(lyingLateral.isEdgeAi, isFalse);
     });
 
     testWidgets('renders sit_down option and Edge AI tag in dropdown', (WidgetTester tester) async {
