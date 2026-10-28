@@ -263,7 +263,7 @@ class BurstReassembler {
         final computedCrc = Crc32.compute(_rawPayloadBytes);
         final isCrcValid = (computedCrc == _announcedCrc32);
 
-        return BurstReassemblyResult(
+        final result = BurstReassemblyResult(
           isCompleted: true,
           isCrcValid: isCrcValid,
           totalAnnounced: _totalSamplesAnnounced,
@@ -271,6 +271,8 @@ class BurstReassembler {
           readings: List.unmodifiable(_collectedReadings),
           errorMessage: isCrcValid ? null : 'CRC32 integrity check failed (expected: $_announcedCrc32, computed: $computedCrc)',
         );
+        reset();
+        return result;
 
       default:
         return null;

@@ -532,5 +532,45 @@ void main() {
       expect(result.isCrcValid, isTrue);
       expect(result.readings.length, equals(10));
     });
+
+    test('Automatically resets internal state upon completing a burst so consecutive bursts do not accumulate', () {
+      final reassembler = BurstReassembler();
+
+      // Create a 1-frame packet
+      final frameBytes = Uint8List(14);
+      final fData = ByteData.sublistView(frameBytes);
+      fData.setUint16(0, 100, Endian.big);
+      fData.setInt16(2, 10, Endian.big);
+      fData.setInt16(4, 20, Endian.big);
+      fData.setInt16(6, 30, Endian.big);
+
+      final pData = ByteData(4 + 14);
+      pData.setUint8(0, BleConstants.packetTypeDataChunk);
+      pData.setUint16(1, 0, Endian.big);
+      pData.setUint8(3, 14);
+      for (int i = 0; i < 14; i++) {
+        pData.setUint8(4 + i, frameBytes[i]);
+      }
+
+      final pEnd = ByteData(12);
+      pEnd.setUint8(0, BleConstants.packetTypeEndOfBurst);
+      pEnd.setUint16(1, 1, Endian.big);
+      pEnd.setUint32(4, 1, Endian.big);
+      pEnd.setUint32(8, Crc32.compute(frameBytes), Endian.big);
+
+      // Burst 1
+      reassembler.processPacket(pData.buffer.asUint8List());
+      final res1 = reassembler.processPacket(pEnd.buffer.asUint8List());
+      expect(res1, isNotNull);
+      expect(res1!.framesRecovered, equals(1));
+      expect(res1.isCrcValid, isTrue);
+
+      // Burst 2 without manual reset
+      reassembler.processPacket(pData.buffer.asUint8List());
+      final res2 = reassembler.processPacket(pEnd.buffer.asUint8List());
+      expect(res2, isNotNull);
+      expect(res2!.framesRecovered, equals(1)); // Must NOT be 2!
+      expect(res2.isCrcValid, isTrue);
+    });
   });
 }

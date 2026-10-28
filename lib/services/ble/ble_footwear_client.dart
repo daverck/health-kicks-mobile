@@ -134,6 +134,9 @@ class BleFootwearClient {
       if (bytes.isNotEmpty) {
         final statusMsg = utf8.decode(bytes, allowMalformed: true).trim();
         onLog?.call('Studio Control notification (0004): "$statusMsg"', isError: false);
+        if (statusMsg.startsWith('FINISHED') || statusMsg.startsWith('START')) {
+          _burstReassembler.reset();
+        }
         _studioStatusController.add(statusMsg);
       }
     });
