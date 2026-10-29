@@ -153,10 +153,6 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
   }
 
   void _showStudioSessionDialog() {
-    final isConnected = _controller.bleClient != null &&
-        (_controller.bleStatus == BleConnectionStatus.ready || _controller.bleStatus == BleConnectionStatus.connected) &&
-        _controller.bleClient!.hasStudioControl;
-
     if (!_controller.isSensorCalibrated) {
       _showUncalibratedWarningDialog();
       return;
@@ -176,8 +172,18 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           customLabel: customLabel,
         ),
         onStartSession: ({required String label, required double durationSec}) async {
-          if (!isConnected) {
+          final currentlyConnected = _controller.bleClient != null &&
+              (_controller.bleStatus == BleConnectionStatus.ready || _controller.bleStatus == BleConnectionStatus.connected) &&
+              _controller.bleClient!.hasStudioControl;
+          if (!currentlyConnected) {
             _controller.addLog('STUDIO', 'Chaussure non connectée ou service Studio indisponible.', color: Colors.red);
+            return false;
+          }
+          if (!_controller.isSensorCalibrated) {
+            _controller.addLog('STUDIO', 'Enregistrement annulé : le capteur d\'assiette n\'a pas encore été calibré.', color: Colors.orange);
+            if (mounted) {
+              _showUncalibratedWarningDialog();
+            }
             return false;
           }
           if (mounted) {
@@ -185,7 +191,13 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           }
           try {
             final recordingFuture = _showActiveRecordingDialog(label: label, durationSec: durationSec);
-            await _controller.triggerStudioSession(label: label, durationSec: durationSec);
+            final started = await _controller.triggerStudioSession(label: label, durationSec: durationSec);
+            if (!started) {
+              if (mounted && _controller.isRecordingDialogVisible) {
+                Navigator.of(context, rootNavigator: true).pop(false);
+              }
+              return false;
+            }
             return await recordingFuture;
           } catch (e) {
             if (mounted) {

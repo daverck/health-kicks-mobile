@@ -585,7 +585,6 @@ class GatewayDashboardController extends ChangeNotifier {
     if (_bleClient == null || _mqttService == null) return;
 
     _coordinator?.stopRouting(notifyOffline: false);
-    setSensorCalibrated(false);
     _studioSavedSub?.cancel();
     _remoteStudioCommandSub?.cancel();
 
@@ -645,6 +644,7 @@ class GatewayDashboardController extends ChangeNotifier {
     addLog('BLE', 'Appareil connecté : ${device.platformName} (MTU: $_mtu octets)');
 
     try {
+      setSensorCalibrated(false);
       _bleClient?.dispose();
       _bleClient = BleFootwearClient(
         device: device,
@@ -811,7 +811,7 @@ class GatewayDashboardController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> triggerStudioSession({
+  Future<bool> triggerStudioSession({
     required String label,
     required double durationSec,
   }) async {
@@ -820,12 +820,12 @@ class GatewayDashboardController extends ChangeNotifier {
 
     if (!isConnected) {
       addLog('STUDIO', 'Chaussure non connectée ou service Studio indisponible.', color: Colors.red);
-      return;
+      return false;
     }
 
     if (!_isSensorCalibrated) {
       addLog('STUDIO', 'Enregistrement annulé : le capteur d\'assiette n\'a pas encore été calibré.', color: Colors.orange);
-      return;
+      return false;
     }
 
     addLog('STUDIO', 'Démarrage session Studio (${durationSec.toStringAsFixed(1)}s, label: $label)...');
@@ -839,7 +839,9 @@ class GatewayDashboardController extends ChangeNotifier {
         await _mqttService!.connect();
       }
 
-      _setupCoordinator();
+      if (_coordinator == null) {
+        _setupCoordinator();
+      }
 
       if (_coordinator != null) {
         addLog('STUDIO', 'Réservation REST de la session auprès du backend FastAPI (/commands/studio/start)...');
@@ -879,8 +881,10 @@ class GatewayDashboardController extends ChangeNotifier {
         );
       }
       addLog('STUDIO', 'Ordre START envoyé à la chaussure. En attente du flux burst...', color: Colors.indigo);
+      return true;
     } catch (e) {
       addLog('STUDIO', 'Échec lancement session Studio : $e', color: Colors.red);
+      return false;
     }
   }
 
