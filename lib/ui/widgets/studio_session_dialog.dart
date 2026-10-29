@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -20,7 +21,7 @@ class StudioActivityOption {
 
 /// Dialog allowing clinician/admin to configure activity type and duration for Studio recording sessions.
 class StudioSessionDialog extends StatefulWidget {
-  final Future<void> Function({
+  final Future<dynamic> Function({
     required String label,
     required double durationSec,
   }) onStartSession;
@@ -92,6 +93,8 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
   late String _selectedActivityKey;
   late final TextEditingController _customLabelController;
   List<String> _recentActivityKeys = [];
+  bool _isStarting = false;
+  String? _successMessage;
 
   @override
   void initState() {
@@ -165,6 +168,12 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
   }
 
   Future<void> _onConfirm() async {
+    if (_isStarting) return;
+    setState(() {
+      _isStarting = true;
+      _successMessage = null;
+    });
+
     String label = _selectedActivityKey;
     final customText = _customLabelController.text.trim();
     if (_selectedActivityKey == 'custom') {
@@ -178,11 +187,23 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
       customLabel: customText,
     );
 
-    Navigator.of(context).pop();
-    await widget.onStartSession(
-      label: label,
-      durationSec: StudioSessionDialog.fixedDurationSec,
-    );
+    try {
+      final result = await widget.onStartSession(
+        label: label,
+        durationSec: StudioSessionDialog.fixedDurationSec,
+      );
+      if (result != false && mounted) {
+        setState(() {
+          _successMessage = 'Capture réalisée avec succès';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isStarting = false;
+        });
+      }
+    }
   }
 
   Widget _buildActivityCategoryBadge(bool isEdgeAi) {
@@ -389,17 +410,50 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
                 ),
               ],
             ),
+            if (_successMessage != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F5E9),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFA5D6A7)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle, size: 18, color: Color(0xFF2E7D32)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _successMessage!,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1B5E20),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Annuler'),
+          child: const Text('Fermer'),
         ),
         FilledButton.icon(
-          onPressed: _onConfirm,
-          icon: const Icon(Icons.play_arrow, size: 18),
+          onPressed: _isStarting ? null : _onConfirm,
+          icon: _isStarting
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.play_arrow, size: 18),
           label: const Text("Démarrer l'enregistrement"),
         ),
       ],

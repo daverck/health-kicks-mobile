@@ -1,8 +1,13 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/ui/widgets/studio_session_dialog.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   group('StudioSessionDialog', () {
     test('defaultActivities contains sit_down and stand_up options with correct Edge AI tags', () {
       const activities = StudioSessionDialog.defaultActivities;
@@ -89,5 +94,75 @@ void main() {
       expect(find.text('Saut 🦘'), findsOneWidget);
       expect(find.text('🧪 R&D'), findsOneWidget);
     });
+
+    testWidgets('displays Fermer button and pops dialog on tap', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => TextButton(
+                onPressed: () => showDialog<void>(
+                  context: ctx,
+                  builder: (_) => StudioSessionDialog(
+                    onStartSession: ({required String label, required double durationSec}) async {},
+                  ),
+                ),
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Fermer'), findsOneWidget);
+      expect(find.text('Annuler'), findsNothing);
+
+      await tester.tap(find.text('Fermer'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Fermer'), findsNothing);
+    });
+
+    testWidgets('keeps dialog open after capture and displays success message', (WidgetTester tester) async {
+      var callCount = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StudioSessionDialog(
+              initialActivityKey: 'walk',
+              onStartSession: ({required String label, required double durationSec}) async {
+                callCount++;
+                return true;
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Capture réalisée avec succès'), findsNothing);
+
+      // Tap start recording
+      await tester.tap(find.text("Démarrer l'enregistrement"));
+      await tester.pumpAndSettle();
+
+      expect(callCount, 1);
+      // Dialog remains mounted with success message
+      expect(find.text('Enregistrement Studio'), findsOneWidget);
+      expect(find.text('Capture réalisée avec succès'), findsOneWidget);
+      expect(find.text("Démarrer l'enregistrement"), findsOneWidget);
+
+      // Can immediately chain another capture
+      await tester.tap(find.text("Démarrer l'enregistrement"));
+      await tester.pumpAndSettle();
+
+      expect(callCount, 2);
+      expect(find.text('Capture réalisée avec succès'), findsOneWidget);
+    });
   });
 }
+

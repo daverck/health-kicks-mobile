@@ -118,35 +118,38 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
     super.dispose();
   }
 
-  void _showActiveRecordingDialog({
+  Future<bool> _showActiveRecordingDialog({
     required String label,
     required double durationSec,
-  }) {
-    if (_controller.isRecordingDialogVisible || !mounted || _controller.bleClient == null) return;
+  }) async {
+    if (_controller.isRecordingDialogVisible || !mounted || _controller.bleClient == null) return false;
     _controller.isRecordingDialogVisible = true;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StudioRecordingDialog(
-        label: label,
-        durationSec: durationSec,
-        studioStatusStream: _controller.bleClient!.studioStatusStream,
-        sessionSavedStream: _controller.coordinator?.studioSessionSavedStream,
-        connectionStatusStream: _controller.bleStatusStream,
-        onCancel: () async {
-          try {
-            await _controller.bleClient?.cancelStudioSession();
-          } catch (_) {}
-        },
-        onFinish: () async {
-          await _controller.bleClient?.finishStudioSession();
-        },
-      ),
-    ).then((_) {
+    try {
+      final result = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => StudioRecordingDialog(
+          label: label,
+          durationSec: durationSec,
+          studioStatusStream: _controller.bleClient!.studioStatusStream,
+          sessionSavedStream: _controller.coordinator?.studioSessionSavedStream,
+          connectionStatusStream: _controller.bleStatusStream,
+          onCancel: () async {
+            try {
+              await _controller.bleClient?.cancelStudioSession();
+            } catch (_) {}
+          },
+          onFinish: () async {
+            await _controller.bleClient?.finishStudioSession();
+          },
+        ),
+      );
+      return result == true;
+    } finally {
       _controller.isRecordingDialogVisible = false;
-    });
+    }
   }
 
   void _showStudioSessionDialog() {
@@ -173,21 +176,22 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           customLabel: customLabel,
         ),
         onStartSession: ({required String label, required double durationSec}) async {
-          // Note: StudioSessionDialog._onConfirm already popped itself, so do not pop dialogCtx here.
           if (!isConnected) {
             _controller.addLog('STUDIO', 'Chaussure non connectée ou service Studio indisponible.', color: Colors.red);
-            return;
+            return false;
           }
           if (mounted) {
             ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            _showActiveRecordingDialog(label: label, durationSec: durationSec);
           }
           try {
+            final recordingFuture = _showActiveRecordingDialog(label: label, durationSec: durationSec);
             await _controller.triggerStudioSession(label: label, durationSec: durationSec);
+            return await recordingFuture;
           } catch (e) {
             if (mounted) {
               ScaffoldMessenger.of(context).hideCurrentSnackBar();
             }
+            return false;
           }
         },
       ),

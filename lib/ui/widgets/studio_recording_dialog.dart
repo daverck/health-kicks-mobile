@@ -205,7 +205,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
       _autoDismissTimer?.cancel();
       _autoDismissTimer = Timer(const Duration(milliseconds: 1200), () {
         if (mounted && Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
+          Navigator.of(context).pop(false);
         }
       });
     } else if (status.startsWith('ERROR')) {
@@ -295,7 +295,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
     _autoDismissTimer?.cancel();
     _autoDismissTimer = Timer(const Duration(milliseconds: 1500), () {
       if (mounted) {
-        Navigator.of(context).pop();
+        Navigator.of(context).pop(true);
       }
     });
   }
@@ -408,7 +408,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
                     // Ignore cancel timeout / disconnection errors
                   } finally {
                     if (mounted && Navigator.of(context).canPop()) {
-                      Navigator.of(context).pop();
+                      Navigator.of(context).pop(false);
                     }
                   }
                 },
@@ -459,7 +459,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
               // Ignore cancel timeout
             } finally {
               if (mounted && Navigator.of(context).canPop()) {
-                Navigator.of(context).pop();
+                Navigator.of(context).pop(false);
               }
             }
           },
@@ -471,7 +471,7 @@ class _StudioRecordingDialogState extends State<StudioRecordingDialog> {
         FilledButton(
           onPressed: () {
             if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
+              Navigator.of(context).pop(false);
             }
           },
           child: const Text('Fermer'),
