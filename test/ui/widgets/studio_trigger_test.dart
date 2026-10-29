@@ -337,15 +337,21 @@ void main() {
       await tester.tap(find.text('Studio'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Enregistrement Studio'), findsOneWidget);
-      expect(find.text("Démarrer l'enregistrement"), findsOneWidget);
+      expect(find.text('Calibration requise'), findsOneWidget);
+      expect(find.text('Calibrer maintenant'), findsOneWidget);
 
-      // Tap confirm and verify only the dialog is popped, GatewayDashboardScreen remains mounted
-      await tester.tap(find.text("Démarrer l'enregistrement"));
+      // Tap Calibrer maintenant to open ImuCalibrationDialog
+      await tester.tap(find.text('Calibrer maintenant'));
+      await tester.pumpAndSettle();
+
+      expect(find.text("Calibration de l'Assiette"), findsOneWidget);
+
+      // Tap Annuler and verify dialogs are dismissed, GatewayDashboardScreen remains mounted
+      await tester.tap(find.text('Annuler'));
       await tester.pumpAndSettle();
 
       expect(find.text('Test Haptique'), findsOneWidget);
-      expect(find.text('Enregistrement Studio'), findsNothing);
+      expect(find.text('Calibration requise'), findsNothing);
     });
 
     testWidgets('Studio button is VISIBLE when role is "admin"',

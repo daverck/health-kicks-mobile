@@ -18,6 +18,7 @@ import '../widgets/recent_activities_card.dart';
 import '../widgets/step_counter_card.dart';
 import '../widgets/studio_recording_dialog.dart';
 import '../widgets/studio_session_dialog.dart';
+import '../widgets/imu_calibration_dialog.dart';
 import 'detection_events_history_screen.dart';
 import 'event_logs_screen.dart';
 import 'settings_screen.dart';
@@ -153,6 +154,11 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
         (_controller.bleStatus == BleConnectionStatus.ready || _controller.bleStatus == BleConnectionStatus.connected) &&
         _controller.bleClient!.hasStudioControl;
 
+    if (!_controller.isSensorCalibrated) {
+      _showUncalibratedWarningDialog();
+      return;
+    }
+
     showDialog<void>(
       context: context,
       builder: (dialogCtx) => StudioSessionDialog(
@@ -184,6 +190,49 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
             }
           }
         },
+      ),
+    );
+  }
+
+  void _showUncalibratedWarningDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        icon: const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 48),
+        title: const Text('Calibration requise'),
+        content: const Text(
+          'Le capteur d\'assiette de la chaussure n\'a pas encore été calibré pour cette session.\n\n'
+          'Une calibration de niveau est requise avant de pouvoir enregistrer une session Studio.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(),
+            child: const Text('Annuler'),
+          ),
+          FilledButton.icon(
+            icon: const Icon(Icons.compass_calibration_outlined),
+            label: const Text('Calibrer maintenant'),
+            onPressed: () {
+              Navigator.of(dialogCtx).pop();
+              _showCalibrationDialog();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCalibrationDialog() {
+    final activeBleClient = _controller.bleClient;
+    final isConnected = _controller.bleStatus == BleConnectionStatus.ready ||
+        _controller.bleStatus == BleConnectionStatus.connected;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => ImuCalibrationDialog(
+        onCalibrate: _controller.calibrateSensor,
+        isConnected: isConnected,
+        studioStatusStream: activeBleClient?.studioStatusStream,
       ),
     );
   }

@@ -209,4 +209,46 @@ void main() {
       controller.dispose();
     });
 });
+
+  group('GatewayDashboardController sensor calibration', () {
+    test('isSensorCalibrated defaults to false', () {
+      final controller = GatewayDashboardController();
+      expect(controller.isSensorCalibrated, isFalse);
+      controller.dispose();
+    });
+
+    test('setSensorCalibrated updates value and notifies listeners', () {
+      final controller = GatewayDashboardController();
+      var notifyCount = 0;
+      controller.addListener(() => notifyCount++);
+
+      controller.setSensorCalibrated(true);
+      expect(controller.isSensorCalibrated, isTrue);
+      expect(notifyCount, 1);
+
+      // Duplicate value does not re-notify
+      controller.setSensorCalibrated(true);
+      expect(notifyCount, 1);
+
+      controller.setSensorCalibrated(false);
+      expect(controller.isSensorCalibrated, isFalse);
+      expect(notifyCount, 2);
+
+      controller.dispose();
+    });
+
+    test('triggerStudioSession aborts when sensor is not calibrated', () async {
+      final controller = GatewayDashboardController();
+      expect(controller.isSensorCalibrated, isFalse);
+
+      await controller.triggerStudioSession(label: 'walk', durationSec: 5.0);
+
+      expect(
+        controller.logs.any((l) => l.message.contains('capteur') || l.message.contains('Chaussure non connectée')),
+        isTrue,
+      );
+      controller.dispose();
+    });
+  });
+
 }

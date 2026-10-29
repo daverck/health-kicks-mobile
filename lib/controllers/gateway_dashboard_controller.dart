@@ -83,6 +83,7 @@ class GatewayDashboardController extends ChangeNotifier {
   final StreamController<ActivityDetectionModel> _activityStreamController = StreamController<ActivityDetectionModel>.broadcast();
   DateTime? _lastInactivityToastTime;
   bool isRecordingDialogVisible = false;
+  bool _isSensorCalibrated = false;
   String _lastStudioActivityKey = 'walk';
   String _lastStudioCustomLabel = '';
   final List<LogEntry> _logs = [];
@@ -152,6 +153,14 @@ class GatewayDashboardController extends ChangeNotifier {
   List<LogEntry> get logs => _logs;
   String get lastStudioActivityKey => _lastStudioActivityKey;
   String get lastStudioCustomLabel => _lastStudioCustomLabel;
+  bool get isSensorCalibrated => _isSensorCalibrated;
+
+  void setSensorCalibrated(bool calibrated) {
+    if (_isSensorCalibrated != calibrated) {
+      _isSensorCalibrated = calibrated;
+      notifyListeners();
+    }
+  }
 
 
   @visibleForTesting
@@ -360,6 +369,7 @@ class GatewayDashboardController extends ChangeNotifier {
 
       addLog('BLE', 'Statut connexion : ${status.name}');
       if (status == BleConnectionStatus.disconnected || status == BleConnectionStatus.scanning) {
+        setSensorCalibrated(false);
         _studioSavedSub?.cancel();
         if (_coordinator != null) {
           _coordinator?.stopRouting();
@@ -572,6 +582,7 @@ class GatewayDashboardController extends ChangeNotifier {
     if (_bleClient == null || _mqttService == null) return;
 
     _coordinator?.stopRouting(notifyOffline: false);
+    setSensorCalibrated(false);
     _studioSavedSub?.cancel();
     _remoteStudioCommandSub?.cancel();
 
@@ -682,6 +693,11 @@ class GatewayDashboardController extends ChangeNotifier {
 
       _bleClient!.studioStatusStream.listen((statusMsg) {
         addLog('STUDIO', 'Signal d\'état : $statusMsg');
+        if (statusMsg.contains('CALIBRATION_OK')) {
+          setSensorCalibrated(true);
+        } else if (statusMsg.contains('CALIBRATION_ERROR')) {
+          setSensorCalibrated(false);
+        }
         if ((statusMsg.startsWith('COUNTDOWN') || statusMsg.startsWith('RECORDING')) && !isRecordingDialogVisible) {
           double dur = _coordinator?.currentStudioDurationSec ?? 5.0;
           if (statusMsg.startsWith('RECORDING')) {
@@ -801,6 +817,11 @@ class GatewayDashboardController extends ChangeNotifier {
 
     if (!isConnected) {
       addLog('STUDIO', 'Chaussure non connectée ou service Studio indisponible.', color: Colors.red);
+      return;
+    }
+
+    if (!_isSensorCalibrated) {
+      addLog('STUDIO', 'Enregistrement annulé : le capteur d\'assiette n\'a pas encore été calibré.', color: Colors.orange);
       return;
     }
 
@@ -1009,6 +1030,7 @@ class GatewayDashboardController extends ChangeNotifier {
       _odometerCoordinator.dispose();
       _surveillanceService.dispose();
     }
+    setSensorCalibrated(false);
     _studioSavedSub?.cancel();
     _remoteStudioCommandSub?.cancel();
     _coordinator?.stopRouting();
