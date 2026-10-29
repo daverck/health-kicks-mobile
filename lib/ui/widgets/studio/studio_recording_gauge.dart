@@ -31,6 +31,24 @@ class StudioRecordingGauge extends StatelessWidget {
     this.errorMessage,
   });
 
+  /// Computes a smooth color transition: Red -> Orange/Amber -> Green.
+  /// Reaches full green once progress reaches [greenThreshold] (default 65%).
+  static Color computeProgressColor(double progress, {double greenThreshold = 0.65}) {
+    if (greenThreshold <= 0.0) return const Color(0xFF10B981);
+    final clampedProgress = progress.clamp(0.0, 1.0);
+    final normalized = (clampedProgress / greenThreshold).clamp(0.0, 1.0);
+
+    const startColor = Colors.redAccent;
+    const midColor = Colors.orangeAccent;
+    const endColor = Color(0xFF10B981);
+
+    if (normalized <= 0.5) {
+      return Color.lerp(startColor, midColor, normalized * 2.0) ?? startColor;
+    } else {
+      return Color.lerp(midColor, endColor, (normalized - 0.5) * 2.0) ?? endColor;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -111,7 +129,7 @@ class StudioRecordingGauge extends StatelessWidget {
                 value: progress,
                 minHeight: 12,
                 backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                color: Colors.redAccent,
+                color: computeProgressColor(progress),
               ),
             ),
             const SizedBox(height: 12),

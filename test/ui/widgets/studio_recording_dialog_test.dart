@@ -486,5 +486,24 @@ void main() {
       expect(dialogPopped, isTrue);
       expect(find.text('Session Studio : walk'), findsNothing);
     });
-  });
+      test('StudioRecordingGauge.computeProgressColor smoothly transitions red to green at 65%', () {
+      final colorAt0 = StudioRecordingGauge.computeProgressColor(0.0);
+      expect(colorAt0.toARGB32(), Colors.redAccent.toARGB32());
+
+      // At half-threshold (~32.5%), should be orange/amber
+      final colorAtHalfway = StudioRecordingGauge.computeProgressColor(0.325);
+      expect(colorAtHalfway.toARGB32(), Colors.orangeAccent.toARGB32());
+
+      // At 65%, should reach full green
+      final colorAt65 = StudioRecordingGauge.computeProgressColor(0.65);
+      expect(colorAt65.toARGB32(), const Color(0xFF10B981).toARGB32());
+
+      // Beyond 65%, stays green
+      final colorAt80 = StudioRecordingGauge.computeProgressColor(0.80);
+      expect(colorAt80.toARGB32(), const Color(0xFF10B981).toARGB32());
+
+      final colorAt100 = StudioRecordingGauge.computeProgressColor(1.0);
+      expect(colorAt100.toARGB32(), const Color(0xFF10B981).toARGB32());
+    });
+});
 }
