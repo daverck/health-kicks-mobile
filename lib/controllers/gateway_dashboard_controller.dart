@@ -862,7 +862,15 @@ class GatewayDashboardController extends ChangeNotifier {
 
   Future<void> setHitlActive(bool active) async {
     final activeClient = _bleClientNotifier.value ?? _bleClient;
+    if (active) {
+      _recentActivities.clear();
+    }
     await _hitlCoordinator.setHitlActive(active, bleClient: activeClient);
+    notifyListeners();
+  }
+
+  void clearRecentActivities() {
+    _recentActivities.clear();
     notifyListeners();
   }
 

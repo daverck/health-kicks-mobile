@@ -187,5 +187,26 @@ void main() {
       expect(snackBarMessage, isNotNull);
       controller.dispose();
     });
-  });
+  
+    test('enabling HITL mode clears recentActivities history', () async {
+      final controller = GatewayDashboardController();
+
+      const walkDetection = ActivityDetectionModel(
+        stateCode: 0x01,
+        eventType: 'walk',
+        confidencePercent: 90,
+        timestampEpochSec: 1729000000,
+        isFall: false,
+        isHapticTriggered: false,
+      );
+      controller.handleActivityDetection(walkDetection);
+      expect(controller.recentActivities.length, equals(1));
+
+      await controller.setHitlActive(true);
+      expect(controller.recentActivities, isEmpty);
+      expect(controller.hitlCoordinator.isHitlActive, isTrue);
+
+      controller.dispose();
+    });
+});
 }

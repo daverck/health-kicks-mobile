@@ -229,7 +229,13 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
                   fit: BoxFit.scaleDown,
                   child: Switch(
                     value: isActive,
-                    onChanged: widget.onToggleHitl,
+                    onChanged: (val) async {
+                      if (val) {
+                        _notifier.clear();
+                      }
+                      widget.onToggleHitl?.call(val);
+                      setState(() {});
+                    },
                   ),
                 ),
               ),

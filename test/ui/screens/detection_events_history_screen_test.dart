@@ -277,6 +277,42 @@ void main() {
 
       expect(find.text('Mode HITL actif (File vide)'), findsOneWidget);
     });
+
+    testWidgets('Toggling HITL mode on clears previous events in history notifier', (tester) async {
+      final fakeService = FakeEventHistoryService(mockedEvents: sampleEvents);
+      final coordinator = HitlCoordinator();
+      bool hitlState = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DetectionEventsHistoryScreen(
+            service: fakeService,
+            hitlCoordinator: coordinator,
+            canUseHitl: true,
+            onToggleHitl: (val) {
+              hitlState = val;
+              coordinator.setHitlActive(val);
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Initially inactive, displaying sample nominal events
+      expect(find.text('Marche'), findsOneWidget);
+
+      // Tap HITL toggle Switch to activate
+      final switchFinder = find.byType(Switch);
+      expect(switchFinder, findsOneWidget);
+      await tester.tap(switchFinder);
+      await tester.pumpAndSettle();
+
+      expect(hitlState, isTrue);
+      expect(coordinator.isHitlActive, isTrue);
+      // Empty HITL state is now rendered
+      expect(find.text('Mode HITL actif (File vide)'), findsOneWidget);
+      expect(find.text('Marche'), findsNothing);
+    });
   });
 }
 
