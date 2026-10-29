@@ -154,6 +154,9 @@ class GatewayDashboardController extends ChangeNotifier {
   String get lastStudioActivityKey => _lastStudioActivityKey;
   String get lastStudioCustomLabel => _lastStudioCustomLabel;
   bool get isSensorCalibrated => _isSensorCalibrated;
+  bool get isBleConnected =>
+      _bleClient != null &&
+      (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected);
 
   void setSensorCalibrated(bool calibrated) {
     if (_isSensorCalibrated != calibrated) {

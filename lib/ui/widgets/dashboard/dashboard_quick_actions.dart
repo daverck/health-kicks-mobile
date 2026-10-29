@@ -5,12 +5,14 @@ class DashboardQuickActions extends StatelessWidget {
   final VoidCallback onSendTestHaptic;
   final bool isClinicianOrAdmin;
   final VoidCallback onOpenStudio;
+  final bool isConnected;
 
   const DashboardQuickActions({
     super.key,
     required this.onSendTestHaptic,
     required this.isClinicianOrAdmin,
     required this.onOpenStudio,
+    this.isConnected = true,
   });
 
   @override
@@ -21,7 +23,7 @@ class DashboardQuickActions extends StatelessWidget {
           child: ElevatedButton.icon(
             icon: const Icon(Icons.vibration),
             label: const Text('Test Haptique'),
-            onPressed: onSendTestHaptic,
+            onPressed: isConnected ? onSendTestHaptic : null,
           ),
         ),
         if (isClinicianOrAdmin) ...[
@@ -30,7 +32,7 @@ class DashboardQuickActions extends StatelessWidget {
             child: ElevatedButton.icon(
               icon: const Icon(Icons.play_arrow),
               label: const Text('Studio'),
-              onPressed: onOpenStudio,
+              onPressed: isConnected ? onOpenStudio : null,
             ),
           ),
         ],

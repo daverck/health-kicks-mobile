@@ -404,6 +404,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
                         onSendTestHaptic: _controller.sendTestHapticCommand,
                         isClinicianOrAdmin: isClinicianOrAdmin,
                         onOpenStudio: _showStudioSessionDialog,
+                        isConnected: _controller.isBleConnected,
                       ),
                     ],
                   ),

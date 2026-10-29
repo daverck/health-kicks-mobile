@@ -321,7 +321,7 @@ void main() {
       expect(find.text('Studio'), findsNothing);
     });
 
-    testWidgets('Studio button is VISIBLE when role is "clinician"',
+    testWidgets('Studio button is VISIBLE when role is "clinician" and buttons are disabled when disconnected',
         (WidgetTester tester) async {
       final authService = createAuthServiceWithRole('clinician');
 
@@ -331,30 +331,15 @@ void main() {
       expect(find.text('Test Haptique'), findsOneWidget);
       expect(find.text('Studio'), findsOneWidget);
 
-      // Scroll to Studio button to ensure it is within viewport and tap to open dialog
-      await tester.ensureVisible(find.text('Studio'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Studio'));
-      await tester.pumpAndSettle();
+      // Both buttons are disabled when BLE is disconnected
+      final hapticBtn = tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Test Haptique'));
+      expect(hapticBtn.onPressed, isNull);
 
-      expect(find.text('Calibration requise'), findsOneWidget);
-      expect(find.text('Calibrer maintenant'), findsOneWidget);
-
-      // Tap Calibrer maintenant to open ImuCalibrationDialog
-      await tester.tap(find.text('Calibrer maintenant'));
-      await tester.pumpAndSettle();
-
-      expect(find.text("Calibration de l'Assiette"), findsOneWidget);
-
-      // Tap Annuler and verify dialogs are dismissed, GatewayDashboardScreen remains mounted
-      await tester.tap(find.text('Annuler'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Test Haptique'), findsOneWidget);
-      expect(find.text('Calibration requise'), findsNothing);
+      final studioBtn = tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Studio'));
+      expect(studioBtn.onPressed, isNull);
     });
 
-    testWidgets('Studio button is VISIBLE when role is "admin"',
+    testWidgets('Studio button is VISIBLE when role is "admin" and buttons are disabled when disconnected',
         (WidgetTester tester) async {
       final authService = createAuthServiceWithRole('admin');
 
@@ -363,6 +348,13 @@ void main() {
 
       expect(find.text('Test Haptique'), findsOneWidget);
       expect(find.text('Studio'), findsOneWidget);
+
+      // Both buttons are disabled when BLE is disconnected
+      final hapticBtn = tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Test Haptique'));
+      expect(hapticBtn.onPressed, isNull);
+
+      final studioBtn = tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Studio'));
+      expect(studioBtn.onPressed, isNull);
     });
   });
 }
