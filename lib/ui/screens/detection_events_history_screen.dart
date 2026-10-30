@@ -162,7 +162,7 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
     final items = coord.items;
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: isActive
