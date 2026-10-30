@@ -41,7 +41,7 @@ void main() {
       expect(lyingProne.isEdgeAi, isTrue);
 
       final lyingLateral = activities.firstWhere((a) => a.key == 'lying_lateral');
-      expect(lyingLateral.isEdgeAi, isFalse);
+      expect(lyingLateral.isEdgeAi, isTrue);
 
       final stairs = activities.firstWhere((a) => a.key == 'stairs');
       expect(stairs.isEdgeAi, isFalse);
