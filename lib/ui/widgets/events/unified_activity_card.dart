@@ -31,6 +31,7 @@ class UnifiedActivityCard extends StatelessWidget {
     'lying_supine',
     'lying_prone',
     'lying_lateral',
+    'jump',
     'stairs_up',
     'stairs_down',
     'fall_forward',

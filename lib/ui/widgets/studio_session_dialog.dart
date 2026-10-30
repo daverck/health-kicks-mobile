@@ -68,7 +68,7 @@ class StudioSessionDialog extends StatefulWidget {
         key: 'lying_prone', label: 'Couché frontal', emoji: '🛌', isEdgeAi: true),
     StudioActivityOption(
         key: 'lying_lateral', label: 'Couché latéral', emoji: '🛌', isEdgeAi: false),
-    StudioActivityOption(key: 'jump', label: 'Saut', emoji: '🦘', isEdgeAi: false),
+    StudioActivityOption(key: 'jump', label: 'Saut', emoji: '🦘', isEdgeAi: true),
     StudioActivityOption(
         key: 'stumble_recover', label: 'Trébuchement rattrapé', emoji: '⚠️', isEdgeAi: true),
     StudioActivityOption(

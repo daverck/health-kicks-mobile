@@ -46,6 +46,7 @@ class ActivityDetectionModel {
       case 'lie_down':
         return ActivityCategory.sedentary;
       case 'stand_up':
+      case 'jump':
       case 'walk':
       case 'walking':
       case 'run':
@@ -144,6 +145,8 @@ class ActivityDetectionModel {
         return 'lying_prone';
       case BleConstants.stateCodeLyingLateral:
         return 'lying_lateral';
+      case BleConstants.stateCodeJump:
+        return 'jump';
       case 0x10:
         return 'fall_forward';
       case 0x11:

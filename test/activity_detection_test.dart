@@ -151,6 +151,7 @@ void main() {
         0x07: 'lying_supine',
         0x08: 'lying_prone',
         0x09: 'lying_lateral',
+        0x0A: 'jump',
         0x10: 'fall_forward',
         0x11: 'fall_backward',
         0x12: 'fall_lateral',
