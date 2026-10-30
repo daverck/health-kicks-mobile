@@ -250,4 +250,91 @@ void main() {
       );
     });
   });
+
+  group('StudioApiService - getStudioStats (/studio/stats)', () {
+    late TokenStorageService tokenStorage;
+
+    setUp(() async {
+      tokenStorage = TokenStorageService(storage: FakeFlutterSecureStorage());
+      await tokenStorage.saveTokens(
+        accessToken: 'initial-valid-jwt-token',
+        refreshToken: 'valid-refresh-token',
+      );
+    });
+
+    test('getStudioStats fetches device-scoped stats and parses validated/pending counts', () async {
+      late http.Request capturedRequest;
+      final mockClient = MockClient((request) async {
+        capturedRequest = request;
+        if (request.url.path == '/api/v1/devices/HK-2/studio/stats' && request.method == 'GET') {
+          return http.Response(
+            jsonEncode({
+              'device_id': 'HK-2',
+              'total_sessions': 35,
+              'total_duration_sec': 175.0,
+              'total_samples': 6650,
+              'by_label': {'walk': 25, 'run': 10},
+              'by_label_validated': {'walk': 20, 'run': 7},
+              'by_label_pending': {'walk': 5, 'run': 3},
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('Not Found', 404);
+      });
+
+      final service = StudioApiService(
+        backendBaseUrl: 'https://healthkicks.duckdns.org:8443',
+        httpClient: mockClient,
+        tokenStorage: tokenStorage,
+      );
+
+      final stats = await service.getStudioStats(deviceId: 'HK-2');
+
+      expect(capturedRequest.url.toString(), equals('https://healthkicks.duckdns.org:8443/api/v1/devices/HK-2/studio/stats'));
+      expect(stats.totalSessions, equals(35));
+      expect(stats.getCountForLabel('walk'), equals(25));
+      expect(stats.getValidatedCountForLabel('walk'), equals(20));
+      expect(stats.getPendingCountForLabel('walk'), equals(5));
+      expect(stats.getCountForLabel('run'), equals(10));
+      expect(stats.getValidatedCountForLabel('run'), equals(7));
+      expect(stats.getPendingCountForLabel('run'), equals(3));
+      expect(stats.getCountForLabel('jump'), equals(0));
+
+      final incremented = stats.incrementPendingForLabel('run');
+      expect(incremented.getCountForLabel('run'), equals(11));
+      expect(incremented.getValidatedCountForLabel('run'), equals(7));
+      expect(incremented.getPendingCountForLabel('run'), equals(4));
+      expect(incremented.totalSessions, equals(36));
+    });
+
+    test('getStudioStats without deviceId calls /api/v1/studio/stats', () async {
+      late http.Request capturedRequest;
+      final mockClient = MockClient((request) async {
+        capturedRequest = request;
+        return http.Response(
+          jsonEncode({
+            'total_sessions': 2,
+            'total_duration_sec': 10.0,
+            'total_samples': 380,
+            'by_label': {'idle': 2},
+            'by_label_validated': {'idle': 1},
+            'by_label_pending': {'idle': 1},
+          }),
+          200,
+        );
+      });
+
+      final service = StudioApiService(
+        backendBaseUrl: 'https://healthkicks.duckdns.org:8443',
+        httpClient: mockClient,
+        tokenStorage: tokenStorage,
+      );
+
+      final stats = await service.getStudioStats();
+      expect(capturedRequest.url.toString(), equals('https://healthkicks.duckdns.org:8443/api/v1/studio/stats'));
+      expect(stats.getCountForLabel('idle'), equals(2));
+    });
+  });
 }

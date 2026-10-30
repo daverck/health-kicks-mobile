@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/studio/studio_api_service.dart';
+
+export '../../services/studio/studio_api_service.dart' show StudioDatasetStats;
 
 /// Activity option model for the Studio session configuration.
 class StudioActivityOption {
@@ -32,11 +35,16 @@ class StudioSessionDialog extends StatefulWidget {
     required String activityKey,
     required String customLabel,
   })? onActivitySaved;
+  final Future<StudioDatasetStats?> Function()? onLoadStats;
+  final StudioDatasetStats? initialStats;
 
   static const String prefLastActivityKey = 'hk_studio_last_activity';
   static const String prefLastCustomLabel = 'hk_studio_last_custom_label';
   static const String prefRecentActivityKeys = 'hk_studio_recent_activities';
   static const int maxRecentActivities = 8;
+
+  /// Target recordings per class before hiding low-sample indicators (matches frontend studio.component.ts:172).
+  static const int targetPerClass = 25;
 
   const StudioSessionDialog({
     super.key,
@@ -45,6 +53,8 @@ class StudioSessionDialog extends StatefulWidget {
     this.initialCustomLabel,
     this.preferences,
     this.onActivitySaved,
+    this.onLoadStats,
+    this.initialStats,
   });
 
   static const List<StudioActivityOption> defaultActivities = [
@@ -93,6 +103,7 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
   late String _selectedActivityKey;
   late final TextEditingController _customLabelController;
   List<String> _recentActivityKeys = [];
+  late StudioDatasetStats _datasetStats;
   bool _isStarting = false;
   String? _successMessage;
 
@@ -102,8 +113,24 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
     _selectedActivityKey = widget.initialActivityKey ?? 'walk';
     _customLabelController =
         TextEditingController(text: widget.initialCustomLabel ?? '');
+    _datasetStats = widget.initialStats ?? const StudioDatasetStats.empty();
 
     _loadSavedPreferences();
+    _loadStudioStats();
+  }
+
+  Future<void> _loadStudioStats() async {
+    if (widget.onLoadStats == null) return;
+    try {
+      final stats = await widget.onLoadStats!();
+      if (stats != null && mounted) {
+        setState(() {
+          _datasetStats = stats;
+        });
+      }
+    } catch (_) {
+      // Ignore stats fetch errors so recording UI stays functional
+    }
   }
 
   Future<void> _loadSavedPreferences() async {
@@ -220,6 +247,10 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
       if (result != false && mounted) {
         setState(() {
           _successMessage = 'Capture réalisée avec succès';
+          _datasetStats = _datasetStats.incrementPendingForLabel(
+            label,
+            durationSec: StudioSessionDialog.fixedDurationSec,
+          );
         });
       }
     } finally {
@@ -231,14 +262,51 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
     }
   }
 
+  Widget _buildCompactCountBadge({
+    required Key badgeKey,
+    required String icon,
+    required int count,
+    required Color activeBg,
+    required Color activeText,
+    required Color inactiveBg,
+    required Color inactiveText,
+  }) {
+    final isActive = count > 0;
+    return Container(
+      key: badgeKey,
+      padding: const EdgeInsets.symmetric(horizontal: 3.5, vertical: 1),
+      decoration: BoxDecoration(
+        color: isActive ? activeBg : inactiveBg,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        '$icon$count',
+        style: TextStyle(
+          fontSize: 8.5,
+          fontWeight: FontWeight.w700,
+          color: isActive ? activeText : inactiveText,
+        ),
+      ),
+    );
+  }
+
   Widget _buildRecentActivityTile(String key, ThemeData theme) {
     final option = StudioSessionDialog.defaultActivities
         .firstWhere((activity) => activity.key == key);
     final isSelected = key == _selectedActivityKey;
+    final customText = _customLabelController.text.trim();
     final label =
-        key == 'custom' && _customLabelController.text.trim().isNotEmpty
-            ? _customLabelController.text.trim()
-            : option.label;
+        key == 'custom' && customText.isNotEmpty ? customText : option.label;
+    final effectiveLabelKey =
+        key == 'custom' && customText.isNotEmpty ? customText : key;
+
+    final totalCount = _datasetStats.getCountForLabel(effectiveLabelKey);
+    final validatedCount =
+        _datasetStats.getValidatedCountForLabel(effectiveLabelKey);
+    final pendingCount =
+        _datasetStats.getPendingCountForLabel(effectiveLabelKey);
+    final showCounts = totalCount < StudioSessionDialog.targetPerClass;
+    final isDark = theme.brightness == Brightness.dark;
 
     return SizedBox(
       width: 126,
@@ -285,15 +353,63 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
                   ],
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  option.isEdgeAi ? '⚡ Edge AI' : '🧪 R&D',
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                    color: option.isEdgeAi
-                        ? const Color(0xFF2E7D32)
-                        : const Color(0xFF6A1B9A),
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        option.isEdgeAi ? '⚡ Edge AI' : '🧪 R&D',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: option.isEdgeAi
+                              ? const Color(0xFF2E7D32)
+                              : const Color(0xFF6A1B9A),
+                        ),
+                      ),
+                    ),
+                    if (showCounts) ...[
+                      const SizedBox(width: 2),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildCompactCountBadge(
+                            badgeKey: ValueKey('studio-recent-validated-$key'),
+                            icon: '✅',
+                            count: validatedCount,
+                            activeBg: isDark
+                                ? const Color(0xFF064E3B)
+                                : const Color(0xFFD1FAE5),
+                            activeText: isDark
+                                ? const Color(0xFFA7F3D0)
+                                : const Color(0xFF065F46),
+                            inactiveBg: isDark
+                                ? const Color(0xFF374151)
+                                : const Color(0xFFF3F4F6),
+                            inactiveText: const Color(0xFF9CA3AF),
+                          ),
+                          const SizedBox(width: 2),
+                          _buildCompactCountBadge(
+                            badgeKey: ValueKey('studio-recent-pending-$key'),
+                            icon: '⏳',
+                            count: pendingCount,
+                            activeBg: isDark
+                                ? const Color(0xFF78350F)
+                                : const Color(0xFFFEF3C7),
+                            activeText: isDark
+                                ? const Color(0xFFFDE68A)
+                                : const Color(0xFF92400E),
+                            inactiveBg: isDark
+                                ? const Color(0xFF374151)
+                                : const Color(0xFFF3F4F6),
+                            inactiveText: const Color(0xFF9CA3AF),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -434,6 +550,7 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
               const SizedBox(height: 12),
               TextField(
                 controller: _customLabelController,
+                onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
                   labelText: 'Libellé personnalisé',
                   hintText: 'Ex: saut_a_la_corde, squat...',

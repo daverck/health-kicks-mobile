@@ -163,6 +163,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
       builder: (dialogCtx) => StudioSessionDialog(
         initialActivityKey: _controller.lastStudioActivityKey,
         initialCustomLabel: _controller.lastStudioCustomLabel,
+        onLoadStats: _controller.fetchStudioStats,
         onActivitySaved: ({
           required String activityKey,
           required String customLabel,

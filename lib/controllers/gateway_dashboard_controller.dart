@@ -811,6 +811,23 @@ class GatewayDashboardController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<StudioDatasetStats?> fetchStudioStats() async {
+    _studioApiService ??= StudioApiService(
+      backendBaseUrl: AppConfig.backendBaseUrl,
+      tokenStorage: TokenStorageService(),
+      authService: authService,
+      onLog: (msg, {bool isError = false}) {
+        addLog('STUDIO', msg, color: isError ? Colors.red : Colors.green);
+      },
+    );
+    try {
+      return await _studioApiService!.getStudioStats(deviceId: deviceId);
+    } catch (e) {
+      addLog('STUDIO', 'Impossible de charger les statistiques Studio : $e', color: Colors.orange);
+      return null;
+    }
+  }
+
   Future<bool> triggerStudioSession({
     required String label,
     required double durationSec,

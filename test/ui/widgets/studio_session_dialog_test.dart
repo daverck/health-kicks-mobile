@@ -250,6 +250,117 @@ void main() {
       expect(jumpTopLeft.dy, equals(runTopLeft.dy));
       expect(jumpTopLeft.dx, lessThan(runTopLeft.dx));
     });
+
+    testWidgets(
+      'fetches StudioDatasetStats on open, shows compact validated/pending counts only when class count < 25, and increments on each session',
+      (WidgetTester tester) async {
+        expect(StudioSessionDialog.targetPerClass, equals(25));
+
+        SharedPreferences.setMockInitialValues({
+          StudioSessionDialog.prefRecentActivityKeys: [
+            'walk', // 25 recordings (>= 25 -> hidden)
+            'run', // 24 recordings (< 25 -> shown, becomes 25 after 1 capture -> hidden)
+            'jump', // 3 recordings (< 25 -> shown, increments on capture)
+          ],
+        });
+
+        var statsLoadCalls = 0;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: StudioSessionDialog(
+                initialActivityKey: 'jump',
+                onLoadStats: () async {
+                  statsLoadCalls++;
+                  return const StudioDatasetStats(
+                    deviceId: 'HK-2',
+                    totalSessions: 52,
+                    totalDurationSec: 260.0,
+                    totalSamples: 9880,
+                    byLabel: {'walk': 25, 'run': 24, 'jump': 3},
+                    byLabelValidated: {'walk': 20, 'run': 20, 'jump': 2},
+                    byLabelPending: {'walk': 5, 'run': 4, 'jump': 1},
+                  );
+                },
+                onStartSession: ({required String label, required double durationSec}) async {
+                  return true;
+                },
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(statsLoadCalls, equals(1));
+
+        // 'walk' has 25 recordings (>= targetPerClass) -> badges must NOT be shown
+        expect(find.byKey(const ValueKey('studio-recent-validated-walk')), findsNothing);
+        expect(find.byKey(const ValueKey('studio-recent-pending-walk')), findsNothing);
+
+        // 'run' has 24 recordings (< 25) -> badges ARE shown (✅20, ⏳4)
+        expect(find.byKey(const ValueKey('studio-recent-validated-run')), findsOneWidget);
+        expect(find.byKey(const ValueKey('studio-recent-pending-run')), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('studio-recent-validated-run')),
+            matching: find.text('✅20'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('studio-recent-pending-run')),
+            matching: find.text('⏳4'),
+          ),
+          findsOneWidget,
+        );
+
+        // 'jump' has 3 recordings (< 25) -> badges ARE shown (✅2, ⏳1)
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('studio-recent-validated-jump')),
+            matching: find.text('✅2'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('studio-recent-pending-jump')),
+            matching: find.text('⏳1'),
+          ),
+          findsOneWidget,
+        );
+
+        // Record a 'jump' session -> pending count increments from 1 to 2 (total 4 < 25)
+        await tester.tap(find.text("Démarrer l'enregistrement"));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('studio-recent-validated-jump')),
+            matching: find.text('✅2'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('studio-recent-pending-jump')),
+            matching: find.text('⏳2'),
+          ),
+          findsOneWidget,
+        );
+
+        // Select 'run' via its shortcut tile and record a session -> total goes from 24 to 25, so badges disappear!
+        await tester.tap(find.byKey(const ValueKey('studio-recent-activity-run')));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text("Démarrer l'enregistrement"));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const ValueKey('studio-recent-validated-run')), findsNothing);
+        expect(find.byKey(const ValueKey('studio-recent-pending-run')), findsNothing);
+      },
+    );
   });
 }
-

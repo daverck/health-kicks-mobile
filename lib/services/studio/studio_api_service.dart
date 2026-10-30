@@ -9,6 +9,90 @@ import '../api/api_headers.dart';
 
 typedef StudioLogCallback = void Function(String message, {bool isError});
 
+/// Dataset summary statistics for Studio motion capture sessions.
+/// Conforms to the backend `StudioDatasetStatsResponse` schema.
+class StudioDatasetStats {
+  final String? deviceId;
+  final int totalSessions;
+  final double totalDurationSec;
+  final int totalSamples;
+  final Map<String, int> byLabel;
+  final Map<String, int> byLabelValidated;
+  final Map<String, int> byLabelPending;
+
+  const StudioDatasetStats({
+    this.deviceId,
+    required this.totalSessions,
+    required this.totalDurationSec,
+    required this.totalSamples,
+    required this.byLabel,
+    this.byLabelValidated = const {},
+    this.byLabelPending = const {},
+  });
+
+  const StudioDatasetStats.empty({this.deviceId})
+      : totalSessions = 0,
+        totalDurationSec = 0.0,
+        totalSamples = 0,
+        byLabel = const {},
+        byLabelValidated = const {},
+        byLabelPending = const {};
+
+  factory StudioDatasetStats.fromJson(Map<String, dynamic> json) {
+    Map<String, int> parseIntMap(dynamic raw) {
+      if (raw is Map) {
+        return raw.map(
+          (key, value) => MapEntry(key.toString(), (value as num?)?.toInt() ?? 0),
+        );
+      }
+      return const {};
+    }
+
+    return StudioDatasetStats(
+      deviceId: json['device_id'] as String?,
+      totalSessions: (json['total_sessions'] as num?)?.toInt() ?? 0,
+      totalDurationSec: (json['total_duration_sec'] as num?)?.toDouble() ?? 0.0,
+      totalSamples: (json['total_samples'] as num?)?.toInt() ?? 0,
+      byLabel: parseIntMap(json['by_label']),
+      byLabelValidated: parseIntMap(json['by_label_validated']),
+      byLabelPending: parseIntMap(json['by_label_pending']),
+    );
+  }
+
+  int getCountForLabel(String label) {
+    if (byLabel.containsKey(label)) {
+      return byLabel[label]!;
+    }
+    return getValidatedCountForLabel(label) + getPendingCountForLabel(label);
+  }
+
+  int getValidatedCountForLabel(String label) => byLabelValidated[label] ?? 0;
+
+  int getPendingCountForLabel(String label) => byLabelPending[label] ?? 0;
+
+  /// Returns a copy of these statistics with one new pending session added for [label].
+  StudioDatasetStats incrementPendingForLabel(
+    String label, {
+    double durationSec = 5.0,
+  }) {
+    final updatedByLabel = Map<String, int>.from(byLabel);
+    final updatedPending = Map<String, int>.from(byLabelPending);
+
+    updatedByLabel[label] = getCountForLabel(label) + 1;
+    updatedPending[label] = getPendingCountForLabel(label) + 1;
+
+    return StudioDatasetStats(
+      deviceId: deviceId,
+      totalSessions: totalSessions + 1,
+      totalDurationSec: totalDurationSec + durationSec,
+      totalSamples: totalSamples,
+      byLabel: updatedByLabel,
+      byLabelValidated: Map<String, int>.from(byLabelValidated),
+      byLabelPending: updatedPending,
+    );
+  }
+}
+
 /// Response returned by the backend API upon initiating a Studio command.
 /// Conforms to the Pydantic `StudioStartResponse` schema.
 class StudioStartResponse {
@@ -75,6 +159,79 @@ class StudioApiService {
         _refreshTokenFunction = refreshTokenFunction;
 
   String get backendBaseUrl => _backendBaseUrl;
+
+  /// Retrieves Studio dataset summary statistics for a specific device or globally:
+  /// - `GET /api/v1/devices/{device_id}/studio/stats`
+  /// - `GET /api/v1/studio/stats`
+  Future<StudioDatasetStats> getStudioStats({String? deviceId}) async {
+    String? token = await _tokenStorage.getAccessToken();
+
+    if (token == null || token.trim().isEmpty) {
+      const msg = 'No access token available to fetch Studio stats.';
+      onLog?.call(msg, isError: true);
+      throw const HttpException(msg);
+    }
+
+    final cleanDeviceId = deviceId?.trim() ?? '';
+    final path = cleanDeviceId.isNotEmpty
+        ? '/api/v1/devices/$cleanDeviceId/studio/stats'
+        : '/api/v1/studio/stats';
+    final uri = Uri.parse('$_backendBaseUrl$path');
+
+    Map<String, String> buildHeaders(String currentToken) => buildApiHeaders(currentToken);
+
+    try {
+      var response = await _httpClient.get(
+        uri,
+        headers: buildHeaders(token),
+      );
+
+      if (response.statusCode == 401) {
+        onLog?.call(
+          'Access token expired (HTTP 401), attempting refresh...',
+          isError: false,
+        );
+
+        bool refreshed = false;
+        if (_refreshTokenFunction != null) {
+          refreshed = await _refreshTokenFunction();
+        } else if (_authService != null) {
+          refreshed = await _authService.refreshToken();
+        }
+
+        if (refreshed) {
+          token = await _tokenStorage.getAccessToken();
+          if (token != null && token.isNotEmpty) {
+            response = await _httpClient.get(
+              uri,
+              headers: buildHeaders(token),
+            );
+          }
+        } else {
+          const msg = 'Failed to refresh authentication token: login required.';
+          onLog?.call(msg, isError: true);
+          await _authService?.logout();
+          await _tokenStorage.clearTokens();
+          throw const HttpException(msg);
+        }
+      }
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return StudioDatasetStats.fromJson(data);
+      } else {
+        final errorMsg =
+            'HTTP ${response.statusCode} failure fetching Studio stats: ${response.body}';
+        onLog?.call(errorMsg, isError: true);
+        throw HttpException(errorMsg, uri: uri);
+      }
+    } catch (e) {
+      if (e is! HttpException) {
+        onLog?.call('Network error fetching Studio stats: $e', isError: true);
+      }
+      rethrow;
+    }
+  }
 
   /// Triggers and reserves a Studio session in the PostgreSQL `studio_sessions`
   /// table via the FastAPI backend REST API:
