@@ -42,6 +42,12 @@ void main() {
 
       final lyingLateral = activities.firstWhere((a) => a.key == 'lying_lateral');
       expect(lyingLateral.isEdgeAi, isFalse);
+
+      final stairs = activities.firstWhere((a) => a.key == 'stairs');
+      expect(stairs.isEdgeAi, isFalse);
+
+      final stumble = activities.firstWhere((a) => a.key == 'stumble_recover');
+      expect(stumble.isEdgeAi, isFalse);
     });
 
     testWidgets('renders sit_down option and Edge AI tag in dropdown', (WidgetTester tester) async {

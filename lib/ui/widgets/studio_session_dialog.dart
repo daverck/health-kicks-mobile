@@ -60,7 +60,7 @@ class StudioSessionDialog extends StatefulWidget {
   static const List<StudioActivityOption> defaultActivities = [
     StudioActivityOption(key: 'walk', label: 'Marche', emoji: '🚶', isEdgeAi: true),
     StudioActivityOption(key: 'run', label: 'Course', emoji: '🏃', isEdgeAi: true),
-    StudioActivityOption(key: 'stairs', label: 'Escaliers', emoji: '🪜', isEdgeAi: true),
+    StudioActivityOption(key: 'stairs', label: 'Escaliers', emoji: '🪜', isEdgeAi: false),
     StudioActivityOption(
         key: 'stairs_up', label: 'Escaliers (Montée)', emoji: '↗️', isEdgeAi: true),
     StudioActivityOption(
@@ -80,7 +80,7 @@ class StudioSessionDialog extends StatefulWidget {
         key: 'lying_lateral', label: 'Couché latéral', emoji: '🛌', isEdgeAi: false),
     StudioActivityOption(key: 'jump', label: 'Saut', emoji: '🦘', isEdgeAi: true),
     StudioActivityOption(
-        key: 'stumble_recover', label: 'Trébuchement rattrapé', emoji: '⚠️', isEdgeAi: true),
+        key: 'stumble_recover', label: 'Trébuchement rattrapé', emoji: '⚠️', isEdgeAi: false),
     StudioActivityOption(
         key: 'fall_forward', label: 'Chute avant', emoji: '⤵️', isEdgeAi: true),
     StudioActivityOption(
