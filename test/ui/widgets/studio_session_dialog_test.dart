@@ -368,5 +368,31 @@ void main() {
         expect(find.byKey(const ValueKey('studio-recent-pending-run')), findsNothing);
       },
     );
+    testWidgets(
+      'dynamically adapts Edge AI badges when edgeAiLabels is supplied in stats',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: StudioSessionDialog(
+                initialActivityKey: 'stairs',
+                initialStats: const StudioDatasetStats(
+                  totalSessions: 10,
+                  totalDurationSec: 50.0,
+                  totalSamples: 500,
+                  byLabel: {'stairs': 5},
+                  edgeAiLabels: ['stairs'], // backend explicitly flags stairs as edge AI for this test
+                ),
+                onStartSession: ({required String label, required double durationSec}) async {},
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // In dropdown trigger row for 'stairs', it should now display '⚡ Edge AI' instead of '🧪 R&D'
+        expect(find.text('⚡ Edge AI'), findsWidgets);
+      },
+    );
   });
 }

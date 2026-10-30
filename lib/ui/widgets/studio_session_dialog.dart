@@ -107,6 +107,13 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
   bool _isStarting = false;
   String? _successMessage;
 
+  bool _isOptionEdgeAi(StudioActivityOption option) {
+    if (_datasetStats.edgeAiLabels.isNotEmpty) {
+      return _datasetStats.edgeAiLabels.contains(option.key);
+    }
+    return option.isEdgeAi;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -307,6 +314,7 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
         _datasetStats.getPendingCountForLabel(effectiveLabelKey);
     final showCounts = totalCount < StudioSessionDialog.targetPerClass;
     final isDark = theme.brightness == Brightness.dark;
+    final isEdgeAi = _isOptionEdgeAi(option);
 
     return SizedBox(
       width: 126,
@@ -358,13 +366,13 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
                   children: [
                     Flexible(
                       child: Text(
-                        option.isEdgeAi ? '⚡ Edge AI' : '🧪 R&D',
+                        isEdgeAi ? '⚡ Edge AI' : '🧪 R&D',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.bold,
-                          color: option.isEdgeAi
+                          color: isEdgeAi
                               ? const Color(0xFF2E7D32)
                               : const Color(0xFF6A1B9A),
                         ),
@@ -495,7 +503,7 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      _buildActivityCategoryBadge(opt.isEdgeAi),
+                      _buildActivityCategoryBadge(_isOptionEdgeAi(opt)),
                     ],
                   ),
                 );

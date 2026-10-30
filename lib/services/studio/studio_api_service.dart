@@ -19,6 +19,7 @@ class StudioDatasetStats {
   final Map<String, int> byLabel;
   final Map<String, int> byLabelValidated;
   final Map<String, int> byLabelPending;
+  final List<String> edgeAiLabels;
 
   const StudioDatasetStats({
     this.deviceId,
@@ -28,6 +29,7 @@ class StudioDatasetStats {
     required this.byLabel,
     this.byLabelValidated = const {},
     this.byLabelPending = const {},
+    this.edgeAiLabels = const [],
   });
 
   const StudioDatasetStats.empty({this.deviceId})
@@ -36,7 +38,8 @@ class StudioDatasetStats {
         totalSamples = 0,
         byLabel = const {},
         byLabelValidated = const {},
-        byLabelPending = const {};
+        byLabelPending = const {},
+        edgeAiLabels = const [];
 
   factory StudioDatasetStats.fromJson(Map<String, dynamic> json) {
     Map<String, int> parseIntMap(dynamic raw) {
@@ -56,6 +59,10 @@ class StudioDatasetStats {
       byLabel: parseIntMap(json['by_label']),
       byLabelValidated: parseIntMap(json['by_label_validated']),
       byLabelPending: parseIntMap(json['by_label_pending']),
+      edgeAiLabels: (json['edge_ai_labels'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
     );
   }
 
@@ -89,6 +96,7 @@ class StudioDatasetStats {
       byLabel: updatedByLabel,
       byLabelValidated: Map<String, int>.from(byLabelValidated),
       byLabelPending: updatedPending,
+      edgeAiLabels: edgeAiLabels,
     );
   }
 }
