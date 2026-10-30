@@ -223,6 +223,7 @@ class _RecentActivitiesCardState extends State<RecentActivitiesCard> {
                     final item = hitlList[index];
                     final isSelected = _selectedId == item.id;
                     return UnifiedActivityCard(
+                      key: ValueKey(item.id),
                       hitlItem: item,
                       isSelected: isSelected,
                       onTap: () {
@@ -284,6 +285,7 @@ class _RecentActivitiesCardState extends State<RecentActivitiesCard> {
                   final id = '${item.eventType}_${item.effectiveTimestamp.millisecondsSinceEpoch}_$index';
                   final isSelected = _selectedId == id;
                   return UnifiedActivityCard(
+                    key: ValueKey(id),
                     activity: item,
                     isSelected: isSelected,
                     onTap: () {

@@ -327,6 +327,86 @@ void main() {
     // Now highlighted with 'Actif' badge
     expect(find.text('Actif'), findsOneWidget);
   });
+
+  testWidgets('updates the originally opened HITL item when a new HITL detection arrives while dropdown is open', (WidgetTester tester) async {
+    final detection1 = ActivityDetectionModel(
+      stateCode: 0x01,
+      eventType: 'walk',
+      confidencePercent: 90,
+      timestampEpochSec: 1726999200,
+      isFall: false,
+      isHapticTriggered: false,
+    );
+    final item1 = HitlDetectionItem(
+      id: 'hitl-item-original',
+      timestamp: DateTime(2026, 10, 24, 14, 30, 0),
+      detectedLabel: 'walk',
+      confidencePercent: 90,
+      isFall: false,
+      rawDetection: detection1,
+      isBurstReady: true,
+    );
+
+    final detection2 = ActivityDetectionModel(
+      stateCode: 0x00,
+      eventType: 'idle',
+      confidencePercent: 95,
+      timestampEpochSec: 1726999205,
+      isFall: false,
+      isHapticTriggered: false,
+    );
+    final item2 = HitlDetectionItem(
+      id: 'hitl-item-newer',
+      timestamp: DateTime(2026, 10, 24, 14, 30, 5),
+      detectedLabel: 'idle',
+      confidencePercent: 95,
+      isFall: false,
+      rawDetection: detection2,
+      isBurstReady: true,
+    );
+
+    String? updatedItemId;
+    String? updatedLabel;
+    final itemsNotifier = ValueNotifier<List<HitlDetectionItem>>([item1]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ValueListenableBuilder<List<HitlDetectionItem>>(
+            valueListenable: itemsNotifier,
+            builder: (context, items, _) {
+              return RecentActivitiesCard(
+                activities: const [],
+                canUseHitl: true,
+                isHitlActive: true,
+                hitlItems: items,
+                onUpdateHitlLabel: (it, label) {
+                  updatedItemId = it.id;
+                  updatedLabel = label;
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    // 1. Open dropdown on item1 ('hitl-item-original')
+    await tester.tap(find.byKey(const ValueKey('hitl_label_dropdown_hitl-item-original')));
+    await tester.pumpAndSettle();
+
+    // 2. While dropdown menu is open, a new activity (item2) is detected and inserted at index 0
+    itemsNotifier.value = [item2, item1];
+    await tester.pump();
+
+    // 3. Select 'run' in the open dropdown menu
+    await tester.tap(find.text('run').last);
+    await tester.pumpAndSettle();
+
+    // 4. Verify the label update targets item1 ('hitl-item-original'), NOT item2 ('hitl-item-newer')
+    expect(updatedItemId, equals('hitl-item-original'));
+    expect(updatedLabel, equals('run'));
+  });
 }
 
 

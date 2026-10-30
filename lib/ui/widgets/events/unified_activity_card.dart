@@ -406,46 +406,51 @@ class UnifiedActivityCard extends StatelessWidget {
                                             color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
                                           ),
                                         ),
-                                        child: DropdownButtonHideUnderline(
-                                          child: DropdownButton<String>(
-                                            isExpanded: true,
-                                            iconSize: 18,
-                                            value: hitlAvailableLabels.contains(hitlItem!.selectedLabel)
-                                                ? hitlItem!.selectedLabel
-                                                : hitlAvailableLabels.first,
-                                            isDense: true,
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                              color: theme.colorScheme.onSurface,
-                                            ),
-                                            items: hitlAvailableLabels.map((l) {
-                                              final optMeta = ActivityVisualMeta.fromEventType(context, l);
-                                              return DropdownMenuItem(
-                                                value: l,
-                                                child: Row(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    Icon(optMeta.icon, size: 14, color: optMeta.color),
-                                                    const SizedBox(width: 4),
-                                                    Flexible(
-                                                      child: Text(
-                                                        l,
-                                                        overflow: TextOverflow.ellipsis,
-                                                      ),
-                                                    ),
-                                                  ],
+                                        child: Builder(
+                                          builder: (context) {
+                                            final capturedItem = hitlItem!;
+                                            return DropdownButtonHideUnderline(
+                                              child: DropdownButton<String>(
+                                                key: ValueKey('hitl_label_dropdown_${capturedItem.id}'),
+                                                isExpanded: true,
+                                                iconSize: 18,
+                                                value: hitlAvailableLabels.contains(capturedItem.selectedLabel)
+                                                    ? capturedItem.selectedLabel
+                                                    : hitlAvailableLabels.first,
+                                                isDense: true,
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: theme.colorScheme.onSurface,
                                                 ),
-                                              );
-                                            }).toList(),
-                                            onTap: onTap,
-                                            onChanged: (newVal) {
-                                              onTap?.call();
-                                              if (newVal != null) {
-                                                onUpdateHitlLabel?.call(hitlItem!, newVal);
-                                              }
-                                            },
-                                          ),
+                                                items: hitlAvailableLabels.map((l) {
+                                                  final optMeta = ActivityVisualMeta.fromEventType(context, l);
+                                                  return DropdownMenuItem<String>(
+                                                    value: l,
+                                                    onTap: () {
+                                                      onTap?.call();
+                                                      onUpdateHitlLabel?.call(capturedItem, l);
+                                                    },
+                                                    child: Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Icon(optMeta.icon, size: 14, color: optMeta.color),
+                                                        const SizedBox(width: 4),
+                                                        Flexible(
+                                                          child: Text(
+                                                            l,
+                                                            overflow: TextOverflow.ellipsis,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  );
+                                                }).toList(),
+                                                onTap: onTap,
+                                                onChanged: (_) {},
+                                              ),
+                                            );
+                                          },
                                         ),
                                       ),
                               ),

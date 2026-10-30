@@ -355,6 +355,7 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
         final item = items[index];
         final isSelected = _selectedEventId == item.id;
         return UnifiedActivityCard(
+          key: ValueKey(item.id),
           hitlItem: item,
           isSelected: isSelected,
           onTap: () {
@@ -425,6 +426,7 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
           final isSelected = _selectedEventId == event.id;
 
           return UnifiedActivityCard(
+            key: ValueKey(event.id),
             event: event,
             isSelected: isSelected,
             onTap: () {
