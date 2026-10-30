@@ -139,6 +139,21 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
   }
 
   Future<void> _savePreferences(String key, String customLabel) async {
+    final updatedRecents = [
+      key,
+      ..._recentActivityKeys.where((recentKey) => recentKey != key),
+    ]
+        .where((recentKey) => StudioSessionDialog.defaultActivities
+            .any((a) => a.key == recentKey))
+        .take(StudioSessionDialog.maxRecentActivities)
+        .toList();
+
+    if (mounted) {
+      setState(() {
+        _recentActivityKeys = updatedRecents;
+      });
+    }
+
     try {
       final prefs = widget.preferences ?? await SharedPreferences.getInstance();
       await prefs.setString(StudioSessionDialog.prefLastActivityKey, key);
@@ -147,15 +162,25 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
             StudioSessionDialog.prefLastCustomLabel, customLabel);
       }
       final previous =
-          prefs.getStringList(StudioSessionDialog.prefRecentActivityKeys) ?? [];
+          prefs.getStringList(StudioSessionDialog.prefRecentActivityKeys) ??
+              updatedRecents;
       final recentKeys = [
         key,
         ...previous.where((recentKey) => recentKey != key),
-      ].take(StudioSessionDialog.maxRecentActivities);
+      ]
+          .where((recentKey) => StudioSessionDialog.defaultActivities
+              .any((a) => a.key == recentKey))
+          .take(StudioSessionDialog.maxRecentActivities)
+          .toList();
       await prefs.setStringList(
         StudioSessionDialog.prefRecentActivityKeys,
-        recentKeys.toList(),
+        recentKeys,
       );
+      if (mounted) {
+        setState(() {
+          _recentActivityKeys = recentKeys;
+        });
+      }
     } catch (_) {
       // Ignore preference write errors
     }

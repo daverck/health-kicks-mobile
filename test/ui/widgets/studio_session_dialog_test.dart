@@ -180,6 +180,56 @@ void main() {
       expect(callCount, 2);
       expect(find.text('Capture réalisée avec succès'), findsOneWidget);
     });
+
+    testWidgets('immediately updates recent activity shortcuts when a 5th activity is recorded', (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({
+        StudioSessionDialog.prefRecentActivityKeys: [
+          'run',
+          'walk',
+          'stairs',
+          'idle',
+        ],
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StudioSessionDialog(
+              initialActivityKey: 'jump',
+              onStartSession: ({required String label, required double durationSec}) async {
+                return true;
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Initially displays the 4 existing recent shortcuts
+      expect(find.byKey(const ValueKey('studio-recent-activity-run')), findsOneWidget);
+      expect(find.byKey(const ValueKey('studio-recent-activity-walk')), findsOneWidget);
+      expect(find.byKey(const ValueKey('studio-recent-activity-stairs')), findsOneWidget);
+      expect(find.byKey(const ValueKey('studio-recent-activity-idle')), findsOneWidget);
+      expect(find.byKey(const ValueKey('studio-recent-activity-jump')), findsNothing);
+
+      // Start recording for the 5th activity ('jump')
+      await tester.tap(find.text("Démarrer l'enregistrement"));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Capture réalisée avec succès'), findsOneWidget);
+
+      // 'jump' is now immediately present in recent shortcuts, and the 4th oldest ('idle') is evicted
+      expect(find.byKey(const ValueKey('studio-recent-activity-jump')), findsOneWidget);
+      expect(find.byKey(const ValueKey('studio-recent-activity-run')), findsOneWidget);
+      expect(find.byKey(const ValueKey('studio-recent-activity-walk')), findsOneWidget);
+      expect(find.byKey(const ValueKey('studio-recent-activity-stairs')), findsOneWidget);
+      expect(find.byKey(const ValueKey('studio-recent-activity-idle')), findsNothing);
+
+      // Verify visual order: 'jump' shortcut appears before 'run'
+      final jumpTopLeft = tester.getTopLeft(find.byKey(const ValueKey('studio-recent-activity-jump')));
+      final runTopLeft = tester.getTopLeft(find.byKey(const ValueKey('studio-recent-activity-run')));
+      expect(jumpTopLeft.dx, lessThan(runTopLeft.dx));
+    });
   });
 }
 
