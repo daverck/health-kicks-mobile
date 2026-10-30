@@ -181,13 +181,19 @@ void main() {
       expect(find.text('Capture réalisée avec succès'), findsOneWidget);
     });
 
-    testWidgets('immediately updates recent activity shortcuts when a 5th activity is recorded', (WidgetTester tester) async {
+    testWidgets('displays up to 8 recent activity shortcuts in two columns and evicts 8th oldest when 9th is recorded', (WidgetTester tester) async {
+      expect(StudioSessionDialog.maxRecentActivities, equals(8));
+
       SharedPreferences.setMockInitialValues({
         StudioSessionDialog.prefRecentActivityKeys: [
           'run',
           'walk',
           'stairs',
           'idle',
+          'sit_down',
+          'stand_up',
+          'lying_supine',
+          'lying_prone',
         ],
       });
 
@@ -205,29 +211,43 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Initially displays the 4 existing recent shortcuts
-      expect(find.byKey(const ValueKey('studio-recent-activity-run')), findsOneWidget);
-      expect(find.byKey(const ValueKey('studio-recent-activity-walk')), findsOneWidget);
-      expect(find.byKey(const ValueKey('studio-recent-activity-stairs')), findsOneWidget);
-      expect(find.byKey(const ValueKey('studio-recent-activity-idle')), findsOneWidget);
+      // Initially displays all 8 existing recent shortcuts
+      for (final key in ['run', 'walk', 'stairs', 'idle', 'sit_down', 'stand_up', 'lying_supine', 'lying_prone']) {
+        expect(find.byKey(ValueKey('studio-recent-activity-$key')), findsOneWidget);
+      }
       expect(find.byKey(const ValueKey('studio-recent-activity-jump')), findsNothing);
 
-      // Start recording for the 5th activity ('jump')
+      // Verify two-column layout:
+      // Row 0: 'run' (col 0) and 'walk' (col 1) share the same Y and have distinct X
+      final runPos = tester.getTopLeft(find.byKey(const ValueKey('studio-recent-activity-run')));
+      final walkPos = tester.getTopLeft(find.byKey(const ValueKey('studio-recent-activity-walk')));
+      // Row 1: 'stairs' (col 0) and 'idle' (col 1) are on the next line
+      final stairsPos = tester.getTopLeft(find.byKey(const ValueKey('studio-recent-activity-stairs')));
+      final idlePos = tester.getTopLeft(find.byKey(const ValueKey('studio-recent-activity-idle')));
+
+      expect(runPos.dy, equals(walkPos.dy));
+      expect(runPos.dx, lessThan(walkPos.dx));
+      expect(stairsPos.dy, equals(idlePos.dy));
+      expect(stairsPos.dx, equals(runPos.dx));
+      expect(idlePos.dx, equals(walkPos.dx));
+      expect(stairsPos.dy, greaterThan(runPos.dy));
+
+      // Start recording for the 9th activity ('jump')
       await tester.tap(find.text("Démarrer l'enregistrement"));
       await tester.pumpAndSettle();
 
       expect(find.text('Capture réalisée avec succès'), findsOneWidget);
 
-      // 'jump' is now immediately present in recent shortcuts, and the 4th oldest ('idle') is evicted
-      expect(find.byKey(const ValueKey('studio-recent-activity-jump')), findsOneWidget);
-      expect(find.byKey(const ValueKey('studio-recent-activity-run')), findsOneWidget);
-      expect(find.byKey(const ValueKey('studio-recent-activity-walk')), findsOneWidget);
-      expect(find.byKey(const ValueKey('studio-recent-activity-stairs')), findsOneWidget);
-      expect(find.byKey(const ValueKey('studio-recent-activity-idle')), findsNothing);
+      // 'jump' is now immediately at index 0, and the 8th oldest ('lying_prone') is evicted
+      for (final key in ['jump', 'run', 'walk', 'stairs', 'idle', 'sit_down', 'stand_up', 'lying_supine']) {
+        expect(find.byKey(ValueKey('studio-recent-activity-$key')), findsOneWidget);
+      }
+      expect(find.byKey(const ValueKey('studio-recent-activity-lying_prone')), findsNothing);
 
-      // Verify visual order: 'jump' shortcut appears before 'run'
+      // Verify visual order: 'jump' (col 0) appears to the left of 'run' (col 1) on the first row
       final jumpTopLeft = tester.getTopLeft(find.byKey(const ValueKey('studio-recent-activity-jump')));
       final runTopLeft = tester.getTopLeft(find.byKey(const ValueKey('studio-recent-activity-run')));
+      expect(jumpTopLeft.dy, equals(runTopLeft.dy));
       expect(jumpTopLeft.dx, lessThan(runTopLeft.dx));
     });
   });

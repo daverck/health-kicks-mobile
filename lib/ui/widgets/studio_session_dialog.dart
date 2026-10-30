@@ -36,7 +36,7 @@ class StudioSessionDialog extends StatefulWidget {
   static const String prefLastActivityKey = 'hk_studio_last_activity';
   static const String prefLastCustomLabel = 'hk_studio_last_custom_label';
   static const String prefRecentActivityKeys = 'hk_studio_recent_activities';
-  static const int maxRecentActivities = 4;
+  static const int maxRecentActivities = 8;
 
   const StudioSessionDialog({
     super.key,
@@ -231,6 +231,78 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
     }
   }
 
+  Widget _buildRecentActivityTile(String key, ThemeData theme) {
+    final option = StudioSessionDialog.defaultActivities
+        .firstWhere((activity) => activity.key == key);
+    final isSelected = key == _selectedActivityKey;
+    final label =
+        key == 'custom' && _customLabelController.text.trim().isNotEmpty
+            ? _customLabelController.text.trim()
+            : option.label;
+
+    return SizedBox(
+      width: 126,
+      height: 58,
+      child: Material(
+        color: isSelected
+            ? theme.colorScheme.primaryContainer
+            : theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          key: ValueKey('studio-recent-activity-$key'),
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => setState(() {
+            _selectedActivityKey = key;
+          }),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isSelected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.outlineVariant,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  children: [
+                    Text(option.emoji),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  option.isEdgeAi ? '⚡ Edge AI' : '🧪 R&D',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    color: option.isEdgeAi
+                        ? const Color(0xFF2E7D32)
+                        : const Color(0xFF6A1B9A),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildActivityCategoryBadge(bool isEdgeAi) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -330,80 +402,32 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
                 ),
               ),
               const SizedBox(height: 6),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: _recentActivityKeys.map((key) {
-                  final option = StudioSessionDialog.defaultActivities
-                      .firstWhere((activity) => activity.key == key);
-                  final isSelected = key == _selectedActivityKey;
-                  final label = key == 'custom' &&
-                          _customLabelController.text.trim().isNotEmpty
-                      ? _customLabelController.text.trim()
-                      : option.label;
-
-                  return SizedBox(
-                    width: 126,
-                    height: 58,
-                    child: Material(
-                      color: isSelected
-                          ? theme.colorScheme.primaryContainer
-                          : theme.colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(10),
-                      child: InkWell(
-                        key: ValueKey('studio-recent-activity-$key'),
-                        borderRadius: BorderRadius.circular(10),
-                        onTap: () => setState(() {
-                          _selectedActivityKey = key;
-                        }),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isSelected
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.outlineVariant,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(option.emoji),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      label,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.labelMedium?.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                option.isEdgeAi ? '⚡ Edge AI' : '🧪 R&D',
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                  color: option.isEdgeAi
-                                      ? const Color(0xFF2E7D32)
-                                      : const Color(0xFF6A1B9A),
-                                ),
-                              ),
-                            ],
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (int i = 0; i < _recentActivityKeys.length; i += 2) ...[
+                    if (i > 0) const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildRecentActivityTile(
+                            _recentActivityKeys[i],
+                            theme,
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: i + 1 < _recentActivityKeys.length
+                              ? _buildRecentActivityTile(
+                                  _recentActivityKeys[i + 1],
+                                  theme,
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
                     ),
-                  );
-                }).toList(),
+                  ],
+                ],
               ),
             ],
             if (_selectedActivityKey == 'custom') ...[
