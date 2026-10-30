@@ -1,3 +1,4 @@
+import 'package:healthkicks_mobile/ui/widgets/events/unified_activity_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/models/activity_detection_model.dart';
@@ -275,14 +276,20 @@ void main() {
       ),
     );
 
-    expect(find.text('Actif'), findsNothing);
+    expect(
+      tester.widget<UnifiedActivityCard>(find.byType(UnifiedActivityCard)).isSelected,
+      isFalse,
+    );
 
     // Tap card
     await tester.tap(find.text('Marche'));
     await tester.pump();
 
-    // Now highlighted with 'Actif' badge
-    expect(find.text('Actif'), findsOneWidget);
+    // Now highlighted (isSelected == true)
+    expect(
+      tester.widget<UnifiedActivityCard>(find.byType(UnifiedActivityCard)).isSelected,
+      isTrue,
+    );
   });
 
   testWidgets('RecentActivitiesCard highlights HITL card when opening label dropdown select', (tester) async {
@@ -318,14 +325,20 @@ void main() {
       ),
     );
 
-    expect(find.text('Actif'), findsNothing);
+    expect(
+      tester.widget<UnifiedActivityCard>(find.byType(UnifiedActivityCard)).isSelected,
+      isFalse,
+    );
 
     // Tap dropdown button
     await tester.tap(find.byType(DropdownButton<String>));
     await tester.pump();
 
-    // Now highlighted with 'Actif' badge
-    expect(find.text('Actif'), findsOneWidget);
+    // Now highlighted (isSelected == true)
+    expect(
+      tester.widget<UnifiedActivityCard>(find.byType(UnifiedActivityCard)).isSelected,
+      isTrue,
+    );
   });
 
   testWidgets('updates the originally opened HITL item when a new HITL detection arrives while dropdown is open', (WidgetTester tester) async {

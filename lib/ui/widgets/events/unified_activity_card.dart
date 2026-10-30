@@ -216,10 +216,6 @@ class UnifiedActivityCard extends StatelessWidget {
                                         const SizedBox(width: 4),
                                         const Icon(Icons.vibration_rounded, size: 14, color: Colors.amber),
                                       ],
-                                      if (hitlItem?.isSynchronized == true) ...[
-                                        const SizedBox(width: 4),
-                                        const Icon(Icons.cloud_done_rounded, size: 14, color: Colors.teal),
-                                      ],
                                       if (isValidated) ...[
                                         const SizedBox(width: 4),
                                         const Icon(Icons.verified_rounded, size: 14, color: Colors.blue),
@@ -227,24 +223,6 @@ class UnifiedActivityCard extends StatelessWidget {
                                       if (event != null && !event!.id.startsWith('live_')) ...[
                                         const SizedBox(width: 4),
                                         const Icon(Icons.cloud_done_rounded, size: 14, color: Colors.teal),
-                                      ],
-                                      if (isSelected) ...[
-                                        const SizedBox(width: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                          decoration: BoxDecoration(
-                                            color: theme.colorScheme.primary,
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: const Text(
-                                            'Actif',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
                                       ],
                                     ],
                                   ),
