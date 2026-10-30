@@ -115,6 +115,13 @@ class ActivityVisualMeta {
           color: const Color(0xFF059669), // Emerald 600
         );
 
+      case 'lie_down':
+        return ActivityVisualMeta(
+          label: tr('lie_down', "S'allonger (Transition)"),
+          icon: Icons.hotel_rounded,
+          color: const Color(0xFF4F46E5), // Indigo 600
+        );
+
       case 'lying_supine':
         return ActivityVisualMeta(
           label: tr('lying_supine', 'Couché dorsal'),

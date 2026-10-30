@@ -32,7 +32,7 @@ void main() {
       expect(custom.isEdgeAi, isFalse);
 
       final lieDown = activities.firstWhere((a) => a.key == 'lie_down');
-      expect(lieDown.isEdgeAi, isFalse);
+      expect(lieDown.isEdgeAi, isTrue);
 
       final lyingSupine = activities.firstWhere((a) => a.key == 'lying_supine');
       expect(lyingSupine.isEdgeAi, isTrue);
@@ -78,7 +78,7 @@ void main() {
       expect(find.text('⚡ Edge AI'), findsOneWidget);
     });
 
-    testWidgets('renders R&D tag when lie_down or custom is selected', (WidgetTester tester) async {
+    testWidgets('renders Edge AI tag when lie_down is selected and R&D tag when custom is selected', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -92,7 +92,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text("S'allonger (Transition) 🛏️"), findsOneWidget);
-      expect(find.text('🧪 R&D'), findsOneWidget);
+      expect(find.text('⚡ Edge AI'), findsOneWidget);
     });
 
     testWidgets('renders Edge AI tag when jump is selected', (WidgetTester tester) async {

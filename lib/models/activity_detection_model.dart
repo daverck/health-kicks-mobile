@@ -147,6 +147,8 @@ class ActivityDetectionModel {
         return 'lying_lateral';
       case BleConstants.stateCodeJump:
         return 'jump';
+      case BleConstants.stateCodeLieDown:
+        return 'lie_down';
       case 0x10:
         return 'fall_forward';
       case 0x11:

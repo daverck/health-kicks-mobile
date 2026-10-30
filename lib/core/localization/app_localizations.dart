@@ -181,6 +181,8 @@ class AppLocalizations {
         return translate('evt_lying_prone');
       case 'lying_lateral':
         return translate('evt_lying_lateral');
+      case 'lie_down':
+        return translate('evt_lie_down');
       case 'jump':
         return translate('evt_jump');
       case 'activity_transition':
@@ -300,6 +302,7 @@ class AppLocalizations {
       'evt_lying_supine': 'Couché dorsal',
       'evt_lying_prone': 'Couché frontal',
       'evt_lying_lateral': 'Couché latéral',
+      'evt_lie_down': "S'allonger (Transition)",
       'evt_jump': 'Saut',
       'evt_activity_transition': 'Transition d\'activité',
     },
@@ -412,6 +415,7 @@ class AppLocalizations {
       'evt_lying_supine': 'Lying supine',
       'evt_lying_prone': 'Lying prone',
       'evt_lying_lateral': 'Lying lateral',
+      'evt_lie_down': 'Lie down (Transition)',
       'evt_jump': 'Jump',
       'evt_activity_transition': 'Activity transition',
     },
@@ -524,6 +528,7 @@ class AppLocalizations {
       'evt_lying_supine': 'Rugligging',
       'evt_lying_prone': 'Buikligging',
       'evt_lying_lateral': 'Zijligging',
+      'evt_lie_down': 'Gaan liggen (Overgang)',
       'evt_jump': 'Sprong',
       'evt_activity_transition': 'Activiteitsovergang',
     },
@@ -636,6 +641,7 @@ class AppLocalizations {
       'evt_lying_supine': 'Decúbito supino',
       'evt_lying_prone': 'Decúbito prono',
       'evt_lying_lateral': 'Decúbito lateral',
+      'evt_lie_down': 'Acostarse (Transición)',
       'evt_jump': 'Salto',
       'evt_activity_transition': 'Transición de actividad',
     },
@@ -748,6 +754,7 @@ class AppLocalizations {
       'evt_lying_supine': 'Rückenlage',
       'evt_lying_prone': 'Bauchlage',
       'evt_lying_lateral': 'Seitenlage',
+      'evt_lie_down': 'Hinlegen (Übergang)',
       'evt_jump': 'Sprung',
       'evt_activity_transition': 'Aktivitätsübergang',
     },
@@ -859,6 +866,7 @@ class AppLocalizations {
       'evt_lying_supine': 'استلقاء على الظهر',
       'evt_lying_prone': 'استلقاء على البطن',
       'evt_lying_lateral': 'استلقاء جانبي',
+      'evt_lie_down': 'الاستلقاء (انتقال)',
       'evt_jump': 'قفز',
       'evt_activity_transition': 'تغير النشاط',
     },
@@ -969,6 +977,7 @@ class AppLocalizations {
       'evt_lying_supine': '仰卧',
       'evt_lying_prone': '俯卧',
       'evt_lying_lateral': '侧卧',
+      'evt_lie_down': '躺下 (过渡)',
       'evt_jump': '跳跃',
       'evt_activity_transition': '活动状态转换',
     },

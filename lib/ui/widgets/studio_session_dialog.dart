@@ -61,7 +61,7 @@ class StudioSessionDialog extends StatefulWidget {
     StudioActivityOption(
         key: 'stand_up', label: 'Se lever (Transition)', emoji: '🧍', isEdgeAi: true),
     StudioActivityOption(
-        key: 'lie_down', label: "S'allonger (Transition)", emoji: '🛏️', isEdgeAi: false),
+        key: 'lie_down', label: "S'allonger (Transition)", emoji: '🛏️', isEdgeAi: true),
     StudioActivityOption(
         key: 'lying_supine', label: 'Couché dorsal', emoji: '🛌', isEdgeAi: true),
     StudioActivityOption(

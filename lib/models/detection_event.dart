@@ -198,6 +198,8 @@ class DetectionEvent {
         return 'Couché frontal';
       case 'lying_lateral':
         return 'Couché latéral';
+      case 'lie_down':
+        return "S'allonger (Transition)";
       case 'jump':
         return 'Saut';
       case 'activity_transition':

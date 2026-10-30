@@ -22,6 +22,7 @@ void main() {
         'fall_lateral',
         'fall_recovery',
         'stand_up',
+        'lie_down',
         'lying_supine',
         'lying_prone',
         'lying_lateral',

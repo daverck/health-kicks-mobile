@@ -75,7 +75,8 @@ class BleConstants {
   static const int stateCodeLyingSupine = 0x07;
   static const int stateCodeLyingProne = 0x08;
   static const int stateCodeLyingLateral = 0x09;
-  static const int stateCodeJump = 0x0A;
+  static const int stateCodeJump = 0x0A;
+  static const int stateCodeLieDown = 0x0B;
   static const int stateCodeFallForward = 0x10;
   static const int stateCodeFallBackward = 0x11;
   static const int stateCodeFallLateral = 0x12;
