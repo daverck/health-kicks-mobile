@@ -6,13 +6,13 @@ import 'ble/ble_footwear_client.dart';
 /// and synchronizing parameters with the HealthKicks footwear over BLE Characteristic 0004 (SET_FALL_IMPACT).
 class FallSensitivitySettingsService extends ChangeNotifier {
   static const String keyThresholdG = 'fall_impact_threshold_g';
-  static const double defaultThresholdG = 1.65;
+  static const double defaultThresholdG = 1.38; // ~13.5 m/s^2 (aligned with firmware DEFAULT_MIN_FALL_IMPACT_MS2)
   static const double gravityMs2 = 9.80665;
 
-  // Discrete range: 1.40 g to 1.90 g with 10 divisions (step of 0.05 g)
-  static const double minThresholdG = 1.40;
+  // Discrete range: 0.80 g (~7.8 m/s^2) to 1.90 g (~18.6 m/s^2) with 22 divisions (step of 0.05 g)
+  static const double minThresholdG = 0.80;
   static const double maxThresholdG = 1.90;
-  static const int divisions = 10;
+  static const int divisions = 22;
 
   double _thresholdG = defaultThresholdG;
   bool _isSynced = false;
@@ -24,11 +24,11 @@ class FallSensitivitySettingsService extends ChangeNotifier {
   String get sensitivityLabel => getSensitivityLabel(_thresholdG);
 
   static String getSensitivityLabel(double g) {
-    if (g <= 1.42) return 'Très sensible';
-    if (g <= 1.47) return 'Sensibilité ++';
-    if (g <= 1.57) return 'Sensible';
-    if (g <= 1.67) return 'Équilibrée (Recommandée)';
-    if (g <= 1.82) return 'Modérée';
+    if (g <= 0.95) return 'Ultra sensible (Démo)';
+    if (g <= 1.15) return 'Très sensible';
+    if (g <= 1.30) return 'Sensible';
+    if (g <= 1.45) return 'Équilibrée (Recommandée)';
+    if (g <= 1.65) return 'Modérée';
     return 'Robuste';
   }
 

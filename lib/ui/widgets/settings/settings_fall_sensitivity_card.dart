@@ -54,12 +54,12 @@ class SettingsFallSensitivityCard extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: (currentG == 1.65)
+                            color: (currentG >= 1.35 && currentG <= 1.45)
                                 ? Colors.green.withValues(alpha: 0.15)
                                 : theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
-                              color: (currentG == 1.65)
+                              color: (currentG >= 1.35 && currentG <= 1.45)
                                   ? Colors.green.shade600
                                   : theme.colorScheme.outlineVariant,
                               width: 1,
@@ -71,7 +71,7 @@ class SettingsFallSensitivityCard extends StatelessWidget {
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 12,
-                              color: (currentG == 1.65)
+                              color: (currentG >= 1.35 && currentG <= 1.45)
                                   ? Colors.green.shade800
                                   : theme.colorScheme.onSecondaryContainer,
                             ),
@@ -114,7 +114,7 @@ class SettingsFallSensitivityCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '1.40 g (Très sensible)',
+                        '0.80 g (Ultra sensible)',
                         style: TextStyle(
                           fontSize: 11,
                           color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8),

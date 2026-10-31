@@ -10,27 +10,27 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    test('Initializes with default values (1.65 g threshold, Équilibrée / Recommandée)', () async {
+    test('Initializes with default values (1.38 g threshold, Équilibrée / Recommandée)', () async {
       final service = FallSensitivitySettingsService();
       await service.loadSettings();
 
-      expect(service.thresholdG, equals(1.65));
-      expect(service.thresholdMs2, closeTo(16.18, 0.02));
+      expect(service.thresholdG, equals(1.38));
+      expect(service.thresholdMs2, closeTo(13.53, 0.05));
       expect(service.sensitivityLabel, equals('Équilibrée (Recommandée)'));
       expect(service.isSynced, isFalse);
     });
 
     test('Loads persisted values from SharedPreferences', () async {
       SharedPreferences.setMockInitialValues({
-        FallSensitivitySettingsService.keyThresholdG: 1.50,
+        FallSensitivitySettingsService.keyThresholdG: 1.10,
       });
 
       final service = FallSensitivitySettingsService();
       await service.loadSettings();
 
-      expect(service.thresholdG, equals(1.50));
-      expect(service.thresholdMs2, closeTo(14.71, 0.02));
-      expect(service.sensitivityLabel, equals('Sensible'));
+      expect(service.thresholdG, equals(1.10));
+      expect(service.thresholdMs2, closeTo(10.79, 0.05));
+      expect(service.sensitivityLabel, equals('Très sensible'));
     });
 
     test('Clamps out-of-range values to default on load', () async {
@@ -48,12 +48,12 @@ void main() {
       final service = FallSensitivitySettingsService();
       await service.loadSettings();
 
-      await service.updateThreshold(1.42); // Should snap to 1.40
-      expect(service.thresholdG, equals(1.40));
-      expect(service.sensitivityLabel, equals('Très sensible'));
+      await service.updateThreshold(0.82); // Should snap to 0.80
+      expect(service.thresholdG, equals(0.80));
+      expect(service.sensitivityLabel, equals('Ultra sensible (Démo)'));
 
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getDouble(FallSensitivitySettingsService.keyThresholdG), equals(1.40));
+      expect(prefs.getDouble(FallSensitivitySettingsService.keyThresholdG), equals(0.80));
 
       await service.updateThreshold(1.88); // Should snap to 1.90
       expect(service.thresholdG, equals(1.90));
@@ -61,15 +61,14 @@ void main() {
     });
 
     test('Labels cover full spectrum correctly', () {
-      expect(FallSensitivitySettingsService.getSensitivityLabel(1.40), equals('Très sensible'));
-      expect(FallSensitivitySettingsService.getSensitivityLabel(1.45), equals('Sensibilité ++'));
-      expect(FallSensitivitySettingsService.getSensitivityLabel(1.50), equals('Sensible'));
-      expect(FallSensitivitySettingsService.getSensitivityLabel(1.55), equals('Sensible'));
-      expect(FallSensitivitySettingsService.getSensitivityLabel(1.60), equals('Équilibrée (Recommandée)'));
-      expect(FallSensitivitySettingsService.getSensitivityLabel(1.65), equals('Équilibrée (Recommandée)'));
-      expect(FallSensitivitySettingsService.getSensitivityLabel(1.70), equals('Modérée'));
-      expect(FallSensitivitySettingsService.getSensitivityLabel(1.80), equals('Modérée'));
-      expect(FallSensitivitySettingsService.getSensitivityLabel(1.85), equals('Robuste'));
+      expect(FallSensitivitySettingsService.getSensitivityLabel(0.80), equals('Ultra sensible (Démo)'));
+      expect(FallSensitivitySettingsService.getSensitivityLabel(1.00), equals('Très sensible'));
+      expect(FallSensitivitySettingsService.getSensitivityLabel(1.20), equals('Sensible'));
+      expect(FallSensitivitySettingsService.getSensitivityLabel(1.35), equals('Équilibrée (Recommandée)'));
+      expect(FallSensitivitySettingsService.getSensitivityLabel(1.40), equals('Équilibrée (Recommandée)'));
+      expect(FallSensitivitySettingsService.getSensitivityLabel(1.50), equals('Modérée'));
+      expect(FallSensitivitySettingsService.getSensitivityLabel(1.65), equals('Modérée'));
+      expect(FallSensitivitySettingsService.getSensitivityLabel(1.70), equals('Robuste'));
       expect(FallSensitivitySettingsService.getSensitivityLabel(1.90), equals('Robuste'));
     });
   });

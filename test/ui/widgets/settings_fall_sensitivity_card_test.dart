@@ -12,7 +12,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    testWidgets('Renders card with default 1.65 g threshold, badges and slider', (tester) async {
+    testWidgets('Renders card with default 1.38 g threshold, badges and slider', (tester) async {
       final service = FallSensitivitySettingsService();
       await service.loadSettings();
 
@@ -31,9 +31,9 @@ void main() {
 
       expect(find.text('Sensibilité détection de chute'), findsOneWidget);
       expect(find.text('Équilibrée (Recommandée)'), findsOneWidget);
-      expect(find.text('1.65 g (16.2 m/s²)'), findsOneWidget);
+      expect(find.text('1.38 g (13.5 m/s²)'), findsOneWidget);
       expect(find.byType(Slider), findsOneWidget);
-      expect(find.text('1.40 g (Très sensible)'), findsOneWidget);
+      expect(find.text('0.80 g (Ultra sensible)'), findsOneWidget);
       expect(find.text('1.90 g (Robuste)'), findsOneWidget);
       expect(find.text('Enregistré localement. Sera transmis à la connexion de la chaussure.'), findsOneWidget);
     });
@@ -76,11 +76,11 @@ void main() {
       );
 
       // Programmatically update threshold to test reactive rebuild
-      await service.updateThreshold(1.40);
+      await service.updateThreshold(0.80);
       await tester.pumpAndSettle();
 
-      expect(find.text('1.40 g (13.7 m/s²)'), findsOneWidget);
-      expect(find.text('Très sensible'), findsOneWidget);
+      expect(find.text('0.80 g (7.8 m/s²)'), findsOneWidget);
+      expect(find.text('Ultra sensible (Démo)'), findsOneWidget);
 
       await service.updateThreshold(1.90);
       await tester.pumpAndSettle();
