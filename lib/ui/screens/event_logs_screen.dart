@@ -7,6 +7,7 @@ class EventLogsScreen extends StatefulWidget {
   final List<LogEntry> logs;
   final VoidCallback onClearLogs;
   final Future<void> Function()? onExportLogs;
+  final Listenable? logsNotifier;
   final String deviceId;
   final String? deviceName;
   final String? bleStatus;
@@ -18,6 +19,7 @@ class EventLogsScreen extends StatefulWidget {
     required this.logs,
     required this.onClearLogs,
     this.onExportLogs,
+    this.logsNotifier,
     this.deviceId = 'HK-2',
     this.deviceName,
     this.bleStatus,
@@ -51,6 +53,7 @@ class _EventLogsScreenState extends State<EventLogsScreen> {
   @override
   void initState() {
     super.initState();
+    widget.logsNotifier?.addListener(_onLogsUpdated);
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text.trim().toLowerCase();
@@ -63,7 +66,25 @@ class _EventLogsScreenState extends State<EventLogsScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant EventLogsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.logsNotifier != widget.logsNotifier) {
+      oldWidget.logsNotifier?.removeListener(_onLogsUpdated);
+      widget.logsNotifier?.addListener(_onLogsUpdated);
+    }
+  }
+
+  void _onLogsUpdated() {
+    if (!mounted) return;
+    setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom();
+    });
+  }
+
+  @override
   void dispose() {
+    widget.logsNotifier?.removeListener(_onLogsUpdated);
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();

@@ -259,6 +259,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
       MaterialPageRoute(
         builder: (_) => EventLogsScreen(
           logs: _controller.logs,
+          logsNotifier: _controller,
           onClearLogs: () => setState(() => _controller.logs.clear()),
           deviceId: _controller.deviceId,
           deviceName: _controller.connectedDevice?.platformName.isNotEmpty == true ? _controller.connectedDevice!.platformName : _controller.targetDeviceId,
