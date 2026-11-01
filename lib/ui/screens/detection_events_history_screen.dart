@@ -351,6 +351,13 @@ class _DetectionEventsHistoryScreenState extends State<DetectionEventsHistoryScr
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
       itemCount: items.length,
+      findChildIndexCallback: (Key key) {
+        if (key is ValueKey<String>) {
+          final index = items.indexWhere((it) => it.id == key.value);
+          return index >= 0 ? index : null;
+        }
+        return null;
+      },
       itemBuilder: (context, index) {
         final item = items[index];
         final isSelected = _selectedEventId == item.id;

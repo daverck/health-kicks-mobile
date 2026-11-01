@@ -376,61 +376,93 @@ class UnifiedActivityCard extends StatelessWidget {
                                           ],
                                         ),
                                       )
-                                    : Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                        decoration: BoxDecoration(
-                                          color: theme.colorScheme.surface,
-                                          borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(
-                                            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
-                                          ),
-                                        ),
-                                        child: Builder(
-                                          builder: (context) {
-                                            final capturedItem = hitlItem!;
-                                            return DropdownButtonHideUnderline(
-                                              child: DropdownButton<String>(
-                                                key: ValueKey('hitl_label_dropdown_${capturedItem.id}'),
-                                                isExpanded: true,
-                                                iconSize: 18,
-                                                value: hitlAvailableLabels.contains(capturedItem.selectedLabel)
-                                                    ? capturedItem.selectedLabel
-                                                    : hitlAvailableLabels.first,
-                                                isDense: true,
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: theme.colorScheme.onSurface,
-                                                ),
-                                                items: hitlAvailableLabels.map((l) {
-                                                  final optMeta = ActivityVisualMeta.fromEventType(context, l);
-                                                  return DropdownMenuItem<String>(
-                                                    value: l,
-                                                    onTap: () {
-                                                      onTap?.call();
-                                                      onUpdateHitlLabel?.call(capturedItem, l);
-                                                    },
-                                                    child: Row(
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      children: [
-                                                        Icon(optMeta.icon, size: 14, color: optMeta.color),
-                                                        const SizedBox(width: 4),
-                                                        Flexible(
-                                                          child: Text(
-                                                            l,
-                                                            overflow: TextOverflow.ellipsis,
+                                    : Builder(
+                                        builder: (context) {
+                                          final capturedItem = hitlItem!;
+                                          final currentLabelMeta = ActivityVisualMeta.fromEventType(context, capturedItem.selectedLabel);
+                                          return PopupMenuButton<String>(
+                                            key: ValueKey('hitl_label_dropdown_${capturedItem.id}'),
+                                            initialValue: capturedItem.selectedLabel,
+                                            tooltip: 'Modifier l\'activité',
+                                            padding: EdgeInsets.zero,
+                                            color: theme.colorScheme.surface,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(8),
+                                              side: BorderSide(
+                                                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
+                                              ),
+                                            ),
+                                            onOpened: () => onTap?.call(),
+                                            onSelected: (String label) {
+                                              onTap?.call();
+                                              onUpdateHitlLabel?.call(capturedItem, label);
+                                            },
+                                            itemBuilder: (BuildContext context) {
+                                              return hitlAvailableLabels.map((String l) {
+                                                final optMeta = ActivityVisualMeta.fromEventType(context, l);
+                                                final isSelected = l == capturedItem.selectedLabel;
+                                                return PopupMenuItem<String>(
+                                                  value: l,
+                                                  height: 34,
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(optMeta.icon, size: 14, color: optMeta.color),
+                                                      const SizedBox(width: 6),
+                                                      Expanded(
+                                                        child: Text(
+                                                          l,
+                                                          overflow: TextOverflow.ellipsis,
+                                                          style: TextStyle(
+                                                            fontSize: 11,
+                                                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                                            color: theme.colorScheme.onSurface,
                                                           ),
                                                         ),
-                                                      ],
-                                                    ),
-                                                  );
-                                                }).toList(),
-                                                onTap: onTap,
-                                                onChanged: (_) {},
+                                                      ),
+                                                      if (isSelected)
+                                                        Icon(Icons.check_rounded, size: 14, color: theme.colorScheme.primary),
+                                                    ],
+                                                  ),
+                                                );
+                                              }).toList();
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: theme.colorScheme.surface,
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(
+                                                  color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
+                                                ),
                                               ),
-                                            );
-                                          },
-                                        ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(currentLabelMeta.icon, size: 14, color: currentLabelMeta.color),
+                                                  const SizedBox(width: 4),
+                                                  Expanded(
+                                                    child: Text(
+                                                      capturedItem.selectedLabel,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: theme.colorScheme.onSurface,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 2),
+                                                  Icon(
+                                                    Icons.arrow_drop_down_rounded,
+                                                    size: 16,
+                                                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          );
+                                        },
                                       ),
                               ),
                               const SizedBox(width: 8),

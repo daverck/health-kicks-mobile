@@ -1,4 +1,5 @@
-import 'package:healthkicks_mobile/ui/widgets/events/unified_activity_card.dart';
+import 'package:healthkicks_mobile/ui/widgets/events/unified_activity_card.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/models/activity_detection_model.dart';
@@ -331,7 +332,7 @@ void main() {
     );
 
     // Tap dropdown button
-    await tester.tap(find.byType(DropdownButton<String>));
+    await tester.tap(find.byKey(ValueKey('hitl_label_dropdown_${item.id}')));
     await tester.pump();
 
     // Now highlighted (isSelected == true)
@@ -404,23 +405,20 @@ void main() {
       ),
     );
 
-    // 1. Open dropdown on item1 ('hitl-item-original')
+    // 1. Open popup menu on item1 ('hitl-item-original')
     await tester.tap(find.byKey(const ValueKey('hitl_label_dropdown_hitl-item-original')));
     await tester.pumpAndSettle();
 
-    // 2. While dropdown menu is open, a new activity (item2) is detected and inserted at index 0
+    // 2. While popup menu is open, a new activity (item2) is detected and inserted at index 0
     itemsNotifier.value = [item2, item1];
     await tester.pump();
 
-    // 3. Select 'run' in the open dropdown menu
-    await tester.tap(find.text('run').last);
+    // 3. Select 'run' in the open popup menu (which remained open and active)
+    await tester.tap(find.widgetWithText(PopupMenuItem<String>, 'run'));
     await tester.pumpAndSettle();
 
-    // 4. Verify the label update targets item1 ('hitl-item-original'), NOT item2 ('hitl-item-newer')
     expect(updatedItemId, equals('hitl-item-original'));
     expect(updatedLabel, equals('run'));
   });
 }
-
-
 

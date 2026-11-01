@@ -215,28 +215,22 @@ class _RecentActivitiesCardState extends State<RecentActivitiesCard> {
                     ],
                   ),
                 ),
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: hitlList.length,
-                  itemBuilder: (context, index) {
-                    final item = hitlList[index];
-                    final isSelected = _selectedId == item.id;
-                    return UnifiedActivityCard(
-                      key: ValueKey(item.id),
-                      hitlItem: item,
-                      isSelected: isSelected,
-                      onTap: () {
-                        setState(() {
-                          _selectedId = item.id;
-                        });
-                      },
-                      onUpdateHitlLabel: widget.onUpdateHitlLabel,
-                      onConfirmHitl: widget.onConfirmHitl,
-                      onDismissHitl: widget.onDismissHitl,
-                    );
-                  },
-                ),
+                ...hitlList.map((item) {
+                  final isSelected = _selectedId == item.id;
+                  return UnifiedActivityCard(
+                    key: ValueKey(item.id),
+                    hitlItem: item,
+                    isSelected: isSelected,
+                    onTap: () {
+                      setState(() {
+                        _selectedId = item.id;
+                      });
+                    },
+                    onUpdateHitlLabel: widget.onUpdateHitlLabel,
+                    onConfirmHitl: widget.onConfirmHitl,
+                    onDismissHitl: widget.onDismissHitl,
+                  );
+                }),
               ],
             ] else if (widget.activities.isEmpty)
               Container(
