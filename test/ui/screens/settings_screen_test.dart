@@ -9,7 +9,6 @@ import 'package:healthkicks_mobile/services/ble/ble_connection_manager.dart';
 import 'package:healthkicks_mobile/services/locale_service.dart';
 import 'package:healthkicks_mobile/services/theme_service.dart';
 import 'package:healthkicks_mobile/ui/screens/settings_screen.dart';
-import 'package:healthkicks_mobile/ui/widgets/settings/settings_fall_sensitivity_card.dart';
 import 'package:healthkicks_mobile/ui/widgets/settings/settings_inactivity_card.dart';
 
 void main() {
@@ -300,7 +299,6 @@ void main() {
       expect(find.text('50 min'), findsOneWidget);
       expect(find.text('10 min'), findsOneWidget);
       expect(find.descendant(of: find.byType(SettingsInactivityCard), matching: find.byType(Slider)), findsNWidgets(2));
-      expect(find.byType(SettingsFallSensitivityCard), findsOneWidget);
       expect(find.text('Synchronisé en direct avec la chaussure'), findsOneWidget);
 
       // Toggle repeat alerts off
