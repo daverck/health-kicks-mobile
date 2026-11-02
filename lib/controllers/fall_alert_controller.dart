@@ -8,6 +8,7 @@ import '../models/fall_alert_model.dart';
 import '../services/location/fall_location_provider.dart';
 import '../services/mqtt/mqtt_gateway_service.dart';
 import '../services/sms/fall_sms_sender.dart';
+import '../services/audio/fall_alert_audio_service.dart';
 
 const _uuid = Uuid();
 
@@ -25,6 +26,7 @@ class FallAlertController extends ChangeNotifier {
   final Future<void> Function()? onCall112;
   final FallAlertLogCallback? onLog;
   final Future<void> Function(int notificationId, bool sent, String? errorMessage)? onSmsStatusReported;
+  final FallAlertAudioService _audioService;
 
   MqttGatewayService? _mqttService;
   StreamSubscription<FallAlertStatusModel>? _statusSub;
@@ -60,8 +62,10 @@ class FallAlertController extends ChangeNotifier {
     this.onCall112,
     this.onLog,
     this.onSmsStatusReported,
+    FallAlertAudioService? audioService,
     MqttGatewayService? mqttService,
-  }) : _remainingSeconds = initialCountdownSeconds {
+  })  : _audioService = audioService ?? FallAlertAudioService(),
+        _remainingSeconds = initialCountdownSeconds {
     if (mqttService != null) {
       attachMqttService(mqttService);
     }
@@ -600,7 +604,23 @@ class FallAlertController extends ChangeNotifier {
     return false;
   }
 
+
+  FallAlertAudioService get audioService => _audioService;
+
+  void _updateAlarmAudioState() {
+    if (_isDisposed) {
+      _audioService.stopAlarm();
+      return;
+    }
+    if (_state == 'ESCALATING') {
+      _audioService.startEscalationAlarm();
+    } else {
+      _audioService.stopAlarm();
+    }
+  }
+
   void _notifySafely() {
+    _updateAlarmAudioState();
     if (!_isDisposed) {
       notifyListeners();
     }
@@ -612,6 +632,7 @@ class FallAlertController extends ChangeNotifier {
     _countdownTimer?.cancel();
     _cancelLocationRefreshDelay();
     _statusSub?.cancel();
+    _audioService.dispose();
     super.dispose();
   }
 }
