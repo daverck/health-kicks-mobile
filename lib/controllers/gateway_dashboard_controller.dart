@@ -517,6 +517,13 @@ class GatewayDashboardController extends ChangeNotifier {
         onLog: (msg, {bool isError = false}) {
           addLog('MQTT', msg, color: isError ? Colors.red : Colors.teal);
         },
+        onConnectionLost: () {
+          if (_isDisposed) return;
+          _mqttConnected = false;
+          _mqttConnectedNotifier.value = false;
+          _fallAlertController.setMqttConnected(false);
+          notifyListeners();
+        },
         onConnectionRestored: () {
           if (_isDisposed) return;
           _mqttConnected = true;

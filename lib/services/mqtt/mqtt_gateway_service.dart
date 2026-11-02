@@ -27,10 +27,17 @@ class MqttGatewayService {
   final AuthUser? Function()? authUserProvider;
   final MqttLogCallback? onLog;
   final VoidCallback? onConnectionRestored;
+  final VoidCallback? onConnectionLost;
 
   MqttServerClient? _client;
   String? _effectiveUserId;
   bool _isConnected = false;
+  bool _isConnecting = false;
+  bool _isDisposed = false;
+  Timer? _reconnectTimer;
+  int _reconnectAttempts = 0;
+  static const int _maxReconnectDelaySec = 30;
+
   bool get isConnected =>
       _isConnected &&
       _client != null &&
@@ -89,6 +96,7 @@ class MqttGatewayService {
     String? clientId,
     this.onLog,
     this.onConnectionRestored,
+    this.onConnectionLost,
   }) : clientId = clientId ??
             (userId != null && userId.isNotEmpty
                 ? 'healthkicks-mobile-$userId-${generateSessionNonce()}'
@@ -97,8 +105,16 @@ class MqttGatewayService {
   /// Establishes secure MQTT connection to AWS IoT Core via WebSockets SigV4 on port 443.
   Future<bool> connect({MqttLogCallback? onLog}) async {
     final log = onLog ?? this.onLog;
+    if (_isDisposed) return false;
+    if (_isConnecting) {
+      log?.call('Connexion MQTT déjà en cours de négociation.', isError: false);
+      return false;
+    }
+    _isConnecting = true;
 
     // 1. Clean up cleanly before any new connect() invocation
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     if (_client != null) {
       try {
         _client!.onDisconnected = null;
@@ -173,6 +189,7 @@ class MqttGatewayService {
           'Connection rejected: no valid userId or session unresolved. Aborting to preserve multi-tenant isolation.',
           isError: true,
         );
+        _isConnecting = false;
         return false;
       }
 
@@ -203,27 +220,25 @@ class MqttGatewayService {
       _client!.useWebSocket = true;
       _client!.secure = false;
       _client!.keepAlivePeriod = 30;
-      _client!.autoReconnect = true;
+      _client!.autoReconnect = false;
       _client!.logging(on: false);
 
       _client!.onConnected = () {
         _isConnected = true;
+        _reconnectAttempts = 0;
         log?.call('WebSocket connected to AWS IoT Core.', isError: false);
         onConnectionRestored?.call();
       };
       _client!.onDisconnected = () {
+        final returnCode = _client?.connectionStatus?.returnCode;
+        final origin = _client?.connectionStatus?.disconnectionOrigin;
         _isConnected = false;
-        log?.call('WebSocket disconnected from AWS IoT Core.', isError: true);
-      };
-      _client!.onAutoReconnect = () {
-        _isConnected = false;
-        log?.call('Automatic MQTT reconnection in progress...', isError: false);
-      };
-      _client!.onAutoReconnected = () {
-        _isConnected = true;
-        log?.call('Automatic MQTT reconnection succeeded.', isError: false);
-        _resubscribeTopics();
-        onConnectionRestored?.call();
+        log?.call(
+          'WebSocket disconnected from AWS IoT Core (code: $returnCode, origin: $origin).',
+          isError: true,
+        );
+        onConnectionLost?.call();
+        _scheduleManagedReconnect();
       };
 
       final connMessage = MqttConnectMessage()
@@ -239,40 +254,43 @@ class MqttGatewayService {
       _isConnected = status?.state == MqttConnectionState.connected;
 
       if (_isConnected) {
+        _reconnectAttempts = 0;
         log?.call('Connected successfully to AWS IoT Core via SigV4 WebSockets.', isError: false);
         _subscribeToCommands();
       } else {
         log?.call(
-          'AWS IoT Core WSS connection failed: status ${status?.state}.',
+          'AWS IoT Core WSS connection failed: status ${status?.state}, returnCode: ${status?.returnCode}.',
           isError: true,
         );
+        _scheduleManagedReconnect();
       }
+      _isConnecting = false;
       return _isConnected;
     } catch (e) {
       _isConnected = false;
+      _isConnecting = false;
       log?.call('WebSocket error: $e', isError: true);
+      _scheduleManagedReconnect();
       return false;
     }
   }
 
-  void _resubscribeTopics() {
-    final log = onLog;
-    final hapticTopic = 'healthkicks/v1/$deviceId/commands/haptic';
-    final studioStartTopic = 'healthkicks/v1/$deviceId/commands/studio/start';
-    final uid = effectiveUserId;
+  void _scheduleManagedReconnect() {
+    if (_isDisposed || _isConnecting) return;
+    _reconnectTimer?.cancel();
 
-    _client?.subscribe(hapticTopic, MqttQos.atLeastOnce);
-    _client?.subscribe(studioStartTopic, MqttQos.atLeastOnce);
-    if (uid != null && uid.isNotEmpty) {
-      final fallStatusTopic = 'healthkicks/v1/users/$uid/fall-alert/status';
-      _client?.subscribe(fallStatusTopic, MqttQos.atLeastOnce);
-      log?.call(
-        'Subscriptions renewed after auto-reconnect: $hapticTopic, $studioStartTopic & $fallStatusTopic',
-        isError: false,
-      );
-    } else {
-      log?.call('Subscriptions renewed after auto-reconnect: $hapticTopic & $studioStartTopic', isError: false);
-    }
+    _reconnectAttempts++;
+    final delaySec = min(pow(2, _reconnectAttempts).toInt(), _maxReconnectDelaySec);
+    onLog?.call(
+      'Reconnexion MQTT planifiée dans ${delaySec}s (tentative #$_reconnectAttempts)...',
+      isError: false,
+    );
+
+    _reconnectTimer = Timer(Duration(seconds: delaySec), () async {
+      if (_isDisposed || _isConnected || _isConnecting) return;
+      onLog?.call('Tentative de reconnexion MQTT en cours...', isError: false);
+      await connect();
+    });
   }
 
   void _subscribeToCommands() {
@@ -557,6 +575,9 @@ class MqttGatewayService {
   }
 
   void disconnect() {
+    _isDisposed = true;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     publishGatewayStatus(online: false);
     publishUserGatewayStatus(online: false);
     _updatesSub?.cancel();
@@ -571,6 +592,7 @@ class MqttGatewayService {
       _client = null;
     }
     _isConnected = false;
+    _isConnecting = false;
     _hapticCommandsController.close();
     _studioCommandsController.close();
     _fallAlertStatusController.close();

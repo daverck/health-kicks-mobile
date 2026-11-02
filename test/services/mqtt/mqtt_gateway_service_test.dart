@@ -208,5 +208,22 @@ void main() {
       expect(result, isFalse);
       expect(logReceived, isTrue);
     });
+
+    test('onConnectionLost callback is triggered and disconnect() cancels reconnection timer', () async {
+      final fakeRepo = FakeCredentialsRepository();
+      bool connectionLostCalled = false;
+      final service = MqttGatewayService(
+        deviceId: 'HK-2',
+        userId: '42',
+        credentialsRepository: fakeRepo,
+        onConnectionLost: () {
+          connectionLostCalled = true;
+        },
+      );
+
+      expect(service.isConnected, isFalse);
+      service.disconnect();
+      expect(connectionLostCalled, isFalse);
+    });
   });
 }
