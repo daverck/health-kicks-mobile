@@ -45,6 +45,7 @@ class SettingsScreen extends StatefulWidget {
   final String? deviceName;
   final String? targetDeviceId;
   final int mtu;
+  final VoidCallback? onSimulateFall;
 
   const SettingsScreen({
     super.key,
@@ -71,6 +72,7 @@ class SettingsScreen extends StatefulWidget {
     this.deviceName,
     this.targetDeviceId,
     this.mtu = 23,
+    this.onSimulateFall,
   });
 
   @override
@@ -403,6 +405,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 bleClient: activeBleClient,
                 isBleReady: isBleReady,
                 onOpenCalibrationDialog: () => _showCalibrationDialog(context, isBleReady),
+                onSimulateFall: widget.onSimulateFall,
                 onOpenLanguageSelector: () => _showLanguageSelector(context),
                 healthConnectService: _healthConnectService,
               ),

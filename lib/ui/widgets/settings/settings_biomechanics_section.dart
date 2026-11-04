@@ -24,6 +24,7 @@ class SettingsBiomechanicsSection extends StatelessWidget {
   final VoidCallback onOpenCalibrationDialog;
   final VoidCallback onOpenLanguageSelector;
   final HealthConnectService? healthConnectService;
+  final VoidCallback? onSimulateFall;
 
   const SettingsBiomechanicsSection({
     super.key,
@@ -36,6 +37,7 @@ class SettingsBiomechanicsSection extends StatelessWidget {
     required this.onOpenCalibrationDialog,
     required this.onOpenLanguageSelector,
     this.healthConnectService,
+    this.onSimulateFall,
   });
 
   @override
@@ -148,6 +150,51 @@ class SettingsBiomechanicsSection extends StatelessWidget {
 
         const Divider(height: 32),
 
+        // Demo & Safety Section
+
+        const Divider(height: 32),
+
+        // Demo & Safety Section
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: Text(
+            'DEMONSTRATION ET SECURITE',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: Colors.amber.shade800,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.1,
+            ),
+          ),
+        ),
+        Card(
+          margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: Colors.amber.shade700.withValues(alpha: 0.5)),
+          ),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: Colors.amber.withValues(alpha: 0.15),
+              child: const Icon(Icons.warning_amber_rounded, color: Colors.amber),
+            ),
+            title: const Text(
+              'Simuler une chute avant (Demo)',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: const Text(
+              'Declenche ecran urgence (60s), alarme sonore et escalade secours',
+              style: TextStyle(fontSize: 12),
+            ),
+            trailing: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.amber.shade700,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: onSimulateFall,
+              child: const Text('Simuler'),
+            ),
+          ),
+        ),
         // Prolonged Inactivity Reminder Category
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),

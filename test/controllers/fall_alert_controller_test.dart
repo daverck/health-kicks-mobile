@@ -427,5 +427,63 @@ void main() {
 
       controller.dispose();
     });
+
+    test('simulateFall triggers PENDING state and alert screen', () async {
+      final published = <FallAlertUplinkPayload>[];
+      final controller = FallAlertController(
+        deviceId: 'HK-1',
+        locationProvider: const StaticFallLocationProvider(location: mockLocation),
+        smsSender: FakeFallSmsSender(),
+        isMqttConnectedGetter: () => true,
+        onPublishUplink: (payload) async {
+          published.add(payload);
+          return true;
+        },
+      );
+
+      // Simulate a fall
+      await controller.simulateFall();
+
+      // Verify state changes
+      expect(controller.state, equals('PENDING'));
+      expect(controller.isAlertScreenVisible, isTrue);
+      expect(controller.remainingSeconds, equals(60));
+      expect(controller.activeEventId, isNotNull);
+
+      // Verify uplink was published
+      expect(published.length, equals(1));
+      expect(published.first.action, equals('DETECTED'));
+      expect(published.first.eventType, equals('fall_forward'));
+      expect(published.first.deviceId, equals('HK-1'));
+
+      controller.dispose();
+    });
+
+    test('simulateFall with custom parameters', () async {
+      final published = <FallAlertUplinkPayload>[];
+      final controller = FallAlertController(
+        deviceId: 'HK-2',
+        locationProvider: const StaticFallLocationProvider(location: mockLocation),
+        smsSender: FakeFallSmsSender(),
+        isMqttConnectedGetter: () => true,
+        onPublishUplink: (payload) async {
+          published.add(payload);
+          return true;
+        },
+      );
+
+      // Simulate a fall with custom parameters
+      await controller.simulateFall(
+        eventType: 'fall_backward',
+        stateCode: 0x11,
+        confidence: 85,
+      );
+
+      // Verify custom parameters were used
+      expect(published.length, equals(1));
+      expect(published.first.eventType, equals('fall_backward'));
+
+      controller.dispose();
+    });
   });
 }

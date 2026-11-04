@@ -210,6 +210,36 @@ class GatewayDashboardController extends ChangeNotifier {
       overrideDeviceId: deviceId,
     ));
   }
+
+  /// Simulates a forward fall detection event (0x10) for live demonstration purposes.
+  /// Triggers the entire emergency sequence (countdown, siren, GPS, MQTT alert, and optional shoe vibration).
+  Future<void> simulateFallForward() async {
+    addLog('DEMO', 'Simulation manuelle d une chute avant (fall_forward, 0x10)...', color: Colors.amber);
+
+    // Optional haptic alert on connected shoe
+    if (isBleConnected && _bleClient != null && _bleClient!.hasHaptic) {
+      unawaited(_bleClient!.sendHapticCommand(const HapticCommandModel(
+        commandId: 'sim-fall-haptic',
+        patternId: 2, // alert_pattern
+        intensity: 255,
+        durationMs: 600,
+      )));
+    }
+
+    // Build synthetic live fall detection
+    final simulatedFall = ActivityDetectionModel(
+      stateCode: 0x10,
+      eventType: 'fall_forward',
+      confidencePercent: 95,
+      timestampEpochSec: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      isFall: true,
+      isHapticTriggered: true,
+      isOfflineBuffered: false,
+    );
+
+    // Feed through standard pipeline
+    handleActivityDetection(simulatedFall);
+  }
   GatewayCoordinator? get coordinator => _coordinator;
   FirmwareService get firmwareService => _firmwareService;
   StepStorageService get stepStorageService => _odometerCoordinator.storageService;

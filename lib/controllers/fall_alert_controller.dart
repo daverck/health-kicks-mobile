@@ -150,6 +150,26 @@ class FallAlertController extends ChangeNotifier {
   }) =>
       onActivityDetected(detection, overrideDeviceId: overrideDeviceId);
 
+  /// Manually injects a simulated fall event into the alerting pipeline.
+  /// This is used for demonstration purposes to trigger the emergency sequence
+  /// (countdown, siren, GPS, MQTT alert) without requiring actual sensor data.
+  Future<void> simulateFall({
+    String eventType = 'fall_forward',
+    int stateCode = 0x10,
+    int confidence = 95,
+  }) async {
+    final simulatedDetection = ActivityDetectionModel(
+      stateCode: stateCode,
+      eventType: eventType,
+      confidencePercent: confidence,
+      timestampEpochSec: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      isFall: true,
+      isHapticTriggered: true,
+      isOfflineBuffered: false,
+    );
+    await onActivityDetected(simulatedDetection);
+  }
+
   /// Processes a decoded BLE activity notification (`7a5a0002`).
   Future<void> onActivityDetected(
     ActivityDetectionModel detection, {

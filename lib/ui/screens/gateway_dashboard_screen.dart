@@ -339,6 +339,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
           onReconnectMqtt: _controller.connectMqtt,
           onCalibrateSensor: _controller.calibrateSensor,
           onOpenEventLogs: _openEventLogsScreen,
+          onSimulateFall: () { Navigator.of(context).pop(); _controller.simulateFallForward(); },
         ),
       ),
     )
