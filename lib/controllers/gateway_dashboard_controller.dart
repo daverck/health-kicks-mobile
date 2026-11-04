@@ -23,6 +23,7 @@ import '../services/auth/token_storage_service.dart';
 import '../services/background_surveillance_service.dart';
 import '../services/ble/ble_connection_manager.dart';
 import '../services/ble/ble_footwear_client.dart';
+import '../services/fall_sensitivity_settings_service.dart';
 import '../services/firmware/firmware_service.dart';
 import '../services/gateway_coordinator.dart';
 import '../services/inactivity_settings_service.dart';
@@ -55,6 +56,7 @@ class GatewayDashboardController extends ChangeNotifier {
   late final BackgroundSurveillanceService _surveillanceService;
   late final DashboardOdometerCoordinator _odometerCoordinator;
   final InactivitySettingsService _inactivitySettingsService;
+  final FallSensitivitySettingsService _fallSensitivitySettingsService;
 
   IotCredentialsRepository? _credentialsRepo;
   BleConnectionManager? _bleManager;
@@ -103,6 +105,7 @@ class GatewayDashboardController extends ChangeNotifier {
     HitlCoordinator? hitlCoordinator,
     StudioAudioFeedbackService? audioFeedbackService,
     InactivitySettingsService? inactivitySettingsService,
+    FallSensitivitySettingsService? fallSensitivitySettingsService,
     this.onShowSnackBar,
     this.onDismissSnackBar,
     this.onShowRecordingDialog,
@@ -110,6 +113,7 @@ class GatewayDashboardController extends ChangeNotifier {
   })  : _firmwareService = firmwareService ?? FirmwareService(),
         _audioFeedbackService = audioFeedbackService ?? StudioAudioFeedbackService(),
         _inactivitySettingsService = inactivitySettingsService ?? InactivitySettingsService(),
+        _fallSensitivitySettingsService = fallSensitivitySettingsService ?? FallSensitivitySettingsService(),
         _ownsFallAlertController = fallAlertController == null {
     _hitlCoordinator = hitlCoordinator ??
         HitlCoordinator(
@@ -246,6 +250,7 @@ class GatewayDashboardController extends ChangeNotifier {
   StepSyncService get stepSyncService => _odometerCoordinator.syncService;
   DashboardOdometerCoordinator get odometerCoordinator => _odometerCoordinator;
   InactivitySettingsService get inactivitySettingsService => _inactivitySettingsService;
+  FallSensitivitySettingsService get fallSensitivitySettingsService => _fallSensitivitySettingsService;
   BackgroundSurveillanceService get surveillanceService => _surveillanceService;
 
   void _onFallAlertUpdated() {
@@ -267,6 +272,7 @@ class GatewayDashboardController extends ChangeNotifier {
     _surveillanceService.initialize();
 
     unawaited(_inactivitySettingsService.loadSettings());
+    unawaited(_fallSensitivitySettingsService.loadSettings());
 
     _odometerCoordinator = DashboardOdometerCoordinator(
       deviceId: deviceId,
@@ -766,6 +772,12 @@ class GatewayDashboardController extends ChangeNotifier {
         unawaited(_inactivitySettingsService.syncToBle(_bleClient!));
       } catch (e) {
         addLog('BLE', 'Erreur sync paramètres inactivité : $e', color: Colors.orange);
+      }
+
+      try {
+        unawaited(_fallSensitivitySettingsService.syncToBle(_bleClient!));
+      } catch (e) {
+        addLog('BLE', 'Erreur sync seuil confiance chute : $e', color: Colors.orange);
       }
 
       try {

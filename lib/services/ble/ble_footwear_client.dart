@@ -223,6 +223,20 @@ class BleFootwearClient {
     onLog?.call('HITL mode config sent: $cmd', isError: false);
   }
 
+  /// Sends the fall confidence threshold configuration (`SET_FALL_CONFIDENCE <threshold>`) to the footwear.
+  /// The threshold is a float value between 0.30 and 0.90 representing the minimum confidence
+  /// required to confirm a fall detection.
+  Future<void> sendFallConfidenceConfig(double threshold) async {
+    if (_studioControlChar == null) {
+      throw StateError('Studio Control characteristic not initialized.');
+    }
+    // Clamp threshold to valid range [0.30, 0.90] as per firmware constraints
+    threshold = threshold.clamp(0.30, 0.90);
+    final cmd = 'SET_FALL_CONFIDENCE ${threshold.toStringAsFixed(2)}';
+    await _studioControlChar!.write(utf8.encode(cmd), withoutResponse: false);
+    onLog?.call('Fall confidence config sent: $cmd', isError: false);
+  }
+
   /// Triggers a Studio recording session (`START <label> <sec> <id>`).
   Future<void> startStudioSession({
     required String label,

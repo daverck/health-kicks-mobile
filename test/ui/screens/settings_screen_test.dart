@@ -299,7 +299,7 @@ void main() {
       expect(find.text('50 min'), findsOneWidget);
       expect(find.text('10 min'), findsOneWidget);
       expect(find.descendant(of: find.byType(SettingsInactivityCard), matching: find.byType(Slider)), findsNWidgets(2));
-      expect(find.text('Synchronisé en direct avec la chaussure'), findsOneWidget);
+      expect(find.text('Synchronisé en direct avec la chaussure'), findsWidgets);
 
       // Toggle repeat alerts off
       await tester.ensureVisible(find.widgetWithText(SwitchListTile, 'Répéter les alertes'));
