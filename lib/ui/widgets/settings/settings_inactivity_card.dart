@@ -19,9 +19,12 @@ class SettingsInactivityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+    return ListenableBuilder(
+      listenable: inactivityService,
+      builder: (context, _) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
         SwitchListTile(
           secondary: Icon(
             Icons.airline_seat_recline_normal_outlined,
@@ -200,6 +203,8 @@ class SettingsInactivityCard extends StatelessWidget {
           ),
         ],
       ],
+    );
+      },
     );
   }
 }

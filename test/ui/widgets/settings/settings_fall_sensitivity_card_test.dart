@@ -114,13 +114,20 @@ void main() {
     expect(find.text('Robuste'), findsOneWidget);
   });
 
-  testWidgets('SettingsFallSensitivityCard has correct description text', (tester) async {
+  testWidgets('SettingsFallSensitivityCard updates UI when slider value changes', (tester) async {
     final service = FallSensitivitySettingsService();
     await service.loadSettings();
 
     await tester.pumpWidget(buildTestWidget(service));
 
-    // Default threshold should have equilibrium description
-    expect(find.textContaining('Équilibre optimal'), findsOneWidget);
+    expect(find.text('65%'), findsWidgets);
+    expect(find.text('Équilibrée'), findsWidgets);
+
+    // Drag slider or set threshold via service
+    await service.setThreshold(0.85);
+    await tester.pumpAndSettle();
+
+    expect(find.text('85%'), findsWidgets);
+    expect(find.text('Robuste'), findsWidgets);
   });
 }

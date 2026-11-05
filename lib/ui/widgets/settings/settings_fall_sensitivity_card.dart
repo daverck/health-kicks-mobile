@@ -20,8 +20,11 @@ class SettingsFallSensitivityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+    return ListenableBuilder(
+      listenable: fallSensitivityService,
+      builder: (context, _) {
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       elevation: 0,
       color: theme.colorScheme.surfaceContainerHighest,
       child: Padding(
@@ -231,6 +234,8 @@ class SettingsFallSensitivityCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+      },
     );
   }
 }
