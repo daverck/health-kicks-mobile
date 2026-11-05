@@ -189,5 +189,40 @@ void main() {
     test('defaultThreshold constant has correct value', () {
       expect(FallSensitivitySettingsService.defaultThreshold, equals(0.65));
     });
+
+    test('Initializes with default cooldown value (5s / 5000ms)', () async {
+      final service = FallSensitivitySettingsService();
+      await service.loadSettings();
+
+      expect(service.cooldownSeconds, equals(5));
+      expect(service.cooldownMs, equals(5000));
+    });
+
+    test('setCooldownSeconds updates state, clamps to valid range, and persists to SharedPreferences', () async {
+      final service = FallSensitivitySettingsService();
+      await service.loadSettings();
+
+      await service.setCooldownSeconds(12);
+      expect(service.cooldownSeconds, equals(12));
+      expect(service.cooldownMs, equals(12000));
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getInt(FallSensitivitySettingsService.keyCooldownSeconds), equals(12));
+
+      // Below minimum
+      await service.setCooldownSeconds(0);
+      expect(service.cooldownSeconds, equals(FallSensitivitySettingsService.minCooldownSeconds));
+      expect(service.cooldownSeconds, equals(1));
+
+      // Above maximum
+      await service.setCooldownSeconds(90);
+      expect(service.cooldownSeconds, equals(FallSensitivitySettingsService.maxCooldownSeconds));
+      expect(service.cooldownSeconds, equals(30));
+
+      // Reset to default restores both threshold and cooldown
+      await service.resetToDefault();
+      expect(service.cooldownSeconds, equals(FallSensitivitySettingsService.defaultCooldownSeconds));
+      expect(service.cooldownSeconds, equals(5));
+    });
   });
 }

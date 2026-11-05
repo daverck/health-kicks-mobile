@@ -237,6 +237,20 @@ class BleFootwearClient {
     onLog?.call('Fall confidence config sent: $cmd', isError: false);
   }
 
+  /// Sends the fall detection cooldown configuration (`SET_FALL_COOLDOWN <cooldown_ms>`) to the footwear.
+  /// The cooldown is an integer value in milliseconds between 1000 (1s) and 60000 (60s) representing
+  /// the minimum interval between consecutive fall alerts.
+  Future<void> sendFallCooldownConfig(int cooldownMs) async {
+    if (_studioControlChar == null) {
+      throw StateError('Studio Control characteristic not initialized.');
+    }
+    // Clamp cooldown to valid range [1000, 60000] ms as per firmware constraints
+    cooldownMs = cooldownMs.clamp(1000, 60000);
+    final cmd = 'SET_FALL_COOLDOWN $cooldownMs';
+    await _studioControlChar!.write(utf8.encode(cmd), withoutResponse: false);
+    onLog?.call('Fall cooldown config sent: $cmd', isError: false);
+  }
+
   /// Triggers a Studio recording session (`START <label> <sec> <id>`).
   Future<void> startStudioSession({
     required String label,

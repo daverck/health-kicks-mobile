@@ -3,10 +3,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'ble/ble_footwear_client.dart';
 
-/// Service managing fall detection confidence threshold user preferences
+/// Service managing fall detection confidence threshold and cooldown user preferences
 /// and synchronizing parameters with the HealthKicks footwear over BLE Characteristic 0004 (Device & Studio Control).
 class FallSensitivitySettingsService extends ChangeNotifier {
   static const String keyThreshold = 'fall_confidence_threshold';
+  static const String keyCooldownSeconds = 'fall_cooldown_seconds';
 
   /// Default confidence threshold for fall detection (65%)
   static const double defaultThreshold = 0.65;
@@ -17,13 +18,28 @@ class FallSensitivitySettingsService extends ChangeNotifier {
   /// Maximum allowed confidence threshold
   static const double maxThreshold = 0.85;
 
-  /// Number of discrete slider divisions for the UI
+  /// Number of discrete slider divisions for the confidence UI
   static const int sliderDivisions = 10;
 
+  /// Default cooldown between consecutive fall alerts in seconds (5s = 5000 ms)
+  static const int defaultCooldownSeconds = 5;
+
+  /// Minimum allowed fall cooldown in seconds (1s = 1000 ms)
+  static const int minCooldownSeconds = 1;
+
+  /// Maximum allowed fall cooldown in seconds (30s = 30000 ms)
+  static const int maxCooldownSeconds = 30;
+
+  /// Number of discrete slider divisions for the cooldown UI (1s steps from 1s to 30s)
+  static const int cooldownSliderDivisions = 29;
+
   double _threshold = defaultThreshold;
+  int _cooldownSeconds = defaultCooldownSeconds;
   bool _isSynced = false;
 
   double get threshold => _threshold;
+  int get cooldownSeconds => _cooldownSeconds;
+  int get cooldownMs => _cooldownSeconds * 1000;
   bool get isSynced => _isSynced;
 
   /// Get the threshold as a percentage (0-100)
@@ -69,6 +85,9 @@ class FallSensitivitySettingsService extends ChangeNotifier {
     _threshold = prefs.getDouble(keyThreshold) ?? defaultThreshold;
     // Clamp to valid range
     _threshold = _threshold.clamp(minThreshold, maxThreshold);
+
+    _cooldownSeconds = prefs.getInt(keyCooldownSeconds) ?? defaultCooldownSeconds;
+    _cooldownSeconds = _cooldownSeconds.clamp(minCooldownSeconds, maxCooldownSeconds);
     notifyListeners();
   }
 
@@ -92,10 +111,31 @@ class FallSensitivitySettingsService extends ChangeNotifier {
     }
   }
 
-  /// Pushes current fall confidence threshold payload (SET_FALL_CONFIDENCE) to the footwear via Characteristic 0004.
+  /// Sets the fall cooldown in seconds, persists to SharedPreferences, and syncs over BLE if client is connected.
+  Future<void> setCooldownSeconds(int seconds, {BleFootwearClient? bleClient}) async {
+    seconds = seconds.clamp(minCooldownSeconds, maxCooldownSeconds);
+
+    if (seconds == _cooldownSeconds) return;
+
+    _cooldownSeconds = seconds;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(keyCooldownSeconds, _cooldownSeconds);
+
+    if (bleClient != null && bleClient.hasStudioControl) {
+      await syncToBle(bleClient);
+    } else {
+      _isSynced = false;
+      notifyListeners();
+    }
+  }
+
+  /// Pushes current fall confidence threshold and cooldown payloads (SET_FALL_CONFIDENCE & SET_FALL_COOLDOWN)
+  /// to the footwear via Characteristic 0004.
   Future<bool> syncToBle(BleFootwearClient bleClient) async {
     try {
       await bleClient.sendFallConfidenceConfig(_threshold);
+      await bleClient.sendFallCooldownConfig(cooldownMs);
       _isSynced = true;
       notifyListeners();
       return true;
@@ -117,8 +157,9 @@ class FallSensitivitySettingsService extends ChangeNotifier {
     await setThreshold(value, bleClient: bleClient);
   }
 
-  /// Resets to default threshold
+  /// Resets to default threshold and cooldown
   Future<void> resetToDefault({BleFootwearClient? bleClient}) async {
     await setThreshold(defaultThreshold, bleClient: bleClient);
+    await setCooldownSeconds(defaultCooldownSeconds, bleClient: bleClient);
   }
 }

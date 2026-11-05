@@ -14,30 +14,33 @@ void main() {
   Widget buildTestWidget(FallSensitivitySettingsService service, {bool isBleReady = true}) {
     return MaterialApp(
       home: Scaffold(
-        body: SettingsFallSensitivityCard(
-          fallSensitivityService: service,
-          bleClient: null,
-          isBleReady: isBleReady,
+        body: SingleChildScrollView(
+          child: SettingsFallSensitivityCard(
+            fallSensitivityService: service,
+            bleClient: null,
+            isBleReady: isBleReady,
+          ),
         ),
       ),
     );
   }
 
-  testWidgets('SettingsFallSensitivityCard renders all main elements', (tester) async {
+  testWidgets('SettingsFallSensitivityCard renders all main elements including cooldown slider', (tester) async {
     final service = FallSensitivitySettingsService();
     await service.loadSettings();
 
     await tester.pumpWidget(buildTestWidget(service));
 
-    // Check for main title
+    // Check for main title and cooldown section title
     expect(find.text('Sensibilité de détection des chutes'), findsOneWidget);
-    
+    expect(find.text('Délai entre deux alertes (Cooldown)'), findsOneWidget);
+
     // Check for icon
     expect(find.byIcon(Icons.shield_outlined), findsOneWidget);
-    
-    // Check for slider
-    expect(find.byType(Slider), findsOneWidget);
-    
+
+    // Check for both sliders (confidence threshold + fall cooldown)
+    expect(find.byType(Slider), findsNWidgets(2));
+
     // Check for sync status
     expect(find.textContaining('Synchronisé'), findsOneWidget);
   });
@@ -68,12 +71,15 @@ void main() {
 
     await tester.pumpWidget(buildTestWidget(service));
 
-    // Check for range labels - they appear multiple times in the widget
-    expect(find.text('35%'), findsWidgets);
-    expect(find.text('85%'), findsWidgets);
-    expect(find.text('Ultra sensible'), findsWidgets);
-    expect(find.text('Recommandée'), findsWidgets);
-    expect(find.text('Robuste'), findsWidgets);
+    // Check for range labels
+    expect(find.text('35%'), findsOneWidget);
+    expect(find.text('85%'), findsOneWidget);
+    expect(find.text('Ultra sensible'), findsOneWidget);
+    expect(find.text('Recommandée'), findsOneWidget);
+    expect(find.text('Robuste'), findsOneWidget);
+    expect(find.text('1 s'), findsOneWidget);
+    expect(find.text('5 s (défaut)'), findsOneWidget);
+    expect(find.text('30 s'), findsOneWidget);
   });
 
   testWidgets('SettingsFallSensitivityCard shows disconnected BLE status', (tester) async {
@@ -100,21 +106,7 @@ void main() {
     expect(find.byIcon(Icons.bluetooth_connected), findsOneWidget);
   });
 
-  testWidgets('SettingsFallSensitivityCard displays range labels', (tester) async {
-    final service = FallSensitivitySettingsService();
-    await service.loadSettings();
-
-    await tester.pumpWidget(buildTestWidget(service));
-
-    // Check for range labels
-    expect(find.text('35%'), findsOneWidget);
-    expect(find.text('85%'), findsOneWidget);
-    expect(find.text('Ultra sensible'), findsOneWidget);
-    expect(find.text('Recommandée'), findsOneWidget);
-    expect(find.text('Robuste'), findsOneWidget);
-  });
-
-  testWidgets('SettingsFallSensitivityCard updates UI when slider value changes', (tester) async {
+  testWidgets('SettingsFallSensitivityCard updates UI when slider values change', (tester) async {
     final service = FallSensitivitySettingsService();
     await service.loadSettings();
 
@@ -122,12 +114,15 @@ void main() {
 
     expect(find.text('65%'), findsWidgets);
     expect(find.text('Équilibrée'), findsWidgets);
+    expect(find.text('5 s'), findsWidgets);
 
-    // Drag slider or set threshold via service
+    // Update threshold and cooldown via service
     await service.setThreshold(0.85);
+    await service.setCooldownSeconds(15);
     await tester.pumpAndSettle();
 
     expect(find.text('85%'), findsWidgets);
     expect(find.text('Robuste'), findsWidgets);
+    expect(find.text('15 s'), findsWidgets);
   });
 }
