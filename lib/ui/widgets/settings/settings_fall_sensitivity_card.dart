@@ -247,7 +247,7 @@ class SettingsFallSensitivityCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        '${fallSensitivityService.cooldownSeconds} s',
+                        fallSensitivityService.cooldownFormatted,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
@@ -263,14 +263,14 @@ class SettingsFallSensitivityCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Slider(
-                      value: fallSensitivityService.cooldownSeconds.toDouble(),
-                      min: FallSensitivitySettingsService.minCooldownSeconds.toDouble(),
-                      max: FallSensitivitySettingsService.maxCooldownSeconds.toDouble(),
+                      value: fallSensitivityService.cooldownSeconds,
+                      min: FallSensitivitySettingsService.minCooldownSeconds,
+                      max: FallSensitivitySettingsService.maxCooldownSeconds,
                       divisions: FallSensitivitySettingsService.cooldownSliderDivisions,
-                      label: '${fallSensitivityService.cooldownSeconds} s',
+                      label: fallSensitivityService.cooldownFormatted,
                       onChanged: (double value) async {
                         await fallSensitivityService.setCooldownSeconds(
-                          value.round(),
+                          value,
                           bleClient: bleClient,
                         );
                       },
@@ -280,14 +280,16 @@ class SettingsFallSensitivityCard extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          '${FallSensitivitySettingsService.minCooldownSeconds} s',
+                          FallSensitivitySettingsService.formatCooldownSeconds(
+                            FallSensitivitySettingsService.minCooldownSeconds,
+                          ),
                           style: TextStyle(
                             fontSize: 11,
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                         Text(
-                          '${FallSensitivitySettingsService.defaultCooldownSeconds} s (défaut)',
+                          '${FallSensitivitySettingsService.formatCooldownSeconds(FallSensitivitySettingsService.defaultCooldownSeconds)} (défaut)',
                           style: TextStyle(
                             fontSize: 10,
                             color: theme.colorScheme.primary,
@@ -295,7 +297,9 @@ class SettingsFallSensitivityCard extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          '${FallSensitivitySettingsService.maxCooldownSeconds} s',
+                          FallSensitivitySettingsService.formatCooldownSeconds(
+                            FallSensitivitySettingsService.maxCooldownSeconds,
+                          ),
                           style: TextStyle(
                             fontSize: 11,
                             color: theme.colorScheme.onSurfaceVariant,

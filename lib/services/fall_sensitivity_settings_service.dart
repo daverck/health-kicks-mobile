@@ -21,26 +21,37 @@ class FallSensitivitySettingsService extends ChangeNotifier {
   /// Number of discrete slider divisions for the confidence UI
   static const int sliderDivisions = 10;
 
-  /// Default cooldown between consecutive fall alerts in seconds (5s = 5000 ms)
-  static const int defaultCooldownSeconds = 5;
+  /// Default cooldown between consecutive fall alerts in seconds (3.0s = 3000 ms)
+  static const double defaultCooldownSeconds = 3.0;
 
-  /// Minimum allowed fall cooldown in seconds (1s = 1000 ms)
-  static const int minCooldownSeconds = 1;
+  /// Minimum allowed fall cooldown in seconds (0.5s = 500 ms)
+  static const double minCooldownSeconds = 0.5;
 
-  /// Maximum allowed fall cooldown in seconds (30s = 30000 ms)
-  static const int maxCooldownSeconds = 30;
+  /// Maximum allowed fall cooldown in seconds (30.0s = 30000 ms)
+  static const double maxCooldownSeconds = 30.0;
 
-  /// Number of discrete slider divisions for the cooldown UI (1s steps from 1s to 30s)
-  static const int cooldownSliderDivisions = 29;
+  /// Number of discrete slider divisions for the cooldown UI (0.5s steps from 0.5s to 30.0s)
+  static const int cooldownSliderDivisions = 59;
 
   double _threshold = defaultThreshold;
-  int _cooldownSeconds = defaultCooldownSeconds;
+  double _cooldownSeconds = defaultCooldownSeconds;
   bool _isSynced = false;
 
   double get threshold => _threshold;
-  int get cooldownSeconds => _cooldownSeconds;
-  int get cooldownMs => _cooldownSeconds * 1000;
+  double get cooldownSeconds => _cooldownSeconds;
+  int get cooldownMs => (_cooldownSeconds * 1000).round();
   bool get isSynced => _isSynced;
+
+  /// Formats the cooldown in seconds for display (e.g., "0.5 s", "3 s", "15 s").
+  String get cooldownFormatted => formatCooldownSeconds(_cooldownSeconds);
+
+  /// Formats any cooldown value in seconds cleanly (omitting ".0" for whole seconds).
+  static String formatCooldownSeconds(double seconds) {
+    if (seconds == seconds.roundToDouble()) {
+      return '${seconds.toInt()} s';
+    }
+    return '${seconds.toStringAsFixed(1)} s';
+  }
 
   /// Get the threshold as a percentage (0-100)
   int get thresholdPercentage => (_threshold * 100).round();
@@ -86,8 +97,9 @@ class FallSensitivitySettingsService extends ChangeNotifier {
     // Clamp to valid range
     _threshold = _threshold.clamp(minThreshold, maxThreshold);
 
-    _cooldownSeconds = prefs.getInt(keyCooldownSeconds) ?? defaultCooldownSeconds;
-    _cooldownSeconds = _cooldownSeconds.clamp(minCooldownSeconds, maxCooldownSeconds);
+    final rawCooldown = prefs.get(keyCooldownSeconds);
+    final loadedCooldown = rawCooldown is num ? rawCooldown.toDouble() : defaultCooldownSeconds;
+    _cooldownSeconds = ((loadedCooldown * 2).round() / 2.0).clamp(minCooldownSeconds, maxCooldownSeconds);
     notifyListeners();
   }
 
@@ -111,16 +123,16 @@ class FallSensitivitySettingsService extends ChangeNotifier {
     }
   }
 
-  /// Sets the fall cooldown in seconds, persists to SharedPreferences, and syncs over BLE if client is connected.
-  Future<void> setCooldownSeconds(int seconds, {BleFootwearClient? bleClient}) async {
-    seconds = seconds.clamp(minCooldownSeconds, maxCooldownSeconds);
+  /// Sets the fall cooldown in seconds (0.5s increments), persists to SharedPreferences, and syncs over BLE if client is connected.
+  Future<void> setCooldownSeconds(num seconds, {BleFootwearClient? bleClient}) async {
+    final clamped = ((seconds.toDouble() * 2).round() / 2.0).clamp(minCooldownSeconds, maxCooldownSeconds);
 
-    if (seconds == _cooldownSeconds) return;
+    if (clamped == _cooldownSeconds) return;
 
-    _cooldownSeconds = seconds;
+    _cooldownSeconds = clamped;
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(keyCooldownSeconds, _cooldownSeconds);
+    await prefs.setDouble(keyCooldownSeconds, _cooldownSeconds);
 
     if (bleClient != null && bleClient.hasStudioControl) {
       await syncToBle(bleClient);

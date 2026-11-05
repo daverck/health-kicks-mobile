@@ -77,8 +77,8 @@ void main() {
     expect(find.text('Ultra sensible'), findsOneWidget);
     expect(find.text('Recommandée'), findsOneWidget);
     expect(find.text('Robuste'), findsOneWidget);
-    expect(find.text('1 s'), findsOneWidget);
-    expect(find.text('5 s (défaut)'), findsOneWidget);
+    expect(find.text('0.5 s'), findsOneWidget);
+    expect(find.text('3 s (défaut)'), findsOneWidget);
     expect(find.text('30 s'), findsOneWidget);
   });
 
@@ -114,15 +114,15 @@ void main() {
 
     expect(find.text('65%'), findsWidgets);
     expect(find.text('Équilibrée'), findsWidgets);
-    expect(find.text('5 s'), findsWidgets);
+    expect(find.text('3 s'), findsWidgets);
 
     // Update threshold and cooldown via service
     await service.setThreshold(0.85);
-    await service.setCooldownSeconds(15);
+    await service.setCooldownSeconds(0.5);
     await tester.pumpAndSettle();
 
     expect(find.text('85%'), findsWidgets);
     expect(find.text('Robuste'), findsWidgets);
-    expect(find.text('15 s'), findsWidgets);
+    expect(find.text('0.5 s'), findsWidgets);
   });
 }
