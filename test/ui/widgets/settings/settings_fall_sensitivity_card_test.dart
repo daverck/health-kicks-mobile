@@ -125,4 +125,114 @@ void main() {
     expect(find.text('Robuste'), findsWidgets);
     expect(find.text('0.5 s'), findsWidgets);
   });
+
+  testWidgets('Dragging sensitivity slider updates local UI immediately and debounces service calls', (tester) async {
+    final service = FallSensitivitySettingsService();
+    await service.loadSettings();
+
+    await tester.pumpWidget(buildTestWidget(service));
+
+    final sensitivitySliderFinder = find.byType(Slider).first;
+    final slider = tester.widget<Slider>(sensitivitySliderFinder);
+
+    // Initial state
+    expect(service.threshold, equals(0.65));
+    expect(find.text('65%'), findsWidgets);
+
+    // Drag slightly to trigger onChanged
+    slider.onChanged!(0.40);
+    await tester.pump();
+
+    // UI updates immediately without waiting for debounce timer
+    expect(find.text('40%'), findsWidgets);
+    expect(find.text('Ultra sensible'), findsWidgets);
+    // Service has NOT been called yet before 300ms
+    expect(service.threshold, equals(0.65));
+
+    // Advance 100ms: still debounced
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(service.threshold, equals(0.65));
+
+    // Advance remaining 200ms: debounce completes and persists to service
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+    expect(service.threshold, equals(0.40));
+  });
+
+  testWidgets('Sensitivity slider onChangeEnd applies threshold immediately', (tester) async {
+    final service = FallSensitivitySettingsService();
+    await service.loadSettings();
+
+    await tester.pumpWidget(buildTestWidget(service));
+
+    final sensitivitySliderFinder = find.byType(Slider).first;
+    final slider = tester.widget<Slider>(sensitivitySliderFinder);
+
+    slider.onChanged!(0.75);
+    await tester.pump();
+    expect(service.threshold, equals(0.65)); // Still debounced
+
+    // Trigger end of drag gesture
+    slider.onChangeEnd!(0.75);
+    await tester.pumpAndSettle();
+
+    // Persisted immediately
+    expect(service.threshold, equals(0.75));
+    expect(find.text('75%'), findsWidgets);
+    expect(find.text('Recommandée'), findsWidgets);
+  });
+
+  testWidgets('Dragging cooldown slider updates local UI immediately and debounces service calls', (tester) async {
+    final service = FallSensitivitySettingsService();
+    await service.loadSettings();
+
+    await tester.pumpWidget(buildTestWidget(service));
+
+    final cooldownSliderFinder = find.byType(Slider).last;
+    final slider = tester.widget<Slider>(cooldownSliderFinder);
+
+    // Initial state
+    expect(service.cooldownSeconds, equals(3.0));
+    expect(find.text('3 s'), findsWidgets);
+
+    // Drag to 10.0 seconds
+    slider.onChanged!(10.0);
+    await tester.pump();
+
+    // UI updates badge and state immediately
+    expect(find.text('10 s'), findsWidgets);
+    // Service has NOT updated yet
+    expect(service.cooldownSeconds, equals(3.0));
+
+    // Advance 100ms: still debounced
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(service.cooldownSeconds, equals(3.0));
+
+    // Advance 200ms: debounce completes
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+    expect(service.cooldownSeconds, equals(10.0));
+  });
+
+  testWidgets('Cooldown slider onChangeEnd applies cooldown immediately', (tester) async {
+    final service = FallSensitivitySettingsService();
+    await service.loadSettings();
+
+    await tester.pumpWidget(buildTestWidget(service));
+
+    final cooldownSliderFinder = find.byType(Slider).last;
+    final slider = tester.widget<Slider>(cooldownSliderFinder);
+
+    slider.onChanged!(15.5);
+    await tester.pump();
+    expect(service.cooldownSeconds, equals(3.0)); // Still debounced
+
+    // Trigger end of drag gesture
+    slider.onChangeEnd!(15.5);
+    await tester.pumpAndSettle();
+
+    // Persisted immediately
+    expect(service.cooldownSeconds, equals(15.5));
+    expect(find.text('15.5 s'), findsWidgets);
+  });
 }
