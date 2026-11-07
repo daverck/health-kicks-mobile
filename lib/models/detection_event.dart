@@ -274,7 +274,7 @@ class DetectionEvent {
     return DateFormat('HH:mm:ss').format(timestamp);
   }
 
-  /// User-friendly relative time description (e.g. 'À l'instant', 'Il y a 5 min', 'Il y a 2 h')
+  /// User-friendly relative time description (e.g. 'Just now', '5 min ago', '2 h ago')
   String get relativeTime {
     final diff = DateTime.now().difference(timestamp);
     if (diff.inSeconds < 45) {

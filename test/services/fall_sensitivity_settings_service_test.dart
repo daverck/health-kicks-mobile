@@ -52,19 +52,19 @@ void main() {
       await service.setThreshold(0.43);
       expect(service.sensitivityLabel, equals('Démo'));
 
-      // Test Très sensible (threshold > 0.45 && <= 0.55)
+      // Test Highly sensitive (threshold > 0.45 && <= 0.55)
       await service.setThreshold(0.50);
       expect(service.sensitivityLabel, equals('Très sensible'));
 
-      // Test Équilibrée (threshold > 0.55 && <= 0.70)
+      // Test Balanced (threshold > 0.55 && <= 0.70)
       await service.setThreshold(0.65);
       expect(service.sensitivityLabel, equals('Équilibrée'));
 
-      // Test Recommandée (threshold > 0.70 && <= 0.75)
+      // Test Recommended (threshold > 0.70 && <= 0.75)
       await service.setThreshold(0.72);
       expect(service.sensitivityLabel, equals('Recommandée'));
 
-      // Test Robuste (threshold > 0.75)
+      // Test Robust (threshold > 0.75)
       await service.setThreshold(0.85);
       expect(service.sensitivityLabel, equals('Robuste'));
     });
@@ -72,7 +72,7 @@ void main() {
     test('Returns correct sensitivity description based on threshold', () async {
       final service = FallSensitivitySettingsService();
 
-      // Test Ultra sensible
+      // Test Ultra sensitive
       await service.setThreshold(0.35);
       expect(service.sensitivityDescription, 
           contains('Détecte presque toutes les anomalies'));
@@ -82,7 +82,7 @@ void main() {
       expect(service.sensitivityDescription, 
           contains('Mode démonstration'));
 
-      // Test Équilibrée
+      // Test Balanced
       await service.setThreshold(0.65);
       expect(service.sensitivityDescription, 
           contains('Équilibre optimal'));

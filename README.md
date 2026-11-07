@@ -1,31 +1,31 @@
 # HealthKicks Mobile (`health-kicks-mobile`)
 
-Application mobile compagnon, passerelle **BLE-to-MQTT** et relais de secours pour l'écosystème de chaussures connectées **HealthKicks**.
+Mobile companion application, **BLE-to-MQTT** gateway, and emergency relay for the **HealthKicks** connected shoe ecosystem.
 
-Développée avec **Flutter**, l'application sert de pont temps réel sécurisé entre la semelle intelligente (firmware ESP32-S3), le patient et le Cloud AWS IoT Core.
+Developed with **Flutter**, the application acts as a secure real-time bridge connecting the smart insole (ESP32-S3 firmware), the patient, and the AWS IoT Core Cloud.
 
 ---
 
-## 1. Rôle & Responsabilités d'Architecture
+## 1. Architectural Role & Responsibilities
 
 ```mermaid
 flowchart TD
-    subgraph Footwear["Chaussure Connectée (ESP32-S3)"]
-        IMU["MPU-6050 + Modèle ML C++"]
-        BLEServer["Serveur BLE GATT LESC Chiffré"]
-        HapticMotor["Moteur Haptique PWM"]
+    subgraph Footwear["Connected Shoe (ESP32-S3)"]
+        IMU["MPU-6050 + C++ ML Model"]
+        BLEServer["LESC Encrypted BLE GATT Server"]
+        HapticMotor["PWM Haptic Motor"]
         IMU --> BLEServer
         BLEServer --> HapticMotor
     end
 
-    subgraph Mobile["Smartphone Android (health-kicks-mobile)"]
-        FGS["Foreground Service (Surveillance Active)"]
-        BLEClient["Client BLE GATT"]
-        FallUI["Écran d'Urgence Chute (60s)"]
-        GPS["Capture Position GPS"]
-        SMSWorker["Relais SMS GSM (SmsManager)"]
-        Odo["Odométrie Différentielle (SQLite)"]
-        MQTTGW["Passerelle MQTT SigV4 / mTLS"]
+    subgraph Mobile["Android Smartphone (health-kicks-mobile)"]
+        FGS["Foreground Service (Active Surveillance)"]
+        BLEClient["BLE GATT Client"]
+        FallUI["Fall Emergency Screen (60s)"]
+        GPS["GPS Location Capture"]
+        SMSWorker["GSM SMS Relay (SmsManager)"]
+        Odo["Differential Odometry (SQLite)"]
+        MQTTGW["SigV4 / mTLS MQTT Gateway"]
 
         BLEClient <--> FGS
         BLEClient --> FallUI
@@ -35,11 +35,11 @@ flowchart TD
         BLEClient --> Odo
     end
 
-    subgraph Cloud["Cloud HealthKicks"]
+    subgraph Cloud["HealthKicks Cloud"]
         IoTCore["AWS IoT Core"]
-        FastAPI["API REST FastAPI"]
-        Escalation["Moteur d'Escalade Backend"]
-        SMSWorker -.->|SMS GSM Direct| Contacts["Contacts d'Urgence"]
+        FastAPI["FastAPI REST API"]
+        Escalation["Backend Escalation Engine"]
+        SMSWorker -.->|Direct GSM SMS| Contacts["Emergency Contacts"]
     end
 
     BLEServer <-->|BLE GATT LESC| BLEClient
@@ -51,57 +51,57 @@ flowchart TD
 
 ---
 
-## 2. Fonctionnalités Principales
+## 2. Key Features
 
-### A. Mode Surveillance Active (Foreground Service)
-- Maintien continu de la connexion BLE en arrière-plan grâce à un service de premier plan Android (`Foreground Service`) conforme aux exigences d'économie d'énergie.
-- Reconnexion automatique avec backoff exponentiel lors des déconnexions transitoires.
-- Indicateur persistant dans la barre de notifications confirmant la surveillance biomécanique en cours.
+### A. Active Surveillance Mode (Foreground Service)
+- Continuous background BLE connection via an Android `Foreground Service` compliant with battery optimization policies.
+- Automatic reconnection with exponential backoff on transient disconnections.
+- Persistent status notification in the notification bar confirming ongoing biomechanical monitoring.
 
-### B. Prise en Charge Immédiate des Chutes & Écran d'Alerte (60 secondes)
-- Réception instantanée des notifications d'événements de chute émis par l'ESP32-S3 (`7a5a0002-...`).
-- Déclenchement d'un écran plein format d'alerte avec compte à rebours de 60 secondes, vibrations haptiques et avertisseur sonore.
-- **Annulation par le patient** : Un bouton *« Je vais bien »* permet d'annuler immédiatement l'alerte (`CANCEL`, motif `user_cancel`), arrêtant la chaîne d'alerte avant toute notification des proches.
-- **Annulation automatique par relevage** : Si la semelle détecte que la personne s'est relevée (`fall_recovery`, code `0x13`), l'alerte s'annule automatiquement.
-- **Confirmation manuelle** : Un bouton *« J'ai besoin d'aide »* saute le décompte et déclenche immédiatement l'escalade vers les proches (`CONFIRM`).
+### B. Immediate Fall Handling & Emergency Alert Screen (60 Seconds)
+- Instant reception of fall event notifications emitted by the ESP32-S3 (`7a5a0002-...`).
+- Full-screen countdown alert UI (60 seconds) with haptic vibrations and sound signals.
+- **Patient cancellation**: An *"I'm okay"* button immediately cancels the alert (`CANCEL`, reason `user_cancel`), stopping the escalation chain before notifying emergency contacts.
+- **Automatic recovery cancellation**: If the insole detects that the user got back up (`fall_recovery`, code `0x13`), the alert cancels automatically.
+- **Manual confirmation**: An *"I need help"* button skips the countdown and immediately escalates the alert to emergency contacts (`CONFIRM`).
 
-### C. Géolocalisation GPS en Direct
-- Dès la détection d'une chute, l'application capture les coordonnées géographiques précises du smartphone (`latitude`, `longitude`, `précision en mètres`, `horodatage`).
-- Ces coordonnées sont encapsulées dans le message MQTT de détection et transmises au Cloud pour permettre aux proches d'ouvrir l'itinéraire Google Maps en un clic.
+### C. Live GPS Geolocation
+- Upon fall detection, the application captures high-precision smartphone GPS coordinates (`latitude`, `longitude`, `accuracy in meters`, `timestamp`).
+- These coordinates are encapsulated within the detection MQTT payload and forwarded to the Cloud, enabling contacts to open the exact Google Maps location with one click.
 
-### D. Relais SMS Local Automatisé (`SmsManager`)
-- Lorsque le backend escalade l'alerte vers un contact disposant d'un numéro de téléphone, il transmet un ordre `sms_command` via le topic MQTT Downlink `healthkicks/v1/users/{user_id}/fall-alert/status`.
-- L'application mobile intercepte cet ordre en tâche de fond et utilise l'API native Android `SmsManager` pour émettre directement le SMS de détresse au contact d'urgence avec le lien sécurisé de prise en charge.
-- L'application renvoie un rapport d'état d'émission (`SMS_STATUS: SENT` ou `SMS_STATUS: FAILED`) au backend pour garantir la traçabilité de l'escalade.
+### D. Automated Local SMS Relay (`SmsManager`)
+- When the backend escalates an alert to a contact with a registered phone number, it transmits an `sms_command` instruction via the downlink MQTT topic `healthkicks/v1/users/{user_id}/fall-alert/status`.
+- The mobile app intercepts this command in the background and uses native Android `SmsManager` to dispatch the emergency distress SMS directly to the contact with a secure rescue link.
+- The app returns a delivery status report (`SMS_STATUS: SENT` or `SMS_STATUS: FAILED`) to the backend to ensure end-to-end escalation traceability.
 
-### E. Odométrie Différentielle & Podométrie
-- Calcul différentiel des pas journaliers ventilés par type d'activité (marche, course, etc.).
-- Persistance locale dans une base SQLite embarquée.
-- Synchronisation périodique avec l'API Cloud via `POST /api/v1/steps/sync`.
+### E. Differential Odometry & Step Counting
+- Differential calculation of daily step counts broken down by activity type (walking, running, etc.).
+- Local persistence in an embedded SQLite database.
+- Periodic synchronization with Cloud API via `POST /api/v1/steps/sync`.
 
-### F. Mode Studio & Transfert IMU Haute Vitesse (Fast Burst)
-- Démarrage et orchestration de sessions de calibration et d'entraînement (commande `START <label> <duration_sec> <session_id>`).
-- Réception et réassemblage des flux de paquets IMU bruts à haute fréquence (`7a5a0005-...`).
-- Vérification d'intégrité par contrôle CRC32 et transmission des séries temporelles à Amazon DynamoDB.
-
----
-
-## 3. Dépendances & Stack Technique
-
-- **Framework** : Flutter 3.24+ / Dart 3.5+
-- **Connectivité BLE** : `flutter_blue_plus` (support appairage sécurisé LESC Numeric Comparison)
-- **Passerelle IoT** : `mqtt_client` avec authentification AWS SigV4 over WebSockets (négociation de jetons AWS STS temporaires via le backend)
-- **Téléphonie & SMS** : Plugin Android natif `telephony` / `SmsManager`
-- **Géolocalisation** : `geolocator`
-- **Stockage Local** : `sqflite` (base SQLite locale) & `flutter_secure_storage` (jetons chiffrés)
-- **Architecture Applicative** : Clean Architecture & State Management réactif
+### F. Studio Mode & High-Speed IMU Transfer (Fast Burst)
+- Initiation and orchestration of calibration and training sessions (`START <label> <duration_sec> <session_id>`).
+- Reception and reassembly of high-frequency raw IMU packet bursts (`7a5a0005-...`).
+- CRC32 integrity verification and telemetry forwarding to Amazon DynamoDB.
 
 ---
 
-## 4. Conformité aux Contrats
+## 3. Dependencies & Tech Stack
 
-L'ensemble des échanges BLE, MQTT et REST respecte rigoureusement les contrats de l'écosystème :
-- Contrat BLE GATT : [`contracts/ble_gatt_specs.md`](../contracts/ble_gatt_specs.md)
-- Contrat Alerting Chute & SMS : [`contracts/fall_alerting.md`](../contracts/fall_alerting.md)
-- Protocole Burst Studio : [`contracts/studio_burst_protocol.md`](../contracts/studio_burst_protocol.md)
-- Vue d'ensemble des contrats : [`contracts/README.md`](../contracts/README.md)
+- **Framework**: Flutter 3.24+ / Dart 3.5+
+- **BLE Connectivity**: `flutter_blue_plus` (LESC Numeric Comparison secure pairing support)
+- **IoT Gateway**: `mqtt_client` with AWS SigV4 over WebSockets authentication (temporary AWS STS token negotiation via backend)
+- **Telephony & SMS**: Android native plugin `telephony` / `SmsManager`
+- **Geolocation**: `geolocator`
+- **Local Storage**: `sqflite` (local SQLite database) & `flutter_secure_storage` (encrypted tokens)
+- **Application Architecture**: Clean Architecture & Reactive State Management
+
+---
+
+## 4. Contract Compliance
+
+All BLE, MQTT, and REST interactions strictly adhere to ecosystem contracts:
+- BLE GATT Contract: [`contracts/ble_gatt_specs.md`](../contracts/ble_gatt_specs.md)
+- Fall Alerting & SMS Contract: [`contracts/fall_alerting.md`](../contracts/fall_alerting.md)
+- Studio Burst Protocol: [`contracts/studio_burst_protocol.md`](../contracts/studio_burst_protocol.md)
+- Contracts Overview: [`contracts/README.md`](../contracts/README.md)

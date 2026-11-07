@@ -194,7 +194,7 @@ class AppLocalizations {
 
   // --- Dictionaries for all 7 languages ---
   static final Map<String, Map<String, String>> _localizedValues = {
-    // 1. Français (FR)
+    // 1. French (FR)
     'fr': {
       'app_name': 'HealthKicks Mobile',
       'loading': 'Chargement…',
