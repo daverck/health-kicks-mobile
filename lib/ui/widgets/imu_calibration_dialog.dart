@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../services/audio/studio_audio_feedback_service.dart';
 
 enum CalibrationStep { idle, calibrating, success, error }
 
@@ -8,12 +9,14 @@ class ImuCalibrationDialog extends StatefulWidget {
   final Future<void> Function()? onCalibrate;
   final bool isConnected;
   final Stream<String>? studioStatusStream;
+  final StudioAudioFeedbackService? audioService;
 
   const ImuCalibrationDialog({
     super.key,
     required this.onCalibrate,
     required this.isConnected,
     this.studioStatusStream,
+    this.audioService,
   });
 
   @override
@@ -27,9 +30,19 @@ class _ImuCalibrationDialogState extends State<ImuCalibrationDialog> {
   StreamSubscription<String>? _statusSubscription;
   String _errorMessage = '';
 
+  late final StudioAudioFeedbackService _audioService;
+  bool _ownsAudioService = false;
+
   @override
   void initState() {
     super.initState();
+    if (widget.audioService != null) {
+      _audioService = widget.audioService!;
+    } else {
+      _audioService = StudioAudioFeedbackService();
+      _ownsAudioService = true;
+    }
+
     if (widget.studioStatusStream != null) {
       _statusSubscription = widget.studioStatusStream!.listen((status) {
         if (!mounted) return;
@@ -46,11 +59,16 @@ class _ImuCalibrationDialogState extends State<ImuCalibrationDialog> {
   void dispose() {
     _countdownTimer?.cancel();
     _statusSubscription?.cancel();
+    _audioService.stopContinuousTone();
+    if (_ownsAudioService) {
+      _audioService.dispose();
+    }
     super.dispose();
   }
 
   void _onCalibrationSuccess() {
     _countdownTimer?.cancel();
+    _audioService.playFinishedChime();
     if (mounted) {
       setState(() {
         _step = CalibrationStep.success;
@@ -60,6 +78,7 @@ class _ImuCalibrationDialogState extends State<ImuCalibrationDialog> {
 
   void _onCalibrationError(String msg) {
     _countdownTimer?.cancel();
+    _audioService.stopContinuousTone();
     if (mounted) {
       setState(() {
         _step = CalibrationStep.error;
@@ -74,6 +93,7 @@ class _ImuCalibrationDialogState extends State<ImuCalibrationDialog> {
       _remainingSeconds = 4.0;
       _errorMessage = '';
     });
+    _audioService.startContinuousRecordingTone();
 
     try {
       if (widget.onCalibrate != null) {
@@ -96,7 +116,7 @@ class _ImuCalibrationDialogState extends State<ImuCalibrationDialog> {
           _remainingSeconds = 0.0;
           timer.cancel();
           if (_step == CalibrationStep.calibrating) {
-            _step = CalibrationStep.success;
+            _onCalibrationSuccess();
           }
         }
       });
@@ -236,6 +256,7 @@ class _ImuCalibrationDialogState extends State<ImuCalibrationDialog> {
           TextButton(
             onPressed: () {
               _countdownTimer?.cancel();
+              _audioService.stopContinuousTone();
               Navigator.of(context).pop();
             },
             child: const Text('Annuler'),
