@@ -54,13 +54,6 @@ class BleConstants {
   static const int packetTypeDeltaChunk = 0x04;
   static const int packetTypeRleChunk = 0x05;
 
-  /// DEPRECATED: Calibration and inactivity settings are now exclusively handled in ASCII on 0004 (Device & Studio Control)
-  @Deprecated('Use Device & Studio Control ASCII command CALIBRATE')
-  static const int commandCalibrateZero = 0x05;
-
-  @Deprecated('Use Device & Studio Control ASCII command SET_INACTIVITY')
-  static const int commandSetInactivity = 0x06;
-
   /// State code for prolonged inactivity alert (Characteristic 0002)
   static const int stateCodeInactivityAlert = 0x20;
 
