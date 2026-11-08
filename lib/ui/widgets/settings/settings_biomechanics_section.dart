@@ -112,41 +112,38 @@ class SettingsBiomechanicsSection extends StatelessWidget {
         else
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: Container(
-              padding: const EdgeInsets.all(12.0),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(8.0),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.timer_outlined,
-                        size: 18,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.timer_outlined,
+                      size: 18,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Gestion intelligente de la batterie',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
                         color: theme.colorScheme.primary,
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Gestion intelligente de la batterie',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Une notification permanente reste visible tant que la surveillance est active.\n'
+                  'Si la chaussure est éteinte ou hors de portée pendant plus de 5 minutes, le service s\'arrête automatiquement pour économiser votre batterie.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.3,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Une notification permanente reste visible tant que la surveillance est active.\n'
-                    'Si la chaussure est éteinte ou hors de portée pendant plus de 5 minutes, le service s\'arrête automatiquement pour économiser votre batterie.',
-                    style: TextStyle(fontSize: 12, height: 1.3),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
 

@@ -108,11 +108,12 @@ class _SettingsFallSensitivityCardState extends State<SettingsFallSensitivityCar
             FallSensitivitySettingsService.formatCooldownSeconds(_localCooldownSeconds);
 
         return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
           elevation: 0,
-          color: theme.colorScheme.surfaceContainerHighest,
+          color: Colors.transparent,
+          shape: const RoundedRectangleBorder(side: BorderSide.none),
           child: Padding(
-            padding: const EdgeInsets.all(12.0),
+            padding: const EdgeInsets.symmetric(vertical: 4.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

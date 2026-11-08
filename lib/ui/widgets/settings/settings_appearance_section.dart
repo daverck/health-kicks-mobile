@@ -38,72 +38,60 @@ class SettingsAppearanceSection extends StatelessWidget {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-          child: Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(
-                color: theme.dividerColor.withValues(alpha: 0.2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Thème de l\'application',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Thème de l\'application',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Choisissez le mode d\'affichage clair, sombre ou automatique.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  ListenableBuilder(
-                    listenable: themeService,
-                    builder: (context, _) {
-                      return SizedBox(
-                        width: double.infinity,
-                        child: SegmentedButton<AppThemeMode>(
-                          segments: [
-                            ButtonSegment<AppThemeMode>(
-                              value: AppThemeMode.system,
-                              label: Text(l10n.themeSystem),
-                              icon: const Icon(Icons.brightness_auto, size: 18),
-                            ),
-                            ButtonSegment<AppThemeMode>(
-                              value: AppThemeMode.light,
-                              label: Text(l10n.themeLight),
-                              icon: const Icon(Icons.light_mode, size: 18),
-                            ),
-                            ButtonSegment<AppThemeMode>(
-                              value: AppThemeMode.dark,
-                              label: Text(l10n.themeDark),
-                              icon: const Icon(Icons.dark_mode, size: 18),
-                            ),
-                          ],
-                          selected: {themeService.currentMode},
-                          onSelectionChanged: (Set<AppThemeMode> selected) {
-                            if (selected.isNotEmpty) {
-                              themeService.setThemeMode(selected.first);
-                            }
-                          },
+              const SizedBox(height: 4),
+              Text(
+                'Choisissez le mode d\'affichage clair, sombre ou automatique.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 14),
+              ListenableBuilder(
+                listenable: themeService,
+                builder: (context, _) {
+                  return SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<AppThemeMode>(
+                      segments: [
+                        ButtonSegment<AppThemeMode>(
+                          value: AppThemeMode.system,
+                          label: Text(l10n.themeSystem),
+                          icon: const Icon(Icons.brightness_auto, size: 18),
                         ),
-                      );
-                    },
-                  ),
-                ],
+                        ButtonSegment<AppThemeMode>(
+                          value: AppThemeMode.light,
+                          label: Text(l10n.themeLight),
+                          icon: const Icon(Icons.light_mode, size: 18),
+                        ),
+                        ButtonSegment<AppThemeMode>(
+                          value: AppThemeMode.dark,
+                          label: Text(l10n.themeDark),
+                          icon: const Icon(Icons.dark_mode, size: 18),
+                        ),
+                      ],
+                      selected: {themeService.currentMode},
+                      onSelectionChanged: (Set<AppThemeMode> selected) {
+                        if (selected.isNotEmpty) {
+                          themeService.setThemeMode(selected.first);
+                        }
+                      },
+                    ),
+                  );
+                },
               ),
-            ),
+            ],
           ),
         ),
 
-        const SizedBox(height: 8),
+        const SizedBox(height: 16),
 
         // Language & Region Category
         Padding(
@@ -118,81 +106,68 @@ class SettingsAppearanceSection extends StatelessWidget {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(
-                color: theme.dividerColor.withValues(alpha: 0.15),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.languageTitle,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.languageTitle,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    l10n.languageDesc,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  ListenableBuilder(
-                    listenable: localeService,
-                    builder: (context, _) {
-                      final current = localeService.currentLanguage;
-                      return InkWell(
+              const SizedBox(height: 4),
+              Text(
+                l10n.languageDesc,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 14),
+              ListenableBuilder(
+                listenable: localeService,
+                builder: (context, _) {
+                  final current = localeService.currentLanguage;
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: onOpenLanguageSelector,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        onTap: onOpenLanguageSelector,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: theme.dividerColor.withValues(alpha: 0.25),
-                            ),
-                            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                          ),
-                          child: Row(
-                            children: [
-                              Text(current.flag, style: const TextStyle(fontSize: 22)),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      current.nativeName,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                    ),
-                                    Text(
-                                      current.name,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: theme.colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Icon(Icons.arrow_drop_down_rounded, size: 28),
-                            ],
-                          ),
+                        border: Border.all(
+                          color: theme.dividerColor.withValues(alpha: 0.25),
                         ),
-                      );
-                    },
-                  ),
-                ],
+                      ),
+                      child: Row(
+                        children: [
+                          Text(current.flag, style: const TextStyle(fontSize: 22)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  current.nativeName,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                ),
+                                Text(
+                                  current.name,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.arrow_drop_down_rounded, size: 28),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
-            ),
+            ],
           ),
         ),
       ],

@@ -26,19 +26,8 @@ class SettingsHealthConnectCard extends StatelessWidget {
           subtitle = 'Actif • Dernière synchro : $timeStr';
         }
 
-        return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-              color: isEnabled
-                  ? theme.colorScheme.primary.withValues(alpha: 0.5)
-                  : theme.dividerColor.withValues(alpha: 0.3),
-            ),
-          ),
-          child: SwitchListTile(
-            secondary: Icon(
+        return SwitchListTile(
+          secondary: Icon(
               Icons.health_and_safety_outlined,
               color: isEnabled ? theme.colorScheme.primary : Colors.grey,
               size: 28,
@@ -111,9 +100,8 @@ class SettingsHealthConnectCard extends StatelessWidget {
                 }
               }
             },
-          ),
-        );
-      },
+          );
+        },
     );
   }
 

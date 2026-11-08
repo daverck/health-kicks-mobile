@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/controllers/fall_alert_controller.dart';
 import 'package:healthkicks_mobile/models/activity_detection_model.dart';
 import 'package:healthkicks_mobile/models/fall_alert_model.dart';
-import 'package:healthkicks_mobile/screens/fall_alert_screen.dart';
+import 'package:healthkicks_mobile/ui/screens/fall_alert_screen.dart';
 import 'package:healthkicks_mobile/services/location/fall_location_provider.dart';
 
 void main() {

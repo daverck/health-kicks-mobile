@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import '../../controllers/gateway_dashboard_controller.dart';
 import '../../core/config/app_config.dart';
 import '../../core/permissions/permission_service.dart';
-import '../../screens/fall_alert_screen.dart';
 import '../../services/auth/auth_service.dart';
 import '../../services/auth/token_storage_service.dart';
 import '../../services/ble/ble_connection_manager.dart';
@@ -21,6 +20,7 @@ import '../widgets/studio_session_dialog.dart';
 import '../widgets/imu_calibration_dialog.dart';
 import 'detection_events_history_screen.dart';
 import 'event_logs_screen.dart';
+import 'fall_alert_screen.dart';
 import 'settings_screen.dart';
 import 'steps_history_screen.dart';
 
