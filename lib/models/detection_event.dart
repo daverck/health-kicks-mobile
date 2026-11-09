@@ -147,69 +147,24 @@ class DetectionEvent {
     return l10n.translateEventType(eventType);
   }
 
+  static final AppLocalizations _defaultFrenchL10n = AppLocalizations(const Locale('fr'));
+
   /// User-friendly localized label for the event type (defaults to French).
   String get formattedTitle {
-    switch (eventType.toLowerCase()) {
-      case 'fall_forward':
-        return 'Chute avant';
-      case 'fall_backward':
-        return 'Chute arrière';
-      case 'fall_lateral':
-        return 'Chute latérale';
-      case 'fall_recovery':
-        return 'Chute relevée';
-      case 'stand_up':
-        return 'Relevage après chute';
-      case 'fall_generic':
-        return 'Chute (générique)';
-      case 'fall_detected':
-      case 'fall':
-        return 'Chute détectée';
-      case 'free_fall':
-        return 'Chute libre (Impact violent)';
-      case 'high_impact':
-        return 'Impact élevé';
-      case 'stumble_recover':
-        return 'Trébuchement rattrapé';
-      case 'prolonged_immobility':
-        return 'Immobilité prolongée';
-      case 'inactivity_alert':
-        return 'Rappel d\'inactivité';
-      case 'walk':
-      case 'walking':
-        return 'Marche';
-      case 'run':
-      case 'running':
-        return 'Course à pied';
-      case 'stairs_up':
-        return 'Escaliers (Montée)';
-      case 'stairs_down':
-        return 'Escaliers (Descente)';
-      case 'stairs':
-        return 'Escaliers';
-      case 'idle':
-        return 'Repos / Station debout';
-      case 'sit_down':
-      case 'sit':
-        return 'Position assise';
-      case 'lying_supine':
-        return 'Couché dorsal';
-      case 'lying_prone':
-        return 'Couché frontal';
-      case 'lying_lateral':
-        return 'Couché latéral';
-      case 'lie_down':
-        return "S'allonger (Transition)";
-      case 'jump':
-        return 'Saut';
-      case 'activity_transition':
-        return 'Transition d\'activité';
-      case 'calibration':
-      case 'sensor_calibration':
-        return 'Calibration des capteurs';
-      default:
-        return eventType.replaceAll('_', ' ').toUpperCase();
+    final lower = eventType.toLowerCase();
+    if (lower == 'fall_generic') {
+      return 'Chute (générique)';
     }
+    if (lower == 'run' || lower == 'running') {
+      return 'Course à pied';
+    }
+    if (lower == 'idle') {
+      return 'Repos / Station debout';
+    }
+    if (lower == 'inactivity_alert') {
+      return 'Rappel d\'inactivité';
+    }
+    return _defaultFrenchL10n.translateEventType(eventType);
   }
 
   /// Checks whether this event belongs to the specified category filter.
