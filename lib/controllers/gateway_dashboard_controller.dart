@@ -15,8 +15,6 @@ import '../models/step_data_model.dart';
 import '../models/studio_command_model.dart';
 import '../models/studio_session_model.dart';
 import '../services/auth/auth_service.dart';
-import '../services/auth/iot_credentials_repository.dart';
-import '../services/auth/token_storage_service.dart';
 import '../services/background_surveillance_service.dart';
 import '../services/ble/ble_connection_manager.dart';
 import '../services/ble/ble_footwear_client.dart';
@@ -31,6 +29,7 @@ import '../services/studio/studio_api_service.dart';
 import '../ui/widgets/studio_session_dialog.dart';
 import 'dashboard_ble_coordinator.dart';
 import 'dashboard_firmware_coordinator.dart';
+import 'dashboard_mqtt_coordinator.dart';
 import 'dashboard_odometer_coordinator.dart';
 import 'dashboard_studio_coordinator.dart';
 import 'package:flutter/services.dart';
@@ -58,17 +57,14 @@ class GatewayDashboardController extends ChangeNotifier {
   final InactivitySettingsService _inactivitySettingsService;
   final FallSensitivitySettingsService _fallSensitivitySettingsService;
 
-  IotCredentialsRepository? _credentialsRepo;
   late final DashboardBleCoordinator _bleCoordinator;
   late final DashboardStudioCoordinator _studioCoordinator;
-  MqttGatewayService? _mqttService;
+  late final DashboardMqttCoordinator _mqttCoordinator;
   GatewayCoordinator? _coordinator;
   StreamSubscription<StudioSessionModel>? _studioSavedSub;
   StreamSubscription<StudioCommandModel>? _remoteStudioCommandSub;
 
-  bool _mqttConnected = false;
   bool _isUserSeated = false;
-  final ValueNotifier<bool> _mqttConnectedNotifier = ValueNotifier<bool>(false);
   bool _isInitializingBleClient = false;
   final List<ActivityDetectionModel> _recentActivities = [];
   final StreamController<ActivityDetectionModel> _activityStreamController = StreamController<ActivityDetectionModel>.broadcast();
@@ -98,6 +94,7 @@ class GatewayDashboardController extends ChangeNotifier {
     DashboardBleCoordinator? bleCoordinator,
     DashboardStudioCoordinator? studioCoordinator,
     DashboardFirmwareCoordinator? firmwareCoordinator,
+    DashboardMqttCoordinator? mqttCoordinator,
     this.onShowSnackBar,
     this.onDismissSnackBar,
     this.onShowRecordingDialog,
@@ -109,6 +106,11 @@ class GatewayDashboardController extends ChangeNotifier {
     _firmwareCoordinator = firmwareCoordinator ??
         DashboardFirmwareCoordinator(
           firmwareService: firmwareService,
+          authService: authService,
+        );
+    _mqttCoordinator = mqttCoordinator ??
+        DashboardMqttCoordinator(
+          deviceId: deviceId,
           authService: authService,
         );
     _bleCoordinator = bleCoordinator ??
@@ -133,7 +135,7 @@ class GatewayDashboardController extends ChangeNotifier {
               _coordinator?.stopRouting();
               _coordinator = null;
             } else {
-              _mqttService?.publishGatewayStatus(online: false);
+              _mqttCoordinator.publishGatewayStatus(online: false);
             }
             if (_bleCoordinator.status == BleConnectionStatus.disconnected) {
               _odometerCoordinator.flushSteps();
@@ -149,12 +151,12 @@ class GatewayDashboardController extends ChangeNotifier {
             if (!_isDisposed) notifyListeners();
           },
           onEnsureMqttConnected: () async {
-            if (_mqttService == null) {
+            if (_mqttCoordinator.mqttService == null) {
               addLog('STUDIO', 'Initialisation et connexion au service MQTT AWS IoT...', color: Colors.indigo);
               await connectMqtt();
-            } else if (!_mqttService!.isConnected) {
+            } else if (!_mqttCoordinator.mqttService!.isConnected) {
               addLog('STUDIO', 'Reconnexion au service MQTT AWS IoT...', color: Colors.indigo);
-              await _mqttService!.connect();
+              await _mqttCoordinator.mqttService!.connect();
             }
           },
           getCoordinator: () => _coordinator,
@@ -165,7 +167,7 @@ class GatewayDashboardController extends ChangeNotifier {
         );
     _hitlCoordinator = hitlCoordinator ??
         HitlCoordinator(
-          mqttService: _mqttService,
+          mqttService: _mqttCoordinator.mqttService,
           studioApiService: _studioCoordinator.studioApiService,
           onLog: (msg, {bool isError = false}) {
             addLog('HITL', msg, color: isError ? Colors.red : Colors.teal);
@@ -175,7 +177,7 @@ class GatewayDashboardController extends ChangeNotifier {
     _fallAlertController = fallAlertController ??
         FallAlertController(
           deviceId: deviceId,
-          isMqttConnectedGetter: () => _mqttConnected || (_mqttService?.isConnected ?? false),
+          isMqttConnectedGetter: () => _mqttCoordinator.isMqttConnected || (_mqttCoordinator.mqttService?.isConnected ?? false),
           onLog: (tag, msg, {bool isError = false}) {
             addLog(tag, msg, color: isError ? Colors.red : Colors.deepOrange);
           },
@@ -191,8 +193,10 @@ class GatewayDashboardController extends ChangeNotifier {
   Stream<BleConnectionStatus>? get bleStatusStream => _bleCoordinator.statusStream;
   BluetoothDevice? get connectedDevice => _bleCoordinator.connectedDevice;
   int get mtu => _bleCoordinator.mtu;
-  bool get isMqttConnected => _mqttConnected;
-  ValueNotifier<bool> get mqttConnectedNotifier => _mqttConnectedNotifier;
+  bool get isMqttConnected => _mqttCoordinator.isMqttConnected;
+  ValueNotifier<bool> get mqttConnectedNotifier => _mqttCoordinator.mqttConnectedNotifier;
+  DashboardMqttCoordinator get mqttCoordinator => _mqttCoordinator;
+  MqttGatewayService? get mqttService => _mqttCoordinator.mqttService;
   BleConnectionManager? get bleManager => _bleCoordinator.bleManager;
   BleFootwearClient? get bleClient => _bleCoordinator.bleClient;
   ValueNotifier<BleFootwearClient?> get bleClientNotifier => _bleCoordinator.bleClientNotifier;
@@ -362,144 +366,66 @@ class GatewayDashboardController extends ChangeNotifier {
       _coordinator?.stopRouting(notifyOffline: true);
       _coordinator = null;
     } else {
-      _mqttService?.publishDeviceStatus(online: false);
+      _mqttCoordinator.publishDeviceStatus(online: false);
     }
     await _bleCoordinator.startAutoConnect(fromButton: fromButton);
   }
 
   Future<void> connectMqtt() async {
-    try {
-      _credentialsRepo ??= IotCredentialsRepository(
-        backendBaseUrl: AppConfig.backendBaseUrl,
-        tokenStorage: TokenStorageService(),
-        authService: authService,
-        onLog: (msg, {bool isError = false}) {
-          addLog('AUTH', msg, color: isError ? Colors.red : Colors.cyan);
-        },
-      );
-
-      var currentUserId = authService?.currentUserId;
-      if (currentUserId == null || currentUserId.isEmpty) {
-        currentUserId = await TokenStorageService().getUserIdFromToken();
-      }
-
-      if (currentUserId == null || currentUserId.isEmpty) {
-        for (int i = 0; i < 6 && (currentUserId == null || currentUserId.isEmpty); i++) {
-          await Future.delayed(const Duration(milliseconds: 500));
-          if (_isDisposed) return;
-          currentUserId = authService?.currentUserId;
-          if (currentUserId == null || currentUserId.isEmpty) {
-            currentUserId = await TokenStorageService().getUserIdFromToken();
-          }
+    await _mqttCoordinator.connectMqtt(
+      addLog: addLog,
+      onMqttStateChanged: (connected) {
+        _fallAlertController.setMqttConnected(connected);
+        if (!_isDisposed) notifyListeners();
+      },
+      onConnectionRestored: () async {
+        if (authService?.currentUser == null && authService != null) {
+          unawaited(authService!.refreshCurrentUser().then((refreshed) {
+            if (!refreshed && !_isDisposed) {
+              addLog(
+                'AUTH',
+                'Impossible de recharger le profil utilisateur après la reconnexion cloud.',
+                color: Colors.orange,
+              );
+            }
+          }));
         }
-      }
 
-      if (currentUserId == null || currentUserId.isEmpty || currentUserId == 'unknown') {
-        addLog(
-          'MQTT',
-          'Connexion MQTT différée : utilisateur non authentifié ou userId introuvable.',
-          color: Colors.amber,
-        );
-        _mqttConnected = false;
-        _mqttConnectedNotifier.value = false;
-        _fallAlertController.setMqttConnected(false);
-        notifyListeners();
-        return;
-      }
-
-      if (_mqttService != null && _mqttService!.userId != currentUserId) {
-        _mqttService?.disconnect();
-        _mqttService = null;
-      }
-
-      _mqttService ??= MqttGatewayService(
-        deviceId: deviceId,
-        userId: currentUserId,
-        credentialsRepository: _credentialsRepo!,
-        authService: authService,
-        onLog: (msg, {bool isError = false}) {
-          addLog('MQTT', msg, color: isError ? Colors.red : Colors.teal);
-        },
-        onConnectionLost: () {
-          if (_isDisposed) return;
-          _mqttConnected = false;
-          _mqttConnectedNotifier.value = false;
-          _fallAlertController.setMqttConnected(false);
-          notifyListeners();
-        },
-        onConnectionRestored: () {
-          if (_isDisposed) return;
-          _mqttConnected = true;
-          _mqttConnectedNotifier.value = true;
-          _fallAlertController.setMqttConnected(true);
-          notifyListeners();
-
-          if (authService?.currentUser == null && authService != null) {
-            unawaited(authService!.refreshCurrentUser().then((refreshed) {
-              if (!refreshed && !_isDisposed) {
-                addLog(
-                  'AUTH',
-                  'Impossible de recharger le profil utilisateur après la reconnexion cloud.',
-                  color: Colors.orange,
-                );
-              }
-            }));
-          }
-
-          if (isBleConnected) {
-            addLog('GATEWAY', 'Reconnexion MQTT : re-synchronisation du statut BLE online...', color: Colors.green);
-            _coordinator?.publishBleStatus(online: true);
-          }
-        },
-      );
-
-      _fallAlertController.attachMqttService(_mqttService);
-
-      final connected = await _mqttService!.connect();
-      _mqttConnected = connected;
-      _mqttConnectedNotifier.value = connected;
-      _fallAlertController.setMqttConnected(connected);
-      notifyListeners();
-
-      if (connected) {
         if (isBleConnected) {
-          if (_coordinator == null) {
-            _setupCoordinator();
-          } else {
-            addLog('GATEWAY', 'MQTT connecté : synchronisation immédiate de la présence BLE online...', color: Colors.green);
-            await _coordinator!.publishBleStatus(online: true);
-          }
-        } else if (_bleCoordinator.status == BleConnectionStatus.scanning ||
-            _bleCoordinator.status == BleConnectionStatus.disconnected) {
-          addLog('GATEWAY', 'MQTT connecté et BLE en mode scan/déconnecté : notification statut offline...', color: Colors.grey);
-          await _mqttService!.publishDeviceStatus(online: false);
+          addLog('GATEWAY', 'Reconnexion MQTT : re-synchronisation du statut BLE online...', color: Colors.green);
+          _coordinator?.publishBleStatus(online: true);
         }
-      }
-    } catch (e) {
-      addLog('MQTT', 'Erreur MQTT inattendue : $e', color: Colors.red);
-      _mqttConnected = false;
-      _mqttConnectedNotifier.value = false;
-      _fallAlertController.setMqttConnected(false);
-      notifyListeners();
-    }
+      },
+      isBleConnectedGetter: () => isBleConnected,
+      onBleOnlineSync: () async {
+        if (_coordinator == null) {
+          _setupCoordinator();
+        } else {
+          addLog('GATEWAY', 'MQTT connecté : synchronisation immédiate de la présence BLE online...', color: Colors.green);
+          await _coordinator!.publishBleStatus(online: true);
+        }
+      },
+    );
+    _fallAlertController.attachMqttService(_mqttCoordinator.mqttService);
   }
 
   void _setupCoordinator() {
     final client = _bleCoordinator.bleClient;
-    if (client == null || _mqttService == null) return;
+    final mqtt = _mqttCoordinator.mqttService;
+    if (client == null || mqtt == null) return;
 
     _coordinator?.stopRouting(notifyOffline: false);
     _studioSavedSub?.cancel();
     _remoteStudioCommandSub?.cancel();
 
     _hitlCoordinator.updateServices(
-      mqttService: _mqttService,
+      mqttService: mqtt,
       studioApiService: _studioCoordinator.studioApiService,
     );
 
     _coordinator = GatewayCoordinator(
       bleClient: client,
-      mqttService: _mqttService!,
+      mqttService: mqtt,
       studioApiService: _studioCoordinator.studioApiService,
       deviceId: deviceId,
       onLog: (msg, {bool isError = false}) {
@@ -622,7 +548,7 @@ class GatewayDashboardController extends ChangeNotifier {
       }
 
       try {
-        if (_mqttService != null) {
+        if (_mqttCoordinator.mqttService != null) {
           _setupCoordinator();
         }
       } catch (e) {
@@ -837,8 +763,7 @@ class GatewayDashboardController extends ChangeNotifier {
     _studioSavedSub?.cancel();
     _remoteStudioCommandSub?.cancel();
     _coordinator?.stopRouting();
-    _mqttService?.disconnect();
-    _mqttConnectedNotifier.dispose();
+    _mqttCoordinator.dispose();
     super.dispose();
   }
 }
