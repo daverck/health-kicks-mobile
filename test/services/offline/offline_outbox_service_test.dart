@@ -169,5 +169,55 @@ void main() {
       expect(remaining.first.retryCount, equals(1));
     });
   });
+
+  group('OutboxItem deserialization', () {
+    test('fromMap parses valid headers and datetime', () {
+      final map = {
+        'id': 42,
+        'endpoint': '/api/v1/test',
+        'method': 'POST',
+        'payload': '{"key":"value"}',
+        'headers': '{"Authorization":"Bearer token","X-Trace":"123"}',
+        'created_at': '2026-11-10T00:00:00.000Z',
+        'retry_count': 2,
+        'next_retry_at': '2026-11-10T00:05:00.000Z',
+        'last_error': 'Network timeout',
+      };
+
+      final item = OutboxItem.fromMap(map);
+
+      expect(item.id, equals(42));
+      expect(item.endpoint, equals('/api/v1/test'));
+      expect(item.method, equals('POST'));
+      expect(item.payload, equals({'key': 'value'}));
+      expect(item.headers?['Authorization'], equals('Bearer token'));
+      expect(item.headers?['X-Trace'], equals('123'));
+      expect(item.retryCount, equals(2));
+      expect(item.lastError, equals('Network timeout'));
+      expect(item.nextRetryAt, isNotNull);
+    });
+
+    test('fromMap safely handles null or malformed headers and dates', () {
+      final map = {
+        'id': 1,
+        'endpoint': '/api/v1/fallback',
+        'method': 'GET',
+        'payload': 'invalid-json',
+        'headers': '{not-valid-json}',
+        'created_at': '2026-11-10T00:00:00.000Z',
+        'retry_count': null,
+        'next_retry_at': 'invalid-date',
+        'last_error': null,
+      };
+
+      final item = OutboxItem.fromMap(map);
+
+      expect(item.id, equals(1));
+      expect(item.payload, isEmpty);
+      expect(item.headers, isNull);
+      expect(item.retryCount, equals(0));
+      expect(item.nextRetryAt, isNull);
+    });
+  });
 }
 

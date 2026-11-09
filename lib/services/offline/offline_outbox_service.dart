@@ -61,32 +61,40 @@ class OutboxItem {
 
   /// Deserializes an [OutboxItem] instance from an SQLite row map.
   factory OutboxItem.fromMap(Map<String, dynamic> map) {
-    Map<String, String>? parsedHeaders;
-    if (map['headers'] != null && map['headers'] is String && (map['headers'] as String).isNotEmpty) {
-      try {
-        final decoded = jsonDecode(map['headers'] as String) as Map<String, dynamic>;
-        parsedHeaders = decoded.map((k, v) => MapEntry(k, v.toString()));
-      } catch (_) {}
-    }
-
-    DateTime? parsedNextRetry;
-    if (map['next_retry_at'] != null && map['next_retry_at'] is String && (map['next_retry_at'] as String).isNotEmpty) {
-      try {
-        parsedNextRetry = DateTime.parse(map['next_retry_at'] as String);
-      } catch (_) {}
-    }
-
     return OutboxItem(
       id: map['id'] as int,
       endpoint: map['endpoint'] as String,
       method: map['method'] as String,
       payloadJson: map['payload'] as String,
-      headers: parsedHeaders,
-      createdAt: DateTime.parse(map['created_at'] as String),
+      headers: _parseHeaders(map['headers']),
+      createdAt: _parseDateTime(map['created_at']) ?? DateTime.now().toUtc(),
       retryCount: map['retry_count'] as int? ?? 0,
-      nextRetryAt: parsedNextRetry,
+      nextRetryAt: _parseDateTime(map['next_retry_at']),
       lastError: map['last_error'] as String?,
     );
+  }
+
+  static Map<String, String>? _parseHeaders(dynamic raw) {
+    if (raw is String && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw) as Map<String, dynamic>;
+        return decoded.map((k, v) => MapEntry(k, v.toString()));
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  static DateTime? _parseDateTime(dynamic raw) {
+    if (raw is String && raw.isNotEmpty) {
+      try {
+        return DateTime.parse(raw);
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
   }
 }
 
