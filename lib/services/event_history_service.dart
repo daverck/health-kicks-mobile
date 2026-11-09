@@ -78,23 +78,10 @@ class EventHistoryService {
       );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        if (decoded is Map<String, dynamic>) {
-          return EventHistoryResponse.fromJson(decoded, page: page, size: size);
-        } else if (decoded is List) {
-          final items = decoded.map((e) => DetectionEvent.fromJson(e as Map<String, dynamic>)).toList();
-          return EventHistoryResponse(
-            events: items,
-            total: items.length,
-            page: page,
-            size: size,
-            hasMore: items.length >= size,
-          );
-        }
-        return EventHistoryResponse(events: [], total: 0, page: page, size: size, hasMore: false);
+        return _parseEventHistoryResponse(response, page: page, size: size);
       } else if (response.statusCode == 404) {
         // Endpoint or empty collection
-        return EventHistoryResponse(events: [], total: 0, page: page, size: size, hasMore: false);
+        return EventHistoryResponse.empty(page: page, size: size);
       } else {
         final errorMsg = 'Erreur serveur (${response.statusCode}): ${response.body}';
         onLog?.call(errorMsg, isError: true);
@@ -114,6 +101,31 @@ class EventHistoryService {
       onLog?.call(msg, isError: true);
       throw HttpException(msg, uri: uri);
     }
+  }
+
+  /// Parses JSON payloads (paginated object or array) into an [EventHistoryResponse].
+  EventHistoryResponse _parseEventHistoryResponse(
+    http.Response response, {
+    required int page,
+    required int size,
+  }) {
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    if (decoded is Map<String, dynamic>) {
+      return EventHistoryResponse.fromJson(decoded, page: page, size: size);
+    } else if (decoded is List) {
+      final items = decoded
+          .whereType<Map<String, dynamic>>()
+          .map((e) => DetectionEvent.fromJson(e))
+          .toList();
+      return EventHistoryResponse(
+        events: items,
+        total: items.length,
+        page: page,
+        size: size,
+        hasMore: items.length >= size,
+      );
+    }
+    return EventHistoryResponse.empty(page: page, size: size);
   }
 }
 

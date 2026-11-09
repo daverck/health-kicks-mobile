@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/models/activity_detection_model.dart';
+import 'package:healthkicks_mobile/models/detection_event.dart';
 import 'package:healthkicks_mobile/services/auth/token_storage_service.dart';
 import 'package:healthkicks_mobile/services/event_history_notifier.dart';
 import 'package:healthkicks_mobile/services/event_history_service.dart';
@@ -356,6 +357,22 @@ void main() {
       expect(notifier.events.length, 2);
       expect(notifier.events.last.id, 'evt-page-2');
       expect(notifier.hasMore, isFalse);
+    });
+
+    test('EventHistoryResponse.empty factory creates empty paginated structure', () {
+      const emptyDefault = EventHistoryResponse.empty();
+      expect(emptyDefault.events, isEmpty);
+      expect(emptyDefault.total, 0);
+      expect(emptyDefault.page, 1);
+      expect(emptyDefault.size, 20);
+      expect(emptyDefault.hasMore, isFalse);
+
+      const emptyCustom = EventHistoryResponse.empty(page: 3, size: 50);
+      expect(emptyCustom.events, isEmpty);
+      expect(emptyCustom.total, 0);
+      expect(emptyCustom.page, 3);
+      expect(emptyCustom.size, 50);
+      expect(emptyCustom.hasMore, isFalse);
     });
   });
 }

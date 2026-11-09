@@ -262,6 +262,13 @@ class EventHistoryResponse {
     required this.hasMore,
   });
 
+  const EventHistoryResponse.empty({
+    this.page = 1,
+    this.size = 20,
+  })  : events = const [],
+        total = 0,
+        hasMore = false;
+
   factory EventHistoryResponse.fromJson(
     Map<String, dynamic> json, {
     int page = 1,
