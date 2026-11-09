@@ -8,7 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../core/config/app_config.dart';
-import '../core/constants/ble_constants.dart';
 import '../core/permissions/permission_service.dart';
 import '../models/activity_detection_model.dart';
 import '../models/firmware_release_model.dart';
@@ -32,6 +31,7 @@ import '../services/mqtt/mqtt_gateway_service.dart';
 import '../services/step_sync_service.dart';
 import '../services/studio/studio_api_service.dart';
 import '../ui/widgets/studio_session_dialog.dart';
+import 'dashboard_ble_coordinator.dart';
 import 'dashboard_odometer_coordinator.dart';
 import 'package:flutter/services.dart';
 import '../models/hitl/hitl_detection_item.dart';
@@ -59,18 +59,13 @@ class GatewayDashboardController extends ChangeNotifier {
   final FallSensitivitySettingsService _fallSensitivitySettingsService;
 
   IotCredentialsRepository? _credentialsRepo;
-  BleConnectionManager? _bleManager;
-  BleFootwearClient? _bleClient;
-  final ValueNotifier<BleFootwearClient?> _bleClientNotifier = ValueNotifier<BleFootwearClient?>(null);
+  late final DashboardBleCoordinator _bleCoordinator;
   MqttGatewayService? _mqttService;
   GatewayCoordinator? _coordinator;
   StudioApiService? _studioApiService;
   StreamSubscription<StudioSessionModel>? _studioSavedSub;
   StreamSubscription<StudioCommandModel>? _remoteStudioCommandSub;
 
-  BleConnectionStatus _bleStatus = BleConnectionStatus.disconnected;
-  BluetoothDevice? _connectedDevice;
-  int _mtu = 23;
   bool _mqttConnected = false;
   bool _isUserSeated = false;
   final ValueNotifier<bool> _mqttConnectedNotifier = ValueNotifier<bool>(false);
@@ -106,6 +101,7 @@ class GatewayDashboardController extends ChangeNotifier {
     StudioAudioFeedbackService? audioFeedbackService,
     InactivitySettingsService? inactivitySettingsService,
     FallSensitivitySettingsService? fallSensitivitySettingsService,
+    DashboardBleCoordinator? bleCoordinator,
     this.onShowSnackBar,
     this.onDismissSnackBar,
     this.onShowRecordingDialog,
@@ -115,6 +111,35 @@ class GatewayDashboardController extends ChangeNotifier {
         _inactivitySettingsService = inactivitySettingsService ?? InactivitySettingsService(),
         _fallSensitivitySettingsService = fallSensitivitySettingsService ?? FallSensitivitySettingsService(),
         _ownsFallAlertController = fallAlertController == null {
+    _bleCoordinator = bleCoordinator ??
+        DashboardBleCoordinator(
+          targetDeviceId: targetDeviceId,
+          permissionService: _permissionService,
+          onLog: (tag, msg, {Color? color}) => addLog(tag, msg, color: color),
+          onStateUpdated: () {
+            if (!_isDisposed) notifyListeners();
+          },
+          onStatusChanged: (status, device) {
+            _surveillanceService.onBleStatusChanged(
+              status,
+              deviceName: device?.platformName ?? targetDeviceId,
+            );
+          },
+          onDeviceReady: (device) => unawaited(onBleDeviceReady(device)),
+          onDeviceDisconnected: () {
+            setSensorCalibrated(false);
+            _studioSavedSub?.cancel();
+            if (_coordinator != null) {
+              _coordinator?.stopRouting();
+              _coordinator = null;
+            } else {
+              _mqttService?.publishGatewayStatus(online: false);
+            }
+            if (_bleCoordinator.status == BleConnectionStatus.disconnected) {
+              _odometerCoordinator.flushSteps();
+            }
+          },
+        );
     _hitlCoordinator = hitlCoordinator ??
         HitlCoordinator(
           mqttService: _mqttService,
@@ -138,15 +163,16 @@ class GatewayDashboardController extends ChangeNotifier {
 
   // Getters
   FallAlertController get fallAlertController => _fallAlertController;
-  BleConnectionStatus get bleStatus => _bleStatus;
-  Stream<BleConnectionStatus>? get bleStatusStream => _bleManager?.statusStream;
-  BluetoothDevice? get connectedDevice => _connectedDevice;
-  int get mtu => _mtu;
+  DashboardBleCoordinator get bleCoordinator => _bleCoordinator;
+  BleConnectionStatus get bleStatus => _bleCoordinator.status;
+  Stream<BleConnectionStatus>? get bleStatusStream => _bleCoordinator.statusStream;
+  BluetoothDevice? get connectedDevice => _bleCoordinator.connectedDevice;
+  int get mtu => _bleCoordinator.mtu;
   bool get isMqttConnected => _mqttConnected;
   ValueNotifier<bool> get mqttConnectedNotifier => _mqttConnectedNotifier;
-  BleConnectionManager? get bleManager => _bleManager;
-  BleFootwearClient? get bleClient => _bleClient;
-  ValueNotifier<BleFootwearClient?> get bleClientNotifier => _bleClientNotifier;
+  BleConnectionManager? get bleManager => _bleCoordinator.bleManager;
+  BleFootwearClient? get bleClient => _bleCoordinator.bleClient;
+  ValueNotifier<BleFootwearClient?> get bleClientNotifier => _bleCoordinator.bleClientNotifier;
   StepDataModel? get latestStepData => _odometerCoordinator.latestStepData;
   List<ActivityDetectionModel> get recentActivities => List.unmodifiable(_recentActivities);
   Stream<ActivityDetectionModel> get activityStream => _activityStreamController.stream;
@@ -155,8 +181,9 @@ class GatewayDashboardController extends ChangeNotifier {
   String get lastStudioCustomLabel => _lastStudioCustomLabel;
   bool get isSensorCalibrated => _isSensorCalibrated;
   bool get isBleConnected =>
-      _bleClient != null &&
-      (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected);
+      _bleCoordinator.bleClient != null &&
+      (_bleCoordinator.status == BleConnectionStatus.ready ||
+          _bleCoordinator.status == BleConnectionStatus.connected);
 
   void setSensorCalibrated(bool calibrated) {
     if (_isSensorCalibrated != calibrated) {
@@ -256,7 +283,7 @@ class GatewayDashboardController extends ChangeNotifier {
     _odometerCoordinator.initialize();
     unawaited(loadLastStudioActivity());
 
-    _ensureBleManager();
+    _bleCoordinator.ensureBleManager();
     _initGateway();
   }
 
@@ -339,71 +366,9 @@ class GatewayDashboardController extends ChangeNotifier {
     _odometerCoordinator.flushSteps();
   }
 
-  void _ensureBleManager() {
-    if (_bleManager != null) return;
-
-    _bleManager = BleConnectionManager(
-      permissionService: _permissionService,
-      onLog: (msg) {
-        final isError = msg.contains('Erreur') || msg.contains('refusé') || msg.contains('Échec');
-        addLog(
-          msg.startsWith('[PERM]') ? 'PERM' : 'BLE',
-          msg.replaceFirst(RegExp(r'^\[(BLE|PERM)\]\s*'), ''),
-          color: isError ? Colors.red : null,
-        );
-      },
-    );
-
-    _bleStatus = _bleManager!.status;
-    _connectedDevice = _bleManager!.connectedDevice;
-    _mtu = _bleManager!.negotiatedMtu;
-    _bleManager!.addListener(_onBleManagerUpdated);
-
-    _bleManager!.statusStream.listen((status) {
-      if (_isDisposed) return;
-      _bleStatus = status;
-      _connectedDevice = _bleManager?.connectedDevice;
-      _mtu = _bleManager?.negotiatedMtu ?? 23;
-      notifyListeners();
-
-      _surveillanceService.onBleStatusChanged(
-        status,
-        deviceName: _bleManager?.connectedDevice?.platformName ?? targetDeviceId,
-      );
-
-      addLog('BLE', 'Statut connexion : ${status.name}');
-      if (status == BleConnectionStatus.disconnected || status == BleConnectionStatus.scanning) {
-        setSensorCalibrated(false);
-        _studioSavedSub?.cancel();
-        if (_coordinator != null) {
-          _coordinator?.stopRouting();
-          _coordinator = null;
-        } else {
-          _mqttService?.publishGatewayStatus(online: false);
-        }
-        _bleClient?.dispose();
-        _bleClient = null;
-        _bleClientNotifier.value = null;
-        if (status == BleConnectionStatus.disconnected) {
-          _odometerCoordinator.flushSteps();
-        }
-      } else if (status == BleConnectionStatus.ready && _bleManager?.connectedDevice != null) {
-        onBleDeviceReady(_bleManager!.connectedDevice!);
-      }
-    });
-  }
-
-  void _onBleManagerUpdated() {
-    if (_isDisposed) return;
-    _bleStatus = _bleManager!.status;
-    _connectedDevice = _bleManager!.connectedDevice;
-    _mtu = _bleManager!.negotiatedMtu;
-    notifyListeners();
-  }
-
   Future<void> _initGateway() async {
     addLog('INIT', 'Démarrage de la passerelle HealthKicks...');
-    _ensureBleManager();
+    _bleCoordinator.ensureBleManager();
     unawaited(connectMqtt());
     unawaited(_fallAlertController.requestSmsPermission());
 
@@ -429,46 +394,13 @@ class GatewayDashboardController extends ChangeNotifier {
   }
 
   Future<void> startBleScan({bool fromButton = false}) async {
-    if (fromButton) {
-      addLog('UI', 'Bouton Re-scanner pressé');
-    }
-
-    _ensureBleManager();
-    _bleStatus = BleConnectionStatus.scanning;
-    _connectedDevice = null;
-    notifyListeners();
-
     if (_coordinator != null) {
       _coordinator?.stopRouting(notifyOffline: true);
       _coordinator = null;
     } else {
       _mqttService?.publishDeviceStatus(online: false);
     }
-    _bleClient?.dispose();
-    _bleClient = null;
-    _bleClientNotifier.value = null;
-
-    try {
-      await _bleManager?.disconnect();
-    } catch (_) {}
-
-    addLog('BLE', 'Démarrage du scan large pour "$targetDeviceId" ou Service GATT...');
-    try {
-      await _bleManager!.startAutoConnect(
-        targetDeviceId: targetDeviceId,
-        timeout: BleConstants.defaultScanTimeout,
-        onLog: (msg) {
-          final isError = msg.contains('Erreur') || msg.contains('refusé') || msg.contains('Échec');
-          addLog(
-            'BLE',
-            msg,
-            color: isError ? Colors.red : (msg.contains('Connecté') ? Colors.green : Colors.blueGrey),
-          );
-        },
-      );
-    } catch (e) {
-      addLog('BLE', 'Erreur de scan : $e', color: Colors.red);
-    }
+    await _bleCoordinator.startAutoConnect(fromButton: fromButton);
   }
 
   Future<void> connectMqtt() async {
@@ -550,7 +482,7 @@ class GatewayDashboardController extends ChangeNotifier {
             }));
           }
 
-          if (_bleClient != null && (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected)) {
+          if (isBleConnected) {
             addLog('GATEWAY', 'Reconnexion MQTT : re-synchronisation du statut BLE online...', color: Colors.green);
             _coordinator?.publishBleStatus(online: true);
           }
@@ -566,16 +498,15 @@ class GatewayDashboardController extends ChangeNotifier {
       notifyListeners();
 
       if (connected) {
-        final isBleReady = _bleClient != null && (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected);
-
-        if (isBleReady) {
+        if (isBleConnected) {
           if (_coordinator == null) {
             _setupCoordinator();
           } else {
             addLog('GATEWAY', 'MQTT connecté : synchronisation immédiate de la présence BLE online...', color: Colors.green);
             await _coordinator!.publishBleStatus(online: true);
           }
-        } else if (_bleStatus == BleConnectionStatus.scanning || _bleStatus == BleConnectionStatus.disconnected) {
+        } else if (_bleCoordinator.status == BleConnectionStatus.scanning ||
+            _bleCoordinator.status == BleConnectionStatus.disconnected) {
           addLog('GATEWAY', 'MQTT connecté et BLE en mode scan/déconnecté : notification statut offline...', color: Colors.grey);
           await _mqttService!.publishDeviceStatus(online: false);
         }
@@ -590,7 +521,8 @@ class GatewayDashboardController extends ChangeNotifier {
   }
 
   void _setupCoordinator() {
-    if (_bleClient == null || _mqttService == null) return;
+    final client = _bleCoordinator.bleClient;
+    if (client == null || _mqttService == null) return;
 
     _coordinator?.stopRouting(notifyOffline: false);
     _studioSavedSub?.cancel();
@@ -611,7 +543,7 @@ class GatewayDashboardController extends ChangeNotifier {
     );
 
     _coordinator = GatewayCoordinator(
-      bleClient: _bleClient!,
+      bleClient: client,
       mqttService: _mqttService!,
       studioApiService: _studioApiService,
       deviceId: deviceId,
@@ -644,43 +576,43 @@ class GatewayDashboardController extends ChangeNotifier {
 
   Future<void> onBleDeviceReady(BluetoothDevice device) async {
     if (_isInitializingBleClient) return;
-    if (_bleClient != null && _bleClient!.device.remoteId == device.remoteId && _bleClient!.isReady) {
+    final currentClient = _bleCoordinator.bleClient;
+    if (currentClient != null && currentClient.device.remoteId == device.remoteId && currentClient.isReady) {
       return;
     }
     _isInitializingBleClient = true;
 
-    addLog('BLE', 'Appareil connecté : ${device.platformName} (MTU: $_mtu octets)');
+    addLog('BLE', 'Appareil connecté : ${device.platformName} (MTU: ${_bleCoordinator.mtu} octets)');
 
     try {
       setSensorCalibrated(false);
-      _bleClient?.dispose();
-      _bleClient = BleFootwearClient(
+      final newClient = BleFootwearClient(
         device: device,
         onLog: (msg, {bool isError = false}) {
           addLog('BLE', msg, color: isError ? Colors.red : Colors.blueGrey);
         },
       );
       addLog('BLE', 'Découverte des services GATT en cours...');
-      await _bleClient!.initializeServices();
-      _bleClientNotifier.value = _bleClient;
+      await newClient.initializeServices();
+      _bleCoordinator.bleClient = newClient;
       notifyListeners();
 
       addLog(
         'BLE',
-        'Souscription active : Activity (0002), Studio Control (0004), Burst (0005) | Haptique (0003) ${_bleClient!.hasHaptic ? "prêt" : "non trouvé"}',
+        'Souscription active : Activity (0002), Studio Control (0004), Burst (0005) | Haptique (0003) ${newClient.hasHaptic ? "prêt" : "non trouvé"}',
       );
 
-      if (_bleClient?.firmwareVersion != null && _bleClient!.firmwareVersion!.isNotEmpty) {
-        addLog('BLE', 'Firmware détecté : ${_bleClient!.firmwareVersion} (${_bleClient!.rawBuildString ?? ""})');
-        _installedFirmwareVersion = _bleClient!.firmwareVersion;
-        _installedFirmwareDate = _bleClient!.firmwareBuildDate ?? _installedFirmwareDate;
+      if (newClient.firmwareVersion != null && newClient.firmwareVersion!.isNotEmpty) {
+        addLog('BLE', 'Firmware détecté : ${newClient.firmwareVersion} (${newClient.rawBuildString ?? ""})');
+        _installedFirmwareVersion = newClient.firmwareVersion;
+        _installedFirmwareDate = newClient.firmwareBuildDate ?? _installedFirmwareDate;
         _notifyIfFirmwareUpdateAvailable(
           installedVersion: _installedFirmwareVersion,
           installedDate: _installedFirmwareDate,
         );
         _firmwareService.saveLocalInstalledFirmware(
-          installedDate: _bleClient!.firmwareBuildDate ?? DateTime.now().toUtc(),
-          version: _bleClient!.firmwareVersion!,
+          installedDate: newClient.firmwareBuildDate ?? DateTime.now().toUtc(),
+          version: newClient.firmwareVersion!,
         );
       } else {
         unawaited(_firmwareService.readDeviceFirmwareInfo(device).then((info) {
@@ -700,9 +632,9 @@ class GatewayDashboardController extends ChangeNotifier {
         }));
       }
 
-      _bleClient!.activityStream.listen(handleActivityDetection);
+      newClient.activityStream.listen(handleActivityDetection);
 
-      _bleClient!.studioStatusStream.listen((statusMsg) {
+      newClient.studioStatusStream.listen((statusMsg) {
         addLog('STUDIO', 'Signal d\'état : $statusMsg');
         if (statusMsg.contains('CALIBRATION_OK')) {
           setSensorCalibrated(true);
@@ -724,7 +656,7 @@ class GatewayDashboardController extends ChangeNotifier {
         }
       });
 
-      _bleClient!.burstResultStream.listen((result) {
+      newClient.burstResultStream.listen((result) {
         addLog(
           'BURST',
           'Réassemblage : ${result.framesRecovered}/${result.totalAnnounced} trames | CRC32 validé : ${result.isCrcValid}',
@@ -735,18 +667,18 @@ class GatewayDashboardController extends ChangeNotifier {
         }
       });
 
-      _bleClient!.stepDataStream.listen((stepData) {
+      newClient.stepDataStream.listen((stepData) {
         _odometerCoordinator.handleOdometerReading(stepData);
       });
 
       try {
-        unawaited(_inactivitySettingsService.syncToBle(_bleClient!));
+        unawaited(_inactivitySettingsService.syncToBle(newClient));
       } catch (e) {
         addLog('BLE', 'Erreur sync paramètres inactivité : $e', color: Colors.orange);
       }
 
       try {
-        unawaited(_fallSensitivitySettingsService.syncToBle(_bleClient!));
+        unawaited(_fallSensitivitySettingsService.syncToBle(newClient));
       } catch (e) {
         addLog('BLE', 'Erreur sync seuil confiance chute : $e', color: Colors.orange);
       }
@@ -765,14 +697,19 @@ class GatewayDashboardController extends ChangeNotifier {
         addLog('GATEWAY', 'Erreur initialisation coordinateur MQTT : $e', color: Colors.orange);
       }
     } catch (e) {
-      addLog('BLE', 'Erreur initialisation GATT : $e', color: Colors.red);
+      addLog('BLE', 'Erreur initialisation client footwear : $e', color: Colors.red);
+      _bleCoordinator.bleClient = null;
     } finally {
       _isInitializingBleClient = false;
     }
   }
 
   Future<void> sendTestHapticCommand() async {
-    final isConnected = _bleClient != null && (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected) && _bleClient!.hasHaptic;
+    final client = _bleCoordinator.bleClient;
+    final isConnected = client != null &&
+        (_bleCoordinator.status == BleConnectionStatus.ready ||
+            _bleCoordinator.status == BleConnectionStatus.connected) &&
+        client.hasHaptic;
 
     if (!isConnected) {
       addLog('HAPTIC', 'Chaussure non connectée : impossible d\'émettre la commande.', color: Colors.red);
@@ -788,7 +725,7 @@ class GatewayDashboardController extends ChangeNotifier {
 
     try {
       addLog('HAPTIC', 'Écriture sur 0003 (Intensité: ${command.intensity}, Durée: ${command.durationMs} ms)...');
-      await _bleClient!.sendHapticCommand(command);
+      await client.sendHapticCommand(command);
       addLog('HAPTIC', 'Écriture sur 0003 validée avec succès (GATT write OK).', color: Colors.green);
     } catch (e) {
       addLog('HAPTIC', 'Échec écriture sur 0003 : $e', color: Colors.red);
@@ -840,8 +777,11 @@ class GatewayDashboardController extends ChangeNotifier {
     required String label,
     required double durationSec,
   }) async {
-    final isConnected =
-        _bleClient != null && (_bleStatus == BleConnectionStatus.ready || _bleStatus == BleConnectionStatus.connected) && _bleClient!.hasStudioControl;
+    final client = _bleCoordinator.bleClient;
+    final isConnected = client != null &&
+        (_bleCoordinator.status == BleConnectionStatus.ready ||
+            _bleCoordinator.status == BleConnectionStatus.connected) &&
+        client.hasStudioControl;
 
     if (!isConnected) {
       addLog('STUDIO', 'Chaussure non connectée ou service Studio indisponible.', color: Colors.red);
@@ -899,7 +839,7 @@ class GatewayDashboardController extends ChangeNotifier {
           addLog('STUDIO', 'Erreur réservation REST ($e), fallback local : $sessionId', color: Colors.orange);
         }
 
-        await _bleClient!.startStudioSession(
+        await client.startStudioSession(
           label: label,
           durationSec: durationSec,
           sessionId: sessionId,
@@ -914,7 +854,7 @@ class GatewayDashboardController extends ChangeNotifier {
   }
 
   Future<void> setHitlActive(bool active) async {
-    final activeClient = _bleClientNotifier.value ?? _bleClient;
+    final activeClient = _bleCoordinator.bleClientNotifier.value ?? _bleCoordinator.bleClient;
     if (active) {
       _recentActivities.clear();
     }
@@ -932,7 +872,7 @@ class GatewayDashboardController extends ChangeNotifier {
   }
 
   Future<void> calibrateSensor() async {
-    final activeClient = _bleClientNotifier.value ?? _bleClient;
+    final activeClient = _bleCoordinator.bleClientNotifier.value ?? _bleCoordinator.bleClient;
     if (activeClient != null) {
       addLog('CONFIG', 'Envoi ordre de calibration d\'assiette (CALIBRATE)...');
       await activeClient.sendCalibrateZeroCommand();
@@ -1004,7 +944,7 @@ class GatewayDashboardController extends ChangeNotifier {
   }
 
   Future<void> disconnectBle() async {
-    await _bleManager?.disconnect();
+    await _bleCoordinator.disconnect();
   }
 
   Future<void> _reportSmsStatusToApi(
@@ -1055,7 +995,7 @@ class GatewayDashboardController extends ChangeNotifier {
       _fallAlertController.dispose();
     }
     _activityStreamController.close();
-    _bleManager?.removeListener(_onBleManagerUpdated);
+    _bleCoordinator.dispose();
     if (_isInitialized) {
       _inactivitySettingsService.dispose();
       _odometerCoordinator.dispose();
@@ -1065,10 +1005,6 @@ class GatewayDashboardController extends ChangeNotifier {
     _studioSavedSub?.cancel();
     _remoteStudioCommandSub?.cancel();
     _coordinator?.stopRouting();
-    _bleClient?.dispose();
-    _bleClient = null;
-    _bleClientNotifier.dispose();
-    _bleManager?.dispose();
     _mqttService?.disconnect();
     _mqttConnectedNotifier.dispose();
     super.dispose();
