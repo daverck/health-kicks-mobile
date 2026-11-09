@@ -6,6 +6,7 @@ import '../../core/config/app_config.dart';
 import '../auth/auth_service.dart';
 import '../auth/token_storage_service.dart';
 import '../api/api_headers.dart';
+import '../api/auth_retry_executor.dart';
 
 typedef StudioLogCallback = void Function(String message, {bool isError});
 
@@ -173,46 +174,16 @@ class StudioApiService {
   Future<http.Response> _sendWithAuthRetry({
     required Future<http.Response> Function(String token) requestFn,
     required String missingTokenMessage,
-  }) async {
-    String? token = await _tokenStorage.getAccessToken();
-
-    if (token == null || token.trim().isEmpty) {
-      onLog?.call(missingTokenMessage, isError: true);
-      throw HttpException(missingTokenMessage);
-    }
-
-    var response = await requestFn(token);
-
-    if (response.statusCode == 401) {
-      onLog?.call(
-        'Access token expired (HTTP 401), attempting refresh...',
-        isError: false,
-      );
-
-      bool refreshed = false;
-      final refreshFn = _refreshTokenFunction;
-      final authSvc = _authService;
-      if (refreshFn != null) {
-        refreshed = await refreshFn();
-      } else if (authSvc != null) {
-        refreshed = await authSvc.refreshToken();
-      }
-
-      if (refreshed) {
-        token = await _tokenStorage.getAccessToken();
-        if (token != null && token.isNotEmpty) {
-          response = await requestFn(token);
-        }
-      } else {
-        const msg = 'Failed to refresh authentication token: login required.';
-        onLog?.call(msg, isError: true);
-        await _authService?.logout();
-        await _tokenStorage.clearTokens();
-        throw const HttpException(msg);
-      }
-    }
-
-    return response;
+  }) {
+    return AuthRetryExecutor(
+      tokenStorage: _tokenStorage,
+      authService: _authService,
+      refreshTokenFunction: _refreshTokenFunction,
+      onLog: onLog,
+    ).execute(
+      requestFn: requestFn,
+      missingTokenMessage: missingTokenMessage,
+    );
   }
 
   /// Retrieves Studio dataset summary statistics for a specific device or globally:

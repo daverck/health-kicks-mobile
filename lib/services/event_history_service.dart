@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../core/config/app_config.dart';
 import '../models/detection_event.dart';
 import 'api/api_headers.dart';
+import 'api/auth_retry_executor.dart';
 import 'auth/auth_service.dart';
 import 'auth/token_storage_service.dart';
 
@@ -42,8 +43,6 @@ class EventHistoryService {
     String category = 'all',
     String? deviceId,
   }) async {
-    String? token = await _tokenStorage.getAccessToken();
-
     final queryParams = <String, String>{
       'page': page.toString(),
       'size': size.toString(),
@@ -61,39 +60,22 @@ class EventHistoryService {
         );
 
     try {
-      var response = await _httpClient
-          .get(
-            uri,
-            headers: buildHeaders(token),
-          )
-          .timeout(const Duration(seconds: 10));
+      final executor = AuthRetryExecutor(
+        tokenStorage: _tokenStorage,
+        authService: _authService,
+        refreshTokenFunction: _refreshTokenFunction,
+        onLog: (msg, {isError = false}) => onLog?.call('[Events] $msg', isError: isError),
+      );
 
-      // Handle token renewal on HTTP 401
-      if (response.statusCode == 401) {
-        onLog?.call(
-          '[Events] Access token expired (HTTP 401), attempting refresh...',
-          isError: false,
-        );
-
-        bool refreshed = false;
-        if (_refreshTokenFunction != null) {
-          refreshed = await _refreshTokenFunction();
-        } else if (_authService != null) {
-          refreshed = await _authService.refreshToken();
-        }
-
-        if (refreshed) {
-          token = await _tokenStorage.getAccessToken();
-          if (token != null && token.isNotEmpty) {
-            response = await _httpClient
-                .get(
-                  uri,
-                  headers: buildHeaders(token),
-                )
-                .timeout(const Duration(seconds: 10));
-          }
-        }
-      }
+      final response = await executor.execute(
+        clearTokensOnFailure: false,
+        requestFn: (currentToken) => _httpClient
+            .get(
+              uri,
+              headers: buildHeaders(currentToken),
+            )
+            .timeout(const Duration(seconds: 10)),
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
