@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/log_entry_model.dart';
 import '../../services/log_export_service.dart';
+import '../widgets/log_export_dialog.dart';
 
 /// Dedicated full-screen console for monitoring and filtering real-time mobile gateway logs.
 class EventLogsScreen extends StatefulWidget {
@@ -121,113 +122,15 @@ class _EventLogsScreenState extends State<EventLogsScreen> {
       return;
     }
 
-    final recipientController = TextEditingController();
-    final logText = LogExportService.formatLogs(
-      logs: widget.logs,
-      deviceId: widget.deviceId,
-      deviceName: widget.deviceName,
-      bleStatus: widget.bleStatus,
-      mtu: widget.mtu,
-      mqttConnected: widget.mqttConnected,
-    );
-
     showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.email_outlined),
-            SizedBox(width: 8),
-            Text('Export du Journal'),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Envoyer les ${widget.logs.length} événements par email.',
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: recipientController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Destinataire (optionnel)',
-                  hintText: 'ex: support@healthkicks.fr',
-                  prefixIcon: Icon(Icons.alternate_email, size: 20),
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                constraints: const BoxConstraints(maxHeight: 120),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: SingleChildScrollView(
-                  child: Text(
-                    logText,
-                    style: const TextStyle(fontFamily: 'monospace', fontSize: 10),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton.icon(
-            icon: const Icon(Icons.copy, size: 16),
-            label: const Text('Copier'),
-            onPressed: () async {
-              await LogExportService.copyToClipboard(logText);
-              if (ctx.mounted) Navigator.of(ctx).pop();
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Logs copiés dans le presse-papier !'),
-                    backgroundColor: Colors.teal,
-                  ),
-                );
-              }
-            },
-          ),
-          FilledButton.icon(
-            icon: const Icon(Icons.send, size: 16),
-            label: const Text('Envoyer'),
-            onPressed: () async {
-              final recipient = recipientController.text.trim();
-              Navigator.of(ctx).pop();
-
-              final subject =
-                  'Journal d\'événements HealthKicks - ${widget.deviceId} - ${DateTime.now().toIso8601String().substring(0, 10)}';
-              final success = await LogExportService.sendEmail(
-                recipient: recipient,
-                subject: subject,
-                body: logText,
-              );
-
-              if (!success) {
-                await LogExportService.copyToClipboard(logText);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Impossible d\'ouvrir l\'application email. Les logs ont été copiés dans le presse-papier.',
-                      ),
-                      backgroundColor: Colors.orange,
-                    ),
-                  );
-                }
-              }
-            },
-          ),
-        ],
+      builder: (ctx) => LogExportDialog(
+        logs: widget.logs,
+        deviceId: widget.deviceId,
+        deviceName: widget.deviceName,
+        bleStatus: widget.bleStatus,
+        mtu: widget.mtu,
+        mqttConnected: widget.mqttConnected,
       ),
     );
   }
