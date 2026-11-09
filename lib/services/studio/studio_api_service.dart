@@ -168,61 +168,71 @@ class StudioApiService {
 
   String get backendBaseUrl => _backendBaseUrl;
 
+  /// Executes [requestFn] using an access token, automatically refreshing the token
+  /// and retrying once if an HTTP 401 Unauthorized response is returned.
+  Future<http.Response> _sendWithAuthRetry({
+    required Future<http.Response> Function(String token) requestFn,
+    required String missingTokenMessage,
+  }) async {
+    String? token = await _tokenStorage.getAccessToken();
+
+    if (token == null || token.trim().isEmpty) {
+      onLog?.call(missingTokenMessage, isError: true);
+      throw HttpException(missingTokenMessage);
+    }
+
+    var response = await requestFn(token);
+
+    if (response.statusCode == 401) {
+      onLog?.call(
+        'Access token expired (HTTP 401), attempting refresh...',
+        isError: false,
+      );
+
+      bool refreshed = false;
+      final refreshFn = _refreshTokenFunction;
+      final authSvc = _authService;
+      if (refreshFn != null) {
+        refreshed = await refreshFn();
+      } else if (authSvc != null) {
+        refreshed = await authSvc.refreshToken();
+      }
+
+      if (refreshed) {
+        token = await _tokenStorage.getAccessToken();
+        if (token != null && token.isNotEmpty) {
+          response = await requestFn(token);
+        }
+      } else {
+        const msg = 'Failed to refresh authentication token: login required.';
+        onLog?.call(msg, isError: true);
+        await _authService?.logout();
+        await _tokenStorage.clearTokens();
+        throw const HttpException(msg);
+      }
+    }
+
+    return response;
+  }
+
   /// Retrieves Studio dataset summary statistics for a specific device or globally:
   /// - `GET /api/v1/devices/{device_id}/studio/stats`
   /// - `GET /api/v1/studio/stats`
   Future<StudioDatasetStats> getStudioStats({String? deviceId}) async {
-    String? token = await _tokenStorage.getAccessToken();
-
-    if (token == null || token.trim().isEmpty) {
-      const msg = 'No access token available to fetch Studio stats.';
-      onLog?.call(msg, isError: true);
-      throw const HttpException(msg);
-    }
-
     final cleanDeviceId = deviceId?.trim() ?? '';
     final path = cleanDeviceId.isNotEmpty
         ? '/api/v1/devices/$cleanDeviceId/studio/stats'
         : '/api/v1/studio/stats';
     final uri = Uri.parse('$_backendBaseUrl$path');
 
-    Map<String, String> buildHeaders(String currentToken) => buildApiHeaders(currentToken);
-
     try {
-      var response = await _httpClient.get(
-        uri,
-        headers: buildHeaders(token),
+      final response = await _sendWithAuthRetry(
+        missingTokenMessage: 'No access token available to fetch Studio stats.',
+        requestFn: (token) => _httpClient.get(
+          uri,
+          headers: buildApiHeaders(token),
+        ),
       );
-
-      if (response.statusCode == 401) {
-        onLog?.call(
-          'Access token expired (HTTP 401), attempting refresh...',
-          isError: false,
-        );
-
-        bool refreshed = false;
-        if (_refreshTokenFunction != null) {
-          refreshed = await _refreshTokenFunction();
-        } else if (_authService != null) {
-          refreshed = await _authService.refreshToken();
-        }
-
-        if (refreshed) {
-          token = await _tokenStorage.getAccessToken();
-          if (token != null && token.isNotEmpty) {
-            response = await _httpClient.get(
-              uri,
-              headers: buildHeaders(token),
-            );
-          }
-        } else {
-          const msg = 'Failed to refresh authentication token: login required.';
-          onLog?.call(msg, isError: true);
-          await _authService?.logout();
-          await _tokenStorage.clearTokens();
-          throw const HttpException(msg);
-        }
-      }
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -254,14 +264,6 @@ class StudioApiService {
     int? pulsePauseMs,
     int? pulseIntensity,
   }) async {
-    String? token = await _tokenStorage.getAccessToken();
-
-    if (token == null || token.trim().isEmpty) {
-      const msg = 'No access token available to trigger Studio session.';
-      onLog?.call(msg, isError: true);
-      throw const HttpException(msg);
-    }
-
     final uri = Uri.parse('$_backendBaseUrl/api/v1/devices/$deviceId/commands/studio/start');
     final payload = <String, dynamic>{
       'label': label,
@@ -273,46 +275,15 @@ class StudioApiService {
     };
     final body = jsonEncode(payload);
 
-    Map<String, String> buildHeaders(String currentToken) => buildApiHeaders(currentToken);
-
     try {
-      var response = await _httpClient.post(
-        uri,
-        headers: buildHeaders(token),
-        body: body,
+      final response = await _sendWithAuthRetry(
+        missingTokenMessage: 'No access token available to trigger Studio session.',
+        requestFn: (token) => _httpClient.post(
+          uri,
+          headers: buildApiHeaders(token),
+          body: body,
+        ),
       );
-
-      // Handle token renewal on 401
-      if (response.statusCode == 401) {
-        onLog?.call(
-          'Access token expired (HTTP 401), attempting refresh...',
-          isError: false,
-        );
-
-        bool refreshed = false;
-        if (_refreshTokenFunction != null) {
-          refreshed = await _refreshTokenFunction();
-        } else if (_authService != null) {
-          refreshed = await _authService.refreshToken();
-        }
-
-        if (refreshed) {
-          token = await _tokenStorage.getAccessToken();
-          if (token != null && token.isNotEmpty) {
-            response = await _httpClient.post(
-              uri,
-              headers: buildHeaders(token),
-              body: body,
-            );
-          }
-        } else {
-          const msg = 'Failed to refresh authentication token: login required.';
-          onLog?.call(msg, isError: true);
-          await _authService?.logout();
-          await _tokenStorage.clearTokens();
-          throw const HttpException(msg);
-        }
-      }
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
