@@ -27,9 +27,8 @@ class LocaleService extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final storedCode = prefs.getString(localeStorageKey);
-      if (storedCode != null &&
-          AppLanguage.supportedLocales.any((l) => l.languageCode == storedCode)) {
-        _currentLocale = Locale(storedCode);
+      if (AppLanguage.isSupportedCode(storedCode)) {
+        _currentLocale = Locale(storedCode!);
         notifyListeners();
       }
     } catch (_) {
@@ -39,8 +38,7 @@ class LocaleService extends ChangeNotifier {
 
   /// Updates and persists the selected [Locale].
   Future<void> setLocale(Locale locale) async {
-    if (!AppLanguage.supportedLocales
-        .any((l) => l.languageCode == locale.languageCode)) {
+    if (!AppLanguage.isSupportedLocale(locale)) {
       return;
     }
     _currentLocale = locale;

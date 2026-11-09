@@ -67,15 +67,21 @@ class AppLanguage {
   ];
 
   /// Supported Flutter locales for MaterialApp.
-  static const List<Locale> supportedLocales = [
-    Locale('fr'),
-    Locale('en'),
-    Locale('nl'),
-    Locale('es'),
-    Locale('de'),
-    Locale('ar'),
-    Locale('zh'),
-  ];
+  static final List<Locale> supportedLocales =
+      supported.map((lang) => lang.locale).toList(growable: false);
+
+  /// Returns whether a language code corresponds to a supported language.
+  static bool isSupportedCode(String? code) {
+    if (code == null || code.trim().isEmpty) return false;
+    final lower = code.trim().toLowerCase();
+    return supported.any((lang) => lang.code.toLowerCase() == lower);
+  }
+
+  /// Returns whether a [Locale] is supported.
+  static bool isSupportedLocale(Locale? locale) {
+    if (locale == null) return false;
+    return isSupportedCode(locale.languageCode);
+  }
 
   /// Resolves an [AppLanguage] from its ISO code, falling back to French.
   static AppLanguage fromCode(String? code) {

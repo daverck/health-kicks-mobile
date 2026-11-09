@@ -67,6 +67,20 @@ void main() {
       await service.setLocale(const Locale('xx'));
       expect(service.currentLanguage.code, 'fr');
     });
+
+    test('AppLanguage validates supported codes and locales', () {
+      expect(AppLanguage.supportedLocales.length, 7);
+      expect(AppLanguage.isSupportedCode('fr'), isTrue);
+      expect(AppLanguage.isSupportedCode('FR'), isTrue);
+      expect(AppLanguage.isSupportedCode('en'), isTrue);
+      expect(AppLanguage.isSupportedCode('invalid'), isFalse);
+      expect(AppLanguage.isSupportedCode(null), isFalse);
+      expect(AppLanguage.isSupportedCode(''), isFalse);
+
+      expect(AppLanguage.isSupportedLocale(const Locale('nl')), isTrue);
+      expect(AppLanguage.isSupportedLocale(const Locale('zz')), isFalse);
+      expect(AppLanguage.isSupportedLocale(null), isFalse);
+    });
   });
 }
 
