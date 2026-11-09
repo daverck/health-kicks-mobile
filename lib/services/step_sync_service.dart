@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../core/config/app_config.dart';
 import '../models/step_data_model.dart';
 import 'api/api_headers.dart';
+import 'api/auth_retry_executor.dart';
 import 'auth/auth_service.dart';
 import 'auth/token_storage_service.dart';
 import 'integrations/health_connect_service.dart';
@@ -117,28 +118,21 @@ class StepSyncService {
         );
 
     try {
-      String? token = await _tokenStorage.getAccessToken();
-      var response = await _httpClient
-          .get(
-            uri,
-            headers: buildHeaders(token),
-          )
-          .timeout(const Duration(seconds: 12));
+      final executor = AuthRetryExecutor(
+        tokenStorage: _tokenStorage,
+        authService: _authService,
+        onLog: onLog,
+      );
 
-      // Handle 401 token refresh
-      if (response.statusCode == 401 && _authService != null) {
-        onLog?.call('Token expired while fetching daily steps (HTTP 401), refreshing...', isError: false);
-        final refreshed = await _authService.refreshToken();
-        if (refreshed) {
-          token = await _tokenStorage.getAccessToken();
-          response = await _httpClient
-              .get(
-                uri,
-                headers: buildHeaders(token),
-              )
-              .timeout(const Duration(seconds: 12));
-        }
-      }
+      final response = await executor.execute(
+        clearTokensOnFailure: false,
+        requestFn: (token) => _httpClient
+            .get(
+              uri,
+              headers: buildHeaders(token),
+            )
+            .timeout(const Duration(seconds: 12)),
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -201,7 +195,12 @@ class StepSyncService {
       }
 
       onLog?.call('Synchronisation de ${unsyncedDays.length} jour(s) de pas...', isError: false);
-      String? token = await _tokenStorage.getAccessToken();
+
+      final executor = AuthRetryExecutor(
+        tokenStorage: _tokenStorage,
+        authService: _authService,
+        onLog: onLog,
+      );
 
       bool allSuccess = true;
       final syncedDates = <String>[];
@@ -226,29 +225,16 @@ class StepSyncService {
             );
 
         try {
-          var response = await _httpClient
-              .post(
-                uri,
-                headers: buildHeaders(token),
-                body: jsonEncode(payload),
-              )
-              .timeout(const Duration(seconds: 12));
-
-          // Handle 401 token refresh
-          if (response.statusCode == 401 && _authService != null) {
-            onLog?.call('Jeton expiré lors du sync des pas (HTTP 401), rafraîchissement...', isError: false);
-            final refreshed = await _authService.refreshToken();
-            if (refreshed) {
-              token = await _tokenStorage.getAccessToken();
-              response = await _httpClient
-                  .post(
-                    uri,
-                    headers: buildHeaders(token),
-                    body: jsonEncode(payload),
-                  )
-                  .timeout(const Duration(seconds: 12));
-            }
-          }
+          final response = await executor.execute(
+            clearTokensOnFailure: false,
+            requestFn: (token) => _httpClient
+                .post(
+                  uri,
+                  headers: buildHeaders(token),
+                  body: jsonEncode(payload),
+                )
+                .timeout(const Duration(seconds: 12)),
+          );
 
           if (response.statusCode >= 200 && response.statusCode < 300) {
             syncedDates.add(date);
