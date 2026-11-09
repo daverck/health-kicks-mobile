@@ -213,18 +213,10 @@ class FallAlertController extends ChangeNotifier {
       return;
     }
 
-    // 2. Check if this event represents a fall (bit 0 of flags or fall state codes)
-    final isFallEvent = detection.isFall ||
-        detection.stateCode == 0x10 ||
-        detection.stateCode == 0x11 ||
-        detection.stateCode == 0x12 ||
-        detection.stateCode == 0x1F;
+    // 2. Check if this event represents a fall alert
+    if (!detection.isFallAlert) return;
 
-    if (!isFallEvent) return;
-
-    final int detectedAtMs = detection.timestampEpochSec > 1000000000
-        ? detection.timestampEpochSec * 1000
-        : detection.effectiveTimestamp.toUtc().millisecondsSinceEpoch;
+    final int detectedAtMs = detection.timestampMs;
     final double confidence = (detection.confidencePercent / 100.0).clamp(0.0, 1.0);
     final String effectiveDeviceId = overrideDeviceId ?? deviceId;
 

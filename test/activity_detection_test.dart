@@ -251,5 +251,63 @@ void main() {
         throwsFormatException,
       );
     });
+
+    test('isFallAlert correctly identifies fall alerts from flags or state codes', () {
+      final flagFall = ActivityDetectionModel(
+        stateCode: 0x01,
+        eventType: 'walk',
+        confidencePercent: 90,
+        timestampEpochSec: 1726224000,
+        isFall: true,
+        isHapticTriggered: false,
+      );
+      expect(flagFall.isFallAlert, isTrue);
+
+      for (final code in [0x10, 0x11, 0x12, 0x1F]) {
+        final codeFall = ActivityDetectionModel(
+          stateCode: code,
+          eventType: 'fall_generic',
+          confidencePercent: 90,
+          timestampEpochSec: 1726224000,
+          isFall: false,
+          isHapticTriggered: false,
+        );
+        expect(codeFall.isFallAlert, isTrue);
+      }
+
+      final nonFall = ActivityDetectionModel(
+        stateCode: 0x01,
+        eventType: 'walk',
+        confidencePercent: 90,
+        timestampEpochSec: 1726224000,
+        isFall: false,
+        isHapticTriggered: false,
+      );
+      expect(nonFall.isFallAlert, isFalse);
+    });
+
+    test('timestampMs converts valid MCU epoch or falls back to receivedAt / effectiveTimestamp', () {
+      final mcuTimeModel = ActivityDetectionModel(
+        stateCode: 0x01,
+        eventType: 'walk',
+        confidencePercent: 90,
+        timestampEpochSec: 1726224000,
+        isFall: false,
+        isHapticTriggered: false,
+      );
+      expect(mcuTimeModel.timestampMs, equals(1726224000000));
+
+      final fixedReceived = DateTime.utc(2026, 11, 9, 12, 0, 0);
+      final bootUptimeModel = ActivityDetectionModel(
+        stateCode: 0x01,
+        eventType: 'walk',
+        confidencePercent: 90,
+        timestampEpochSec: 50, // uptime seconds
+        receivedAt: fixedReceived,
+        isFall: false,
+        isHapticTriggered: false,
+      );
+      expect(bootUptimeModel.timestampMs, equals(fixedReceived.millisecondsSinceEpoch));
+    });
   });
 }

@@ -22,6 +22,15 @@ class ActivityDetectionModel {
 
   bool get isFallRecovery => eventType == 'fall_recovery' || stateCode == 0x13;
 
+  /// Evaluates whether this detection represents an emergency fall event
+  /// (Flags bit 0 set or state code in [0x10, 0x11, 0x12, 0x1F]).
+  bool get isFallAlert =>
+      isFall ||
+      stateCode == 0x10 ||
+      stateCode == 0x11 ||
+      stateCode == 0x12 ||
+      stateCode == 0x1F;
+
   ActivityCategory get activityCategory => categoryForEventType(eventType);
 
   const ActivityDetectionModel({
@@ -68,6 +77,13 @@ class ActivityDetectionModel {
     return DateTime.now();
   }
 
+  /// Normalized timestamp in UTC epoch milliseconds.
+  /// If microcontroller provides a valid UTC epoch (> year 2001, 10^9 seconds),
+  /// uses MCU timestamp; otherwise falls back to reception UTC epoch milliseconds.
+  int get timestampMs => timestampEpochSec > 1000000000
+      ? timestampEpochSec * 1000
+      : (receivedAt ?? effectiveTimestamp).toUtc().millisecondsSinceEpoch;
+
   /// Decodes 7 bytes of Big-Endian binary payload per the HealthKicks GATT specification.
   factory ActivityDetectionModel.fromBytes(List<int> bytes) {
     if (bytes.length < 7) {
@@ -102,15 +118,6 @@ class ActivityDetectionModel {
   /// Converts the detection event to normalized JSON message for AWS IoT Core MQTT publishing.
   /// Reference: contracts/README.md (Topic healthkicks/v1/{device_id}/events/detection)
   Map<String, dynamic> toMqttPayload(String deviceId) {
-    // If the microcontroller provides a valid UTC epoch (> year 2001, 10^9 seconds),
-    // convert to milliseconds; otherwise fallback to reception UTC epoch milliseconds.
-    final int timestampMs;
-    if (timestampEpochSec > 1000000000) {
-      timestampMs = timestampEpochSec * 1000;
-    } else {
-      timestampMs = effectiveTimestamp.toUtc().millisecondsSinceEpoch;
-    }
-
     final confidence = confidencePercent / 100.0;
 
     return {
