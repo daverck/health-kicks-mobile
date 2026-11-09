@@ -234,24 +234,11 @@ class GatewayDashboardController extends ChangeNotifier {
     }
 
     if (detection.eventType == 'inactivity_alert') {
-      final now = DateTime.now();
-      if (_lastInactivityToastTime == null ||
-          now.difference(_lastInactivityToastTime!).inSeconds >= 30) {
-        _lastInactivityToastTime = now;
-        onShowSnackBar?.call(
-          _inactivitySettingsService.inactivityAlertMessage(isSeated: _isUserSeated),
-          backgroundColor: Colors.deepOrange.shade700,
-        );
-      }
+      _handleInactivityAlert(detection);
       return;
     }
 
-    _recentActivities.insert(0, detection);
-    if (_recentActivities.length > 20) {
-      _recentActivities.removeLast();
-    }
-    notifyListeners();
-    _activityStreamController.add(detection);
+    _recordRecentActivity(detection);
 
     addLog(
       'ACTIVITY',
@@ -268,6 +255,27 @@ class GatewayDashboardController extends ChangeNotifier {
       detection,
       overrideDeviceId: deviceId,
     ));
+  }
+
+  void _handleInactivityAlert(ActivityDetectionModel detection) {
+    final now = DateTime.now();
+    if (_lastInactivityToastTime == null ||
+        now.difference(_lastInactivityToastTime!).inSeconds >= 30) {
+      _lastInactivityToastTime = now;
+      onShowSnackBar?.call(
+        _inactivitySettingsService.inactivityAlertMessage(isSeated: _isUserSeated),
+        backgroundColor: Colors.deepOrange.shade700,
+      );
+    }
+  }
+
+  void _recordRecentActivity(ActivityDetectionModel detection) {
+    _recentActivities.insert(0, detection);
+    if (_recentActivities.length > 20) {
+      _recentActivities.removeLast();
+    }
+    notifyListeners();
+    _activityStreamController.add(detection);
   }
 
   GatewayCoordinator? get coordinator => _coordinator;
