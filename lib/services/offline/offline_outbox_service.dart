@@ -215,6 +215,24 @@ class OfflineOutboxService {
     return await db.insert(tableName, row);
   }
 
+  /// Builds the parameterized SQL WHERE clause and arguments for pending outbox items.
+  ({String clause, List<Object?> args}) _buildPendingFilter({
+    DateTime? now,
+    bool includeScheduled = false,
+  }) {
+    if (includeScheduled) {
+      return (
+        clause: 'retry_count < ?',
+        args: [maxRetryThreshold],
+      );
+    }
+    final nowIso = (now?.toUtc() ?? DateTime.now().toUtc()).toIso8601String();
+    return (
+      clause: 'retry_count < ? AND (next_retry_at IS NULL OR next_retry_at <= ?)',
+      args: [maxRetryThreshold, nowIso],
+    );
+  }
+
   /// Get pending items up to the specified limit, ordered by insertion time (FIFO).
   /// By default, filters out items whose [nextRetryAt] is scheduled in the future unless [includeScheduled] is true.
   Future<List<OutboxItem>> getPendingItems({
@@ -223,22 +241,12 @@ class OfflineOutboxService {
     bool includeScheduled = false,
   }) async {
     final db = await database;
-    final String whereClause;
-    final List<Object?> whereArgs;
-
-    if (includeScheduled) {
-      whereClause = 'retry_count < ?';
-      whereArgs = [maxRetryThreshold];
-    } else {
-      final nowIso = (now?.toUtc() ?? DateTime.now().toUtc()).toIso8601String();
-      whereClause = 'retry_count < ? AND (next_retry_at IS NULL OR next_retry_at <= ?)';
-      whereArgs = [maxRetryThreshold, nowIso];
-    }
+    final filter = _buildPendingFilter(now: now, includeScheduled: includeScheduled);
 
     final results = await db.query(
       tableName,
-      where: whereClause,
-      whereArgs: whereArgs,
+      where: filter.clause,
+      whereArgs: filter.args,
       orderBy: 'id ASC',
       limit: limit,
     );
@@ -249,19 +257,11 @@ class OfflineOutboxService {
   /// If [includeScheduled] is true, includes items currently in backoff delay.
   Future<int> getPendingCount({DateTime? now, bool includeScheduled = false}) async {
     final db = await database;
-    final String query;
-    final List<Object?> args;
+    final filter = _buildPendingFilter(now: now, includeScheduled: includeScheduled);
 
-    if (includeScheduled) {
-      query = 'SELECT COUNT(*) FROM $tableName WHERE retry_count < ?';
-      args = [maxRetryThreshold];
-    } else {
-      final nowIso = (now?.toUtc() ?? DateTime.now().toUtc()).toIso8601String();
-      query = 'SELECT COUNT(*) FROM $tableName WHERE retry_count < ? AND (next_retry_at IS NULL OR next_retry_at <= ?)';
-      args = [maxRetryThreshold, nowIso];
-    }
-
-    final count = Sqflite.firstIntValue(await db.rawQuery(query, args));
+    final count = Sqflite.firstIntValue(
+      await db.rawQuery('SELECT COUNT(*) FROM $tableName WHERE ${filter.clause}', filter.args),
+    );
     return count ?? 0;
   }
 
