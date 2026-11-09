@@ -9,6 +9,7 @@ import '../services/location/fall_location_provider.dart';
 import '../services/mqtt/mqtt_gateway_service.dart';
 import '../services/sms/fall_sms_sender.dart';
 import '../services/audio/fall_alert_audio_service.dart';
+import 'fall_sms_relay_coordinator.dart';
 
 const _uuid = Uuid();
 
@@ -19,7 +20,7 @@ typedef FallAlertLogCallback = void Function(String tag, String message, {bool i
 class FallAlertController extends ChangeNotifier {
   final String deviceId;
   final FallLocationProvider locationProvider;
-  final FallSmsSender smsSender;
+  final FallSmsRelayCoordinator _smsRelayCoordinator;
   final int initialCountdownSeconds;
   final Future<bool> Function(FallAlertUplinkPayload payload)? onPublishUplink;
   final bool Function()? isMqttConnectedGetter;
@@ -48,14 +49,14 @@ class FallAlertController extends ChangeNotifier {
   String? _locationRefreshEventId;
   bool _isDisposed = false;
 
-  final Set<String> _processedSmsCommandKeys = {};
   final List<FallAlertUplinkPayload> _pendingReplayedPayloads = [];
   final List<FallAlertUplinkPayload> _publishedPayloads = [];
 
   FallAlertController({
     this.deviceId = 'HK-2',
     this.locationProvider = const DefaultFallLocationProvider(),
-    this.smsSender = const MethodChannelFallSmsSender(),
+    FallSmsSender smsSender = const MethodChannelFallSmsSender(),
+    FallSmsRelayCoordinator? smsRelayCoordinator,
     this.initialCountdownSeconds = 60,
     this.onPublishUplink,
     this.isMqttConnectedGetter,
@@ -64,12 +65,22 @@ class FallAlertController extends ChangeNotifier {
     this.onSmsStatusReported,
     FallAlertAudioService? audioService,
     MqttGatewayService? mqttService,
-  })  : _audioService = audioService ?? FallAlertAudioService(),
+  })  : _smsRelayCoordinator = smsRelayCoordinator ??
+            FallSmsRelayCoordinator(
+              smsSender: smsSender,
+              onLog: onLog,
+              onSmsStatusReported: onSmsStatusReported,
+            ),
+        _audioService = audioService ?? FallAlertAudioService(),
         _remainingSeconds = initialCountdownSeconds {
     if (mqttService != null) {
       attachMqttService(mqttService);
     }
   }
+
+  FallSmsSender get smsSender => _smsRelayCoordinator.smsSender;
+  FallSmsRelayCoordinator get smsRelayCoordinator => _smsRelayCoordinator;
+  Set<String> get processedSmsCommandKeys => _smsRelayCoordinator.processedSmsCommandKeys;
 
   String? get activeEventId => _activeEventId;
   String? get state => _state;
@@ -405,14 +416,12 @@ class FallAlertController extends ChangeNotifier {
 
     // 1. Process embedded SMS command if present and not yet handled (idempotence)
     if (status.smsCommand != null) {
-      final cmd = status.smsCommand!;
-      final smsKey = cmd.notificationId != null
-          ? 'notif:${cmd.notificationId}'
-          : 'event:${status.eventId}';
-      if (!_processedSmsCommandKeys.contains(smsKey)) {
-        _processedSmsCommandKeys.add(smsKey);
-        unawaited(_handleSmsCommand(status.eventId, cmd));
-      }
+      _smsRelayCoordinator.handleDownlinkSmsCommand(
+        eventId: status.eventId,
+        cmd: status.smsCommand!,
+        publishUplink: _publishUplink,
+        enqueuePendingPayload: (payload) => _pendingReplayedPayloads.add(payload),
+      );
     }
 
     // 2. TEST_SMS downlinks must NEVER modify active alert state or open the emergency screen
@@ -503,70 +512,6 @@ class FallAlertController extends ChangeNotifier {
         _activeEventId = null;
         _notifySafely();
         break;
-    }
-  }
-
-  Future<void> _handleSmsCommand(String eventId, FallAlertSmsCommand cmd) async {
-    onLog?.call(
-      'FALL_ALERT',
-      'Envoi SMS (${cmd.isTest ? "TEST" : "URGENCE"}) vers ${cmd.recipientPhone} (${cmd.contactFirstName})...',
-    );
-
-    final result = await smsSender.sendSms(
-      phone: cmd.recipientPhone,
-      message: cmd.message,
-    );
-
-    if (result.success) {
-      onLog?.call(
-        'FALL_ALERT',
-        'SMS remis au modem GSM Android pour ${cmd.contactFirstName}.',
-      );
-    } else {
-      onLog?.call(
-        'FALL_ALERT',
-        'Échec envoi SMS pour ${cmd.contactFirstName} : ${result.errorMessage ?? "erreur inconnue"}',
-        isError: true,
-      );
-    }
-
-    if (!cmd.isTest && cmd.notificationId != null) {
-      final statusPayload = FallAlertUplinkPayload.smsStatus(
-        eventId: eventId,
-        notificationId: cmd.notificationId!,
-        sent: result.success,
-        errorMessage: result.success ? null : result.errorMessage,
-      );
-      final ok = await _publishUplink(statusPayload);
-      if (!ok) {
-        onLog?.call(
-          'FALL_ALERT',
-          'Échec publication MQTT SMS_STATUS (notif #${cmd.notificationId}), mise en file d\'attente.',
-          isError: true,
-        );
-        _pendingReplayedPayloads.add(statusPayload);
-      } else {
-        onLog?.call(
-          'FALL_ALERT',
-          'Rapport SMS_STATUS (${result.success ? "SENT" : "FAILED"}) notif #${cmd.notificationId} publié avec succès via MQTT.',
-        );
-      }
-
-      if (onSmsStatusReported != null) {
-        try {
-          await onSmsStatusReported!(
-            cmd.notificationId!,
-            result.success,
-            result.errorMessage,
-          );
-        } catch (e) {
-          onLog?.call(
-            'FALL_ALERT',
-            'Échec du signalement REST direct de l\'état SMS : $e',
-            isError: true,
-          );
-        }
-      }
     }
   }
 
