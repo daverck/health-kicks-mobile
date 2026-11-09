@@ -273,10 +273,7 @@ class FallAlertController extends ChangeNotifier {
       'Chute détectée en direct ($liveEventId) : ouverture de l\'écran d\'urgence (60 s).',
     );
 
-    final location = await locationProvider.getCurrentLocation(timeout: const Duration(seconds: 3)).timeout(
-          const Duration(seconds: 3),
-          onTimeout: () => null,
-        );
+    final location = await _resolveCurrentLocation(timeout: const Duration(seconds: 3));
     _lastLocation = location;
 
     final livePayload = FallAlertUplinkPayload.detected(
@@ -338,10 +335,7 @@ class FallAlertController extends ChangeNotifier {
     );
 
     final location = _lastLocation ??
-        await locationProvider.getCurrentLocation(timeout: const Duration(seconds: 2)).timeout(
-              const Duration(seconds: 2),
-              onTimeout: () => null,
-            ) ??
+        await _resolveCurrentLocation(timeout: const Duration(seconds: 2)) ??
         _lastLocation;
     _lastLocation = location;
 
@@ -363,10 +357,7 @@ class FallAlertController extends ChangeNotifier {
 
   Future<void> _refreshLocationUntilAvailable(String eventId) async {
     while (!_isDisposed && _activeEventId == eventId && _state == 'PENDING') {
-      final location = await locationProvider.getCurrentLocation(timeout: const Duration(seconds: 3)).timeout(
-            const Duration(seconds: 3),
-            onTimeout: () => null,
-          );
+      final location = await _resolveCurrentLocation(timeout: const Duration(seconds: 3));
 
       if (_isDisposed || _activeEventId != eventId) return;
       if (location != null) {
@@ -377,6 +368,15 @@ class FallAlertController extends ChangeNotifier {
 
       await _waitForLocationRefreshRetry();
     }
+  }
+
+  Future<FallAlertLocation?> _resolveCurrentLocation({
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    return locationProvider.getCurrentLocation(timeout: timeout).timeout(
+          timeout,
+          onTimeout: () => null,
+        );
   }
 
   Future<void> _waitForLocationRefreshRetry() {
