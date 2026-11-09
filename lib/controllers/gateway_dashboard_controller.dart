@@ -30,6 +30,7 @@ import '../services/step_sync_service.dart';
 import '../services/studio/studio_api_service.dart';
 import '../ui/widgets/studio_session_dialog.dart';
 import 'dashboard_ble_coordinator.dart';
+import 'dashboard_firmware_coordinator.dart';
 import 'dashboard_odometer_coordinator.dart';
 import 'dashboard_studio_coordinator.dart';
 import 'package:flutter/services.dart';
@@ -44,7 +45,7 @@ class GatewayDashboardController extends ChangeNotifier {
   final String deviceId;
   final String targetDeviceId;
   final AuthService? authService;
-  final FirmwareService _firmwareService;
+  late final DashboardFirmwareCoordinator _firmwareCoordinator;
   late final HitlCoordinator _hitlCoordinator;
   HitlCoordinator get hitlCoordinator => _hitlCoordinator;
   final StudioAudioFeedbackService _audioFeedbackService;
@@ -69,10 +70,6 @@ class GatewayDashboardController extends ChangeNotifier {
   bool _isUserSeated = false;
   final ValueNotifier<bool> _mqttConnectedNotifier = ValueNotifier<bool>(false);
   bool _isInitializingBleClient = false;
-  FirmwareReleaseModel? _latestFirmwareRelease;
-  String? _installedFirmwareVersion;
-  DateTime? _installedFirmwareDate;
-  String? _announcedFirmwareReleaseVersion;
   final List<ActivityDetectionModel> _recentActivities = [];
   final StreamController<ActivityDetectionModel> _activityStreamController = StreamController<ActivityDetectionModel>.broadcast();
   DateTime? _lastInactivityToastTime;
@@ -100,15 +97,20 @@ class GatewayDashboardController extends ChangeNotifier {
     FallSensitivitySettingsService? fallSensitivitySettingsService,
     DashboardBleCoordinator? bleCoordinator,
     DashboardStudioCoordinator? studioCoordinator,
+    DashboardFirmwareCoordinator? firmwareCoordinator,
     this.onShowSnackBar,
     this.onDismissSnackBar,
     this.onShowRecordingDialog,
     this.onPermissionDeniedAction,
-  })  : _firmwareService = firmwareService ?? FirmwareService(),
-        _audioFeedbackService = audioFeedbackService ?? StudioAudioFeedbackService(),
+  })  : _audioFeedbackService = audioFeedbackService ?? StudioAudioFeedbackService(),
         _inactivitySettingsService = inactivitySettingsService ?? InactivitySettingsService(),
         _fallSensitivitySettingsService = fallSensitivitySettingsService ?? FallSensitivitySettingsService(),
         _ownsFallAlertController = fallAlertController == null {
+    _firmwareCoordinator = firmwareCoordinator ??
+        DashboardFirmwareCoordinator(
+          firmwareService: firmwareService,
+          authService: authService,
+        );
     _bleCoordinator = bleCoordinator ??
         DashboardBleCoordinator(
           targetDeviceId: targetDeviceId,
@@ -265,7 +267,11 @@ class GatewayDashboardController extends ChangeNotifier {
   }
 
   GatewayCoordinator? get coordinator => _coordinator;
-  FirmwareService get firmwareService => _firmwareService;
+  FirmwareService get firmwareService => _firmwareCoordinator.firmwareService;
+  DashboardFirmwareCoordinator get firmwareCoordinator => _firmwareCoordinator;
+  FirmwareReleaseModel? get latestFirmwareRelease => _firmwareCoordinator.latestFirmwareRelease;
+  String? get installedFirmwareVersion => _firmwareCoordinator.installedFirmwareVersion;
+  DateTime? get installedFirmwareDate => _firmwareCoordinator.installedFirmwareDate;
   StepStorageService get stepStorageService => _odometerCoordinator.storageService;
   StepSyncService get stepSyncService => _odometerCoordinator.syncService;
   DashboardOdometerCoordinator get odometerCoordinator => _odometerCoordinator;
@@ -310,73 +316,9 @@ class GatewayDashboardController extends ChangeNotifier {
   }
 
   Future<void> checkForFirmwareUpdate() async {
-    if (_isDisposed) return;
-    String? installedVersion;
-    DateTime? installedDate;
-    try {
-      installedVersion = await _firmwareService.getLocalInstalledVersion();
-      installedDate = await _firmwareService.getLocalInstalledDate();
-      _installedFirmwareVersion = installedVersion;
-      _installedFirmwareDate = installedDate;
-    } catch (e) {
-      addLog('FIRMWARE', 'Version locale non disponible : $e', color: Colors.orange);
-    }
-    if (_isDisposed) return;
-
-    try {
-      String? token;
-      try {
-        token = await authService?.getValidAccessToken();
-      } catch (e) {
-        addLog('FIRMWARE', 'Jeton API indisponible, tentative de vérification publique : $e', color: Colors.orange);
-      }
-      if (_isDisposed) return;
-
-      final release = await _firmwareService.fetchLatestRelease(
-        backendUrl: authService?.backendBaseUrl,
-        token: token,
-      );
-      if (_isDisposed) return;
-
-      _latestFirmwareRelease = release;
-      addLog('FIRMWARE', 'Vérification automatique terminée : ${release.version}.');
-      _notifyIfFirmwareUpdateAvailable(
-        installedVersion: _installedFirmwareVersion ?? installedVersion,
-        installedDate: _installedFirmwareDate ?? installedDate,
-      );
-    } catch (e) {
-      if (!_isDisposed) {
-        addLog('FIRMWARE', 'Échec de la vérification automatique du firmware : $e', color: Colors.red);
-      }
-    }
-  }
-
-  void _notifyIfFirmwareUpdateAvailable({
-    required String? installedVersion,
-    required DateTime? installedDate,
-  }) {
-    if (_isDisposed) return;
-    final release = _latestFirmwareRelease;
-    if (release == null) return;
-
-    if (installedVersion == null && installedDate == null) {
-      addLog('FIRMWARE', 'Version installée inconnue ; comparaison reportée à la connexion BLE.');
-      return;
-    }
-
-    final isNewer = _firmwareService.isCloudReleaseNewer(
-      cloudReleaseDate: release.releaseDate,
-      installedDate: installedDate,
-      cloudVersion: release.version,
-      installedVersion: installedVersion,
-    );
-    if (!isNewer || _announcedFirmwareReleaseVersion == release.version) return;
-
-    _announcedFirmwareReleaseVersion = release.version;
-    addLog('FIRMWARE', 'Nouveau firmware disponible : ${release.version}.', color: Colors.orange);
-    onShowSnackBar?.call(
-      'Nouveau firmware disponible (${release.version}). Consultez Paramètres > Mise à jour du firmware.',
-      backgroundColor: Colors.orange.shade800,
+    await _firmwareCoordinator.checkForFirmwareUpdate(
+      addLog: addLog,
+      onShowSnackBar: onShowSnackBar,
     );
   }
 
@@ -615,35 +557,12 @@ class GatewayDashboardController extends ChangeNotifier {
         'Souscription active : Activity (0002), Studio Control (0004), Burst (0005) | Haptique (0003) ${newClient.hasHaptic ? "prêt" : "non trouvé"}',
       );
 
-      if (newClient.firmwareVersion != null && newClient.firmwareVersion!.isNotEmpty) {
-        addLog('BLE', 'Firmware détecté : ${newClient.firmwareVersion} (${newClient.rawBuildString ?? ""})');
-        _installedFirmwareVersion = newClient.firmwareVersion;
-        _installedFirmwareDate = newClient.firmwareBuildDate ?? _installedFirmwareDate;
-        _notifyIfFirmwareUpdateAvailable(
-          installedVersion: _installedFirmwareVersion,
-          installedDate: _installedFirmwareDate,
-        );
-        _firmwareService.saveLocalInstalledFirmware(
-          installedDate: newClient.firmwareBuildDate ?? DateTime.now().toUtc(),
-          version: newClient.firmwareVersion!,
-        );
-      } else {
-        unawaited(_firmwareService.readDeviceFirmwareInfo(device).then((info) {
-          if (info.version != null && info.version!.isNotEmpty) {
-            addLog('BLE', 'Firmware détecté : ${info.version} (${info.rawBuildString ?? ""})');
-            _installedFirmwareVersion = info.version;
-            _installedFirmwareDate = info.buildDate ?? _installedFirmwareDate;
-            _notifyIfFirmwareUpdateAvailable(
-              installedVersion: _installedFirmwareVersion,
-              installedDate: _installedFirmwareDate,
-            );
-            _firmwareService.saveLocalInstalledFirmware(
-              installedDate: info.buildDate ?? DateTime.now().toUtc(),
-              version: info.version!,
-            );
-          }
-        }));
-      }
+      _firmwareCoordinator.syncConnectedDeviceFirmware(
+        device: device,
+        client: newClient,
+        addLog: addLog,
+        onShowSnackBar: onShowSnackBar,
+      );
 
       newClient.activityStream.listen(handleActivityDetection);
 
@@ -908,6 +827,7 @@ class GatewayDashboardController extends ChangeNotifier {
     }
     _activityStreamController.close();
     _bleCoordinator.dispose();
+    _firmwareCoordinator.dispose();
     if (_isInitialized) {
       _inactivitySettingsService.dispose();
       _odometerCoordinator.dispose();
