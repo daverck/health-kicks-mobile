@@ -74,6 +74,13 @@ class BleFootwearClient {
     );
 
     // Read DIS (Device Information Service 0x180A) in the same GATT pass if available
+    await _readDeviceInformation(services);
+
+    // Map and subscribe to HealthKicks footwear characteristics
+    await _mapTargetCharacteristics(targetService);
+  }
+
+  Future<void> _readDeviceInformation(List<BluetoothService> services) async {
     for (final service in services) {
       final sUuid = service.uuid.toString().toLowerCase();
       if (sUuid == BleConstants.disServiceUuid || sUuid.contains('180a')) {
@@ -82,19 +89,25 @@ class BleFootwearClient {
           if (cUuid == BleConstants.firmwareRevisionCharUuid || cUuid.contains('2a26')) {
             try {
               final bytes = await char.read();
-              _firmwareVersion = utf8.decode(bytes).replaceAll('\u0000', '').trim();
+              _firmwareVersion = _cleanDisString(bytes);
             } catch (_) {}
           } else if (cUuid == BleConstants.softwareRevisionCharUuid || cUuid.contains('2a28')) {
             try {
               final bytes = await char.read();
-              _rawBuildString = utf8.decode(bytes).replaceAll('\u0000', '').trim();
+              _rawBuildString = _cleanDisString(bytes);
               _firmwareBuildDate = FirmwareService.parseBuildTimestamp(_rawBuildString);
             } catch (_) {}
           }
         }
       }
     }
+  }
 
+  static String _cleanDisString(List<int> bytes) {
+    return utf8.decode(bytes, allowMalformed: true).replaceAll('\u0000', '').trim();
+  }
+
+  Future<void> _mapTargetCharacteristics(BluetoothService targetService) async {
     for (final char in targetService.characteristics) {
       final uuidStr = char.uuid.toString().toLowerCase();
 
