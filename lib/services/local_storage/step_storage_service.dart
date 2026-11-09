@@ -5,6 +5,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../../models/daily_step_record.dart';
 import '../../models/step_data_model.dart';
+import 'step_history_aggregator.dart';
 
 export '../../models/daily_step_record.dart';
 
@@ -444,22 +445,7 @@ class StepStorageService {
       orderBy: '$columnDate ASC, $columnHour ASC, $columnActivityType ASC',
     );
 
-    final Map<String, List<Map<String, dynamic>>> hourlyByDate = {};
-    for (final row in hourlyRows) {
-      final date = row[columnDate] as String;
-      hourlyByDate.putIfAbsent(date, () => []).add({
-        'hour': row[columnHour] as int,
-        'activity_type': row[columnActivityType] as String,
-        'step_count': row[columnStepCount] as int,
-      });
-    }
-
-    return dates.map((d) {
-      return <String, dynamic>{
-        'date': d,
-        'hourly_steps': hourlyByDate[d] ?? <Map<String, dynamic>>[],
-      };
-    }).toList();
+    return StepHistoryAggregator.groupHourlyStepsByDate(dates, hourlyRows);
   }
 
   /// Marks the specified dates as synced (sync_status = 1) in both daily and hourly tables.
@@ -493,23 +479,7 @@ class StepStorageService {
       whereArgs: [dateStr],
     );
 
-    if (rows.isEmpty) return null;
-
-    final activities = <String, int>{};
-    bool allSynced = true;
-
-    for (final row in rows) {
-      final activity = row[columnActivityType] as String;
-      final count = row[columnStepCount] as int;
-      final syncStatus = row[columnSyncStatus] as int;
-
-      activities[activity] = count;
-      if (syncStatus == 0) {
-        allSynced = false;
-      }
-    }
-
-    return DailyStepRecord.fromMap(dateStr, activities, allSynced);
+    return StepHistoryAggregator.aggregateSingleDay(dateStr, rows);
   }
 
   /// Retrieves step history for the last [days] days.
@@ -526,34 +496,12 @@ class StepStorageService {
       orderBy: '$columnDate DESC',
     );
 
-    final Map<String, Map<String, int>> activitiesByDate = {};
-    final Map<String, bool> syncStatusByDate = {};
-
-    for (final row in rows) {
-      final date = row[columnDate] as String;
-      final activity = row[columnActivityType] as String;
-      final count = row[columnStepCount] as int;
-      final syncStatus = row[columnSyncStatus] as int;
-
-      activitiesByDate.putIfAbsent(date, () => {})[activity] = count;
-      if (syncStatus == 0) {
-        syncStatusByDate[date] = false;
-      } else {
-        syncStatusByDate.putIfAbsent(date, () => true);
-      }
-    }
-
-    final List<DailyStepRecord> history = [];
-    for (int i = 0; i < days; i++) {
-      final d = now.subtract(Duration(days: i));
-      final dateStr = _formatDate(d);
-      final acts = activitiesByDate[dateStr] ?? {'walk': 0, 'run': 0, 'stairs': 0, 'unclassified': 0};
-      final isSynced = syncStatusByDate[dateStr] ?? true;
-
-      history.add(DailyStepRecord.fromMap(dateStr, acts, isSynced));
-    }
-
-    return history;
+    return StepHistoryAggregator.aggregateDailyHistory(
+      rows,
+      now: now,
+      days: days,
+      formatDate: _formatDate,
+    );
   }
 
   /// Purges synced records older than [retentionDays] (default: 90 days).
