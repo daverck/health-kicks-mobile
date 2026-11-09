@@ -4,8 +4,6 @@ import 'package:http/http.dart' as http;
 import '../services/api/api_headers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
 
 import '../core/config/app_config.dart';
 import '../core/permissions/permission_service.dart';
@@ -33,6 +31,7 @@ import '../services/studio/studio_api_service.dart';
 import '../ui/widgets/studio_session_dialog.dart';
 import 'dashboard_ble_coordinator.dart';
 import 'dashboard_odometer_coordinator.dart';
+import 'dashboard_studio_coordinator.dart';
 import 'package:flutter/services.dart';
 import '../models/hitl/hitl_detection_item.dart';
 import '../services/audio/studio_audio_feedback_service.dart';
@@ -60,9 +59,9 @@ class GatewayDashboardController extends ChangeNotifier {
 
   IotCredentialsRepository? _credentialsRepo;
   late final DashboardBleCoordinator _bleCoordinator;
+  late final DashboardStudioCoordinator _studioCoordinator;
   MqttGatewayService? _mqttService;
   GatewayCoordinator? _coordinator;
-  StudioApiService? _studioApiService;
   StreamSubscription<StudioSessionModel>? _studioSavedSub;
   StreamSubscription<StudioCommandModel>? _remoteStudioCommandSub;
 
@@ -79,8 +78,6 @@ class GatewayDashboardController extends ChangeNotifier {
   DateTime? _lastInactivityToastTime;
   bool isRecordingDialogVisible = false;
   bool _isSensorCalibrated = false;
-  String _lastStudioActivityKey = 'walk';
-  String _lastStudioCustomLabel = '';
   final List<LogEntry> _logs = [];
   bool _isDisposed = false;
   bool _isInitialized = false;
@@ -102,6 +99,7 @@ class GatewayDashboardController extends ChangeNotifier {
     InactivitySettingsService? inactivitySettingsService,
     FallSensitivitySettingsService? fallSensitivitySettingsService,
     DashboardBleCoordinator? bleCoordinator,
+    DashboardStudioCoordinator? studioCoordinator,
     this.onShowSnackBar,
     this.onDismissSnackBar,
     this.onShowRecordingDialog,
@@ -140,10 +138,33 @@ class GatewayDashboardController extends ChangeNotifier {
             }
           },
         );
+    _studioCoordinator = studioCoordinator ??
+        DashboardStudioCoordinator(
+          deviceId: deviceId,
+          authService: authService,
+          onLog: (tag, msg, {Color? color}) => addLog(tag, msg, color: color),
+          onStateUpdated: () {
+            if (!_isDisposed) notifyListeners();
+          },
+          onEnsureMqttConnected: () async {
+            if (_mqttService == null) {
+              addLog('STUDIO', 'Initialisation et connexion au service MQTT AWS IoT...', color: Colors.indigo);
+              await connectMqtt();
+            } else if (!_mqttService!.isConnected) {
+              addLog('STUDIO', 'Reconnexion au service MQTT AWS IoT...', color: Colors.indigo);
+              await _mqttService!.connect();
+            }
+          },
+          getCoordinator: () => _coordinator,
+          onSetupCoordinator: _setupCoordinator,
+          getBleClient: () => _bleCoordinator.bleClient,
+          getBleStatus: () => _bleCoordinator.status,
+          getIsSensorCalibrated: () => _isSensorCalibrated,
+        );
     _hitlCoordinator = hitlCoordinator ??
         HitlCoordinator(
           mqttService: _mqttService,
-          studioApiService: _studioApiService,
+          studioApiService: _studioCoordinator.studioApiService,
           onLog: (msg, {bool isError = false}) {
             addLog('HITL', msg, color: isError ? Colors.red : Colors.teal);
           },
@@ -177,8 +198,9 @@ class GatewayDashboardController extends ChangeNotifier {
   List<ActivityDetectionModel> get recentActivities => List.unmodifiable(_recentActivities);
   Stream<ActivityDetectionModel> get activityStream => _activityStreamController.stream;
   List<LogEntry> get logs => _logs;
-  String get lastStudioActivityKey => _lastStudioActivityKey;
-  String get lastStudioCustomLabel => _lastStudioCustomLabel;
+  DashboardStudioCoordinator get studioCoordinator => _studioCoordinator;
+  String get lastStudioActivityKey => _studioCoordinator.lastStudioActivityKey;
+  String get lastStudioCustomLabel => _studioCoordinator.lastStudioCustomLabel;
   bool get isSensorCalibrated => _isSensorCalibrated;
   bool get isBleConnected =>
       _bleCoordinator.bleClient != null &&
@@ -281,7 +303,7 @@ class GatewayDashboardController extends ChangeNotifier {
       },
     );
     _odometerCoordinator.initialize();
-    unawaited(loadLastStudioActivity());
+    unawaited(_studioCoordinator.loadLastStudioActivity());
 
     _bleCoordinator.ensureBleManager();
     _initGateway();
@@ -528,24 +550,15 @@ class GatewayDashboardController extends ChangeNotifier {
     _studioSavedSub?.cancel();
     _remoteStudioCommandSub?.cancel();
 
-    _studioApiService ??= StudioApiService(
-      backendBaseUrl: AppConfig.backendBaseUrl,
-      tokenStorage: TokenStorageService(),
-      authService: authService,
-      onLog: (msg, {bool isError = false}) {
-        addLog('STUDIO', msg, color: isError ? Colors.red : Colors.green);
-      },
-    );
-
     _hitlCoordinator.updateServices(
       mqttService: _mqttService,
-      studioApiService: _studioApiService,
+      studioApiService: _studioCoordinator.studioApiService,
     );
 
     _coordinator = GatewayCoordinator(
       bleClient: client,
       mqttService: _mqttService!,
-      studioApiService: _studioApiService,
+      studioApiService: _studioCoordinator.studioApiService,
       deviceId: deviceId,
       onLog: (msg, {bool isError = false}) {
         addLog('GATEWAY', msg, color: isError ? Colors.red : Colors.green);
@@ -732,126 +745,25 @@ class GatewayDashboardController extends ChangeNotifier {
     }
   }
 
-  Future<void> loadLastStudioActivity() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final key = prefs.getString(StudioSessionDialog.prefLastActivityKey);
-      final custom = prefs.getString(StudioSessionDialog.prefLastCustomLabel);
-      if (key != null && StudioSessionDialog.defaultActivities.any((a) => a.key == key)) {
-        _lastStudioActivityKey = key;
-        if (custom != null) _lastStudioCustomLabel = custom;
-        notifyListeners();
-      }
-    } catch (_) {}
-  }
+  Future<void> loadLastStudioActivity() => _studioCoordinator.loadLastStudioActivity();
 
   void rememberStudioActivity({
     required String activityKey,
     required String customLabel,
-  }) {
-    _lastStudioActivityKey = activityKey;
-    if (activityKey == 'custom') {
-      _lastStudioCustomLabel = customLabel;
-    }
-    notifyListeners();
-  }
+  }) => _studioCoordinator.rememberStudioActivity(
+    activityKey: activityKey,
+    customLabel: customLabel,
+  );
 
-  Future<StudioDatasetStats?> fetchStudioStats() async {
-    _studioApiService ??= StudioApiService(
-      backendBaseUrl: AppConfig.backendBaseUrl,
-      tokenStorage: TokenStorageService(),
-      authService: authService,
-      onLog: (msg, {bool isError = false}) {
-        addLog('STUDIO', msg, color: isError ? Colors.red : Colors.green);
-      },
-    );
-    try {
-      return await _studioApiService!.getStudioStats(deviceId: deviceId);
-    } catch (e) {
-      addLog('STUDIO', 'Impossible de charger les statistiques Studio : $e', color: Colors.orange);
-      return null;
-    }
-  }
+  Future<StudioDatasetStats?> fetchStudioStats() => _studioCoordinator.fetchStudioStats();
 
   Future<bool> triggerStudioSession({
     required String label,
     required double durationSec,
-  }) async {
-    final client = _bleCoordinator.bleClient;
-    final isConnected = client != null &&
-        (_bleCoordinator.status == BleConnectionStatus.ready ||
-            _bleCoordinator.status == BleConnectionStatus.connected) &&
-        client.hasStudioControl;
-
-    if (!isConnected) {
-      addLog('STUDIO', 'Chaussure non connectée ou service Studio indisponible.', color: Colors.red);
-      return false;
-    }
-
-    if (!_isSensorCalibrated) {
-      addLog('STUDIO', 'Enregistrement annulé : le capteur d\'assiette n\'a pas encore été calibré.', color: Colors.orange);
-      return false;
-    }
-
-    addLog('STUDIO', 'Démarrage session Studio (${durationSec.toStringAsFixed(1)}s, label: $label)...');
-
-    try {
-      if (_mqttService == null) {
-        addLog('STUDIO', 'Initialisation et connexion au service MQTT AWS IoT...', color: Colors.indigo);
-        await connectMqtt();
-      } else if (!_mqttService!.isConnected) {
-        addLog('STUDIO', 'Reconnexion au service MQTT AWS IoT...', color: Colors.indigo);
-        await _mqttService!.connect();
-      }
-
-      if (_coordinator == null) {
-        _setupCoordinator();
-      }
-
-      if (_coordinator != null) {
-        addLog('STUDIO', 'Réservation REST de la session auprès du backend FastAPI (/commands/studio/start)...');
-        await _coordinator!.triggerStudioSession(
-          label: label,
-          durationSec: durationSec,
-        );
-      } else {
-        _studioApiService ??= StudioApiService(
-          backendBaseUrl: AppConfig.backendBaseUrl,
-          tokenStorage: TokenStorageService(),
-          authService: authService,
-          onLog: (msg, {bool isError = false}) {
-            addLog('STUDIO', msg, color: isError ? Colors.red : Colors.green);
-          },
-        );
-
-        String sessionId;
-        try {
-          addLog('STUDIO', 'Réservation REST directe auprès du backend FastAPI...');
-          final resp = await _studioApiService!.startStudioSession(
-            deviceId: deviceId,
-            label: label,
-            durationSec: durationSec,
-          );
-          sessionId = resp.sessionId;
-          addLog('STUDIO', 'Session réservée : $sessionId', color: Colors.green);
-        } catch (e) {
-          sessionId = const Uuid().v4();
-          addLog('STUDIO', 'Erreur réservation REST ($e), fallback local : $sessionId', color: Colors.orange);
-        }
-
-        await client.startStudioSession(
-          label: label,
-          durationSec: durationSec,
-          sessionId: sessionId,
-        );
-      }
-      addLog('STUDIO', 'Ordre START envoyé à la chaussure. En attente du flux burst...', color: Colors.indigo);
-      return true;
-    } catch (e) {
-      addLog('STUDIO', 'Échec lancement session Studio : $e', color: Colors.red);
-      return false;
-    }
-  }
+  }) => _studioCoordinator.triggerStudioSession(
+    label: label,
+    durationSec: durationSec,
+  );
 
   Future<void> setHitlActive(bool active) async {
     final activeClient = _bleCoordinator.bleClientNotifier.value ?? _bleCoordinator.bleClient;
