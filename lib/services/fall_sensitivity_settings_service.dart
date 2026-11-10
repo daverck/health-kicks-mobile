@@ -3,6 +3,59 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'ble/ble_footwear_client.dart';
 
+/// Representation of a fall detection sensitivity tier with localized user-facing feedback.
+enum FallSensitivityTier {
+  ultraSensitive(
+    label: 'Ultra sensible',
+    description: 'Détecte presque toutes les anomalies de mouvement comme des chutes',
+  ),
+  demo(
+    label: 'Démo',
+    description: 'Mode démonstration - très perméable aux faux positifs',
+  ),
+  verySensitive(
+    label: 'Très sensible',
+    description: 'Détection précoce avec quelques faux positifs acceptables',
+  ),
+  balanced(
+    label: 'Équilibrée',
+    description: 'Équilibre optimal entre détection et précision',
+  ),
+  recommended(
+    label: 'Recommandée',
+    description: 'Recommandé pour un usage quotidien fiable',
+  ),
+  robust(
+    label: 'Robuste',
+    description: 'Seulement les chutes très certaines seront signalées',
+  );
+
+  final String label;
+  final String description;
+
+  const FallSensitivityTier({
+    required this.label,
+    required this.description,
+  });
+
+  /// Resolves the sensitivity tier corresponding to the confidence threshold.
+  static FallSensitivityTier fromThreshold(double threshold) {
+    if (threshold <= 0.40) {
+      return FallSensitivityTier.ultraSensitive;
+    } else if (threshold <= 0.45) {
+      return FallSensitivityTier.demo;
+    } else if (threshold <= 0.55) {
+      return FallSensitivityTier.verySensitive;
+    } else if (threshold <= 0.70) {
+      return FallSensitivityTier.balanced;
+    } else if (threshold <= 0.75) {
+      return FallSensitivityTier.recommended;
+    } else {
+      return FallSensitivityTier.robust;
+    }
+  }
+}
+
 /// Service managing fall detection confidence threshold and cooldown user preferences
 /// and synchronizing parameters with the HealthKicks footwear over BLE Characteristic 0004 (Device & Studio Control).
 class FallSensitivitySettingsService extends ChangeNotifier {
@@ -45,6 +98,11 @@ class FallSensitivitySettingsService extends ChangeNotifier {
   /// Formats the cooldown in seconds for display (e.g., "0.5 s", "3 s", "15 s").
   String get cooldownFormatted => formatCooldownSeconds(_cooldownSeconds);
 
+  /// Snaps a cooldown duration in seconds to the nearest 0.5s step and clamps it within valid range.
+  static double snapAndClampCooldown(num seconds) {
+    return ((seconds.toDouble() * 2).round() / 2.0).clamp(minCooldownSeconds, maxCooldownSeconds);
+  }
+
   /// Formats any cooldown value in seconds cleanly (omitting ".0" for whole seconds).
   static String formatCooldownSeconds(double seconds) {
     if (seconds == seconds.roundToDouble()) {
@@ -56,39 +114,14 @@ class FallSensitivitySettingsService extends ChangeNotifier {
   /// Get the threshold as a percentage (0-100)
   int get thresholdPercentage => (_threshold * 100).round();
 
+  /// Get current sensitivity tier based on threshold value
+  FallSensitivityTier get sensitivityTier => FallSensitivityTier.fromThreshold(_threshold);
+
   /// Get adaptive label based on threshold value
-  String get sensitivityLabel {
-    if (_threshold <= 0.40) {
-      return 'Ultra sensible';
-    } else if (_threshold <= 0.45) {
-      return 'Démo';
-    } else if (_threshold <= 0.55) {
-      return 'Très sensible';
-    } else if (_threshold <= 0.70) {
-      return 'Équilibrée';
-    } else if (_threshold <= 0.75) {
-      return 'Recommandée';
-    } else {
-      return 'Robuste';
-    }
-  }
+  String get sensitivityLabel => sensitivityTier.label;
 
   /// Get description for the current sensitivity level
-  String get sensitivityDescription {
-    if (_threshold <= 0.40) {
-      return 'Détecte presque toutes les anomalies de mouvement comme des chutes';
-    } else if (_threshold <= 0.45) {
-      return 'Mode démonstration - très perméable aux faux positifs';
-    } else if (_threshold <= 0.55) {
-      return 'Détection précoce avec quelques faux positifs acceptables';
-    } else if (_threshold <= 0.70) {
-      return 'Équilibre optimal entre détection et précision';
-    } else if (_threshold <= 0.75) {
-      return 'Recommandé pour un usage quotidien fiable';
-    } else {
-      return 'Seulement les chutes très certaines seront signalées';
-    }
-  }
+  String get sensitivityDescription => sensitivityTier.description;
 
   /// Loads persisted settings from SharedPreferences.
   Future<void> loadSettings() async {
@@ -99,7 +132,7 @@ class FallSensitivitySettingsService extends ChangeNotifier {
 
     final rawCooldown = prefs.get(keyCooldownSeconds);
     final loadedCooldown = rawCooldown is num ? rawCooldown.toDouble() : defaultCooldownSeconds;
-    _cooldownSeconds = ((loadedCooldown * 2).round() / 2.0).clamp(minCooldownSeconds, maxCooldownSeconds);
+    _cooldownSeconds = snapAndClampCooldown(loadedCooldown);
     notifyListeners();
   }
 
@@ -125,7 +158,7 @@ class FallSensitivitySettingsService extends ChangeNotifier {
 
   /// Sets the fall cooldown in seconds (0.5s increments), persists to SharedPreferences, and syncs over BLE if client is connected.
   Future<void> setCooldownSeconds(num seconds, {BleFootwearClient? bleClient}) async {
-    final clamped = ((seconds.toDouble() * 2).round() / 2.0).clamp(minCooldownSeconds, maxCooldownSeconds);
+    final clamped = snapAndClampCooldown(seconds);
 
     if (clamped == _cooldownSeconds) return;
 

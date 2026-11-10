@@ -231,5 +231,29 @@ void main() {
       expect(service.cooldownSeconds, equals(FallSensitivitySettingsService.defaultCooldownSeconds));
       expect(service.cooldownSeconds, equals(3.0));
     });
+
+    test('snapAndClampCooldown rounds to 0.5s increments and enforces bounds', () {
+      expect(FallSensitivitySettingsService.snapAndClampCooldown(0.1), equals(0.5));
+      expect(FallSensitivitySettingsService.snapAndClampCooldown(0.7), equals(0.5));
+      expect(FallSensitivitySettingsService.snapAndClampCooldown(0.8), equals(1.0));
+      expect(FallSensitivitySettingsService.snapAndClampCooldown(2.24), equals(2.0));
+      expect(FallSensitivitySettingsService.snapAndClampCooldown(2.26), equals(2.5));
+      expect(FallSensitivitySettingsService.snapAndClampCooldown(35.0), equals(30.0));
+    });
+
+    test('FallSensitivityTier resolves expected tier, label, and description for thresholds', () {
+      expect(FallSensitivityTier.fromThreshold(0.35), equals(FallSensitivityTier.ultraSensitive));
+      expect(FallSensitivityTier.fromThreshold(0.40), equals(FallSensitivityTier.ultraSensitive));
+      expect(FallSensitivityTier.fromThreshold(0.42), equals(FallSensitivityTier.demo));
+      expect(FallSensitivityTier.fromThreshold(0.50), equals(FallSensitivityTier.verySensitive));
+      expect(FallSensitivityTier.fromThreshold(0.65), equals(FallSensitivityTier.balanced));
+      expect(FallSensitivityTier.fromThreshold(0.72), equals(FallSensitivityTier.recommended));
+      expect(FallSensitivityTier.fromThreshold(0.80), equals(FallSensitivityTier.robust));
+
+      final service = FallSensitivitySettingsService();
+      expect(service.sensitivityTier, equals(FallSensitivityTier.balanced));
+      expect(service.sensitivityTier.label, equals('Équilibrée'));
+      expect(service.sensitivityTier.description, contains('Équilibre optimal'));
+    });
   });
 }
