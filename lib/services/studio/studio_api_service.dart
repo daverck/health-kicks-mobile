@@ -147,6 +147,8 @@ class StudioStartResponse {
 /// REST client service for managing and persisting Studio sessions
 /// with the HealthKicks FastAPI backend API.
 class StudioApiService {
+  static const Duration _httpTimeout = Duration(seconds: 12);
+
   final String _backendBaseUrl;
   final http.Client _httpClient;
   final TokenStorageService _tokenStorage;
@@ -199,10 +201,12 @@ class StudioApiService {
     try {
       final response = await _sendWithAuthRetry(
         missingTokenMessage: 'No access token available to fetch Studio stats.',
-        requestFn: (token) => _httpClient.get(
-          uri,
-          headers: buildApiHeaders(token),
-        ),
+        requestFn: (token) => _httpClient
+            .get(
+              uri,
+              headers: buildApiHeaders(token),
+            )
+            .timeout(_httpTimeout),
       );
 
       if (response.statusCode == 200) {
@@ -254,11 +258,13 @@ class StudioApiService {
     try {
       final response = await _sendWithAuthRetry(
         missingTokenMessage: 'No access token available to trigger Studio session.',
-        requestFn: (token) => _httpClient.post(
-          uri,
-          headers: buildApiHeaders(token, idempotencyKey: effectiveIdempotencyKey),
-          body: body,
-        ),
+        requestFn: (token) => _httpClient
+            .post(
+              uri,
+              headers: buildApiHeaders(token, idempotencyKey: effectiveIdempotencyKey),
+              body: body,
+            )
+            .timeout(_httpTimeout),
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {

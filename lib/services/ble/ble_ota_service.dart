@@ -205,6 +205,8 @@ class BleOtaService {
       // 3. Set up notification listener on OTA Control characteristic
       final readyCompleter = Completer<bool>();
       final finalCompleter = Completer<bool>();
+      // Prevent unhandled async error if finalCompleter fails while streaming chunks
+      finalCompleter.future.ignore();
       int? reportedErrorCode;
 
       await controlChar.setNotifyValue(true);
@@ -279,12 +281,16 @@ class BleOtaService {
 
       final stopwatch = Stopwatch()..start();
       int bytesSent = 0;
+      int lastProgressEmitMs = -100;
 
       // 7. Stream raw data chunks without response
       for (int i = 0; i < totalSize; i += chunkSize) {
         if (_isAborted) {
           await _sendAbort(controlChar);
           return false;
+        }
+        if (reportedErrorCode != null) {
+          throw Exception(formatErrorCode(reportedErrorCode!));
         }
 
         final end = min(i + chunkSize, totalSize);
@@ -293,26 +299,30 @@ class BleOtaService {
         await dataChar.write(chunk, withoutResponse: true);
         bytesSent += chunk.length;
 
-        // Calculate speed & estimated remaining duration
-        final elapsedSeconds = stopwatch.elapsedMilliseconds / 1000.0;
-        final speedKbps =
-            elapsedSeconds > 0 ? (bytesSent / 1024.0) / elapsedSeconds : 0.0;
-        final remainingBytes = totalSize - bytesSent;
-        final estimatedSec =
-            (speedKbps > 0) ? (remainingBytes / 1024.0) / speedKbps : null;
+        final elapsedMs = stopwatch.elapsedMilliseconds;
+        final isFirstOrLastChunk = (i == 0) || (bytesSent >= totalSize);
+        if (isFirstOrLastChunk || (elapsedMs - lastProgressEmitMs) >= 50) {
+          lastProgressEmitMs = elapsedMs;
+          final elapsedSeconds = elapsedMs / 1000.0;
+          final speedKbps =
+              elapsedSeconds > 0 ? (bytesSent / 1024.0) / elapsedSeconds : 0.0;
+          final remainingBytes = totalSize - bytesSent;
+          final estimatedSec =
+              (speedKbps > 0) ? (remainingBytes / 1024.0) / speedKbps : null;
 
-        _emit(BleOtaProgress(
-          status: BleOtaStatus.transferring,
-          bytesSent: bytesSent,
-          totalBytes: totalSize,
-          progress: bytesSent / totalSize,
-          speedKbps: speedKbps,
-          estimatedTimeRemaining: estimatedSec != null
-              ? Duration(seconds: estimatedSec.ceil())
-              : null,
-          message:
-              'Transfert en cours (${(bytesSent / 1024).toStringAsFixed(0)} / ${(totalSize / 1024).toStringAsFixed(0)} Ko)...',
-        ));
+          _emit(BleOtaProgress(
+            status: BleOtaStatus.transferring,
+            bytesSent: bytesSent,
+            totalBytes: totalSize,
+            progress: bytesSent / totalSize,
+            speedKbps: speedKbps,
+            estimatedTimeRemaining: estimatedSec != null
+                ? Duration(seconds: estimatedSec.ceil())
+                : null,
+            message:
+                'Transfert en cours (${(bytesSent / 1024).toStringAsFixed(0)} / ${(totalSize / 1024).toStringAsFixed(0)} Ko)...',
+          ));
+        }
 
         // Pacing delay to avoid saturating BLE buffer queues
         if (pacingDelayMs > 0) {
