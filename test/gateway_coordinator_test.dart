@@ -132,6 +132,7 @@ class FakeStudioApiService implements StudioApiService {
     int? pulseDurationMs,
     int? pulsePauseMs,
     int? pulseIntensity,
+    String? idempotencyKey,
   }) async {
     startedSessions.add({
       'device_id': deviceId,

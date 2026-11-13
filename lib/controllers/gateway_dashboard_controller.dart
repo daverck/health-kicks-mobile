@@ -721,7 +721,11 @@ class GatewayDashboardController extends ChangeNotifier {
       final token = await authService?.getValidAccessToken();
       final baseUrl = authService?.backendBaseUrl ?? AppConfig.backendBaseUrl;
       final uri = Uri.parse('$baseUrl/api/v1/fall-alerts/sms-status');
-      final headers = buildApiHeaders(token);
+      final headers = buildApiHeaders(
+        token,
+        method: 'POST',
+        path: '/api/v1/fall-alerts/sms-status',
+      );
       final body = jsonEncode({
         'notification_id': notificationId,
         'sms_status': sent ? 'SENT' : 'FAILED',

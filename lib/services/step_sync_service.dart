@@ -219,8 +219,10 @@ class StepSyncService {
         };
 
         final uri = Uri.parse('$_backendBaseUrl/api/v1/steps/sync');
+        final idempotencyKey = generateIdempotencyKey();
         Map<String, String> buildHeaders(String? currentToken) => buildApiHeaders(
               currentToken,
+              idempotencyKey: idempotencyKey,
               extraHeaders: const {'Accept': 'application/json'},
             );
 

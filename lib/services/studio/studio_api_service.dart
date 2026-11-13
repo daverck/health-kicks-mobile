@@ -234,6 +234,7 @@ class StudioApiService {
     int? pulseDurationMs,
     int? pulsePauseMs,
     int? pulseIntensity,
+    String? idempotencyKey,
   }) async {
     final uri = Uri.parse('$_backendBaseUrl/api/v1/devices/$deviceId/commands/studio/start');
     final payload = <String, dynamic>{
@@ -245,13 +246,17 @@ class StudioApiService {
       if (pulseIntensity != null) 'pulse_intensity': pulseIntensity,
     };
     final body = jsonEncode(payload);
+    final effectiveIdempotencyKey =
+        (idempotencyKey != null && idempotencyKey.trim().isNotEmpty)
+            ? idempotencyKey.trim()
+            : generateIdempotencyKey();
 
     try {
       final response = await _sendWithAuthRetry(
         missingTokenMessage: 'No access token available to trigger Studio session.',
         requestFn: (token) => _httpClient.post(
           uri,
-          headers: buildApiHeaders(token),
+          headers: buildApiHeaders(token, idempotencyKey: effectiveIdempotencyKey),
           body: body,
         ),
       );
@@ -290,6 +295,7 @@ class StudioApiService {
       deviceId: deviceId,
       label: label,
       durationSec: durationSec,
+      idempotencyKey: id,
     );
     return true;
   }
