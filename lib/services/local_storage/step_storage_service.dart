@@ -79,7 +79,20 @@ class StepStorageService {
       );
     ''');
 
+    await _ensureIndexes(db);
+
     return db;
+  }
+
+  Future<void> _ensureIndexes(Database db) async {
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_local_daily_steps_sync_date
+      ON $tableName ($columnSyncStatus, $columnDate);
+    ''');
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_local_hourly_steps_sync_date
+      ON $tableNameHourly ($columnSyncStatus, $columnDate);
+    ''');
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -212,73 +225,38 @@ class StepStorageService {
         }
       }
 
-      // Apply deltas to local_daily_steps and local_hourly_steps
+      // Apply deltas to local_daily_steps and local_hourly_steps in a single SQLite batch
       final hour = date.hour;
+      final batch = txn.batch();
+      var hasBatchOps = false;
       for (final entry in deltas.entries) {
         final delta = entry.value;
         if (delta > 0) {
-          final existing = await txn.query(
-            tableName,
-            columns: [columnStepCount, columnSyncStatus],
-            where: '$columnDate = ? AND $columnActivityType = ?',
-            whereArgs: [dateStr, entry.key],
+          hasBatchOps = true;
+          batch.rawInsert(
+            '''
+            INSERT INTO $tableName ($columnDate, $columnActivityType, $columnStepCount, $columnSyncStatus)
+            VALUES (?, ?, ?, 0)
+            ON CONFLICT($columnDate, $columnActivityType)
+            DO UPDATE SET $columnStepCount = $tableName.$columnStepCount + excluded.$columnStepCount,
+                          $columnSyncStatus = 0
+            ''',
+            [dateStr, entry.key, delta],
           );
-
-          if (existing.isEmpty) {
-            await txn.insert(
-              tableName,
-              {
-                columnDate: dateStr,
-                columnActivityType: entry.key,
-                columnStepCount: delta,
-                columnSyncStatus: 0,
-              },
-            );
-          } else {
-            final currentCount = existing.first[columnStepCount] as int;
-            await txn.update(
-              tableName,
-              {
-                columnStepCount: currentCount + delta,
-                columnSyncStatus: 0, // Reset to unsynced
-              },
-              where: '$columnDate = ? AND $columnActivityType = ?',
-              whereArgs: [dateStr, entry.key],
-            );
-          }
-
-          // Accumulate into local_hourly_steps
-          final existingHourly = await txn.query(
-            tableNameHourly,
-            columns: [columnStepCount, columnSyncStatus],
-            where: '$columnDate = ? AND $columnHour = ? AND $columnActivityType = ?',
-            whereArgs: [dateStr, hour, entry.key],
+          batch.rawInsert(
+            '''
+            INSERT INTO $tableNameHourly ($columnDate, $columnHour, $columnActivityType, $columnStepCount, $columnSyncStatus)
+            VALUES (?, ?, ?, ?, 0)
+            ON CONFLICT($columnDate, $columnHour, $columnActivityType)
+            DO UPDATE SET $columnStepCount = $tableNameHourly.$columnStepCount + excluded.$columnStepCount,
+                          $columnSyncStatus = 0
+            ''',
+            [dateStr, hour, entry.key, delta],
           );
-
-          if (existingHourly.isEmpty) {
-            await txn.insert(
-              tableNameHourly,
-              {
-                columnDate: dateStr,
-                columnHour: hour,
-                columnActivityType: entry.key,
-                columnStepCount: delta,
-                columnSyncStatus: 0,
-              },
-            );
-          } else {
-            final currentHourlyCount = existingHourly.first[columnStepCount] as int;
-            await txn.update(
-              tableNameHourly,
-              {
-                columnStepCount: currentHourlyCount + delta,
-                columnSyncStatus: 0,
-              },
-              where: '$columnDate = ? AND $columnHour = ? AND $columnActivityType = ?',
-              whereArgs: [dateStr, hour, entry.key],
-            );
-          }
         }
+      }
+      if (hasBatchOps) {
+        await batch.commit(noResult: true);
       }
 
       // Upsert device_odometer_state
