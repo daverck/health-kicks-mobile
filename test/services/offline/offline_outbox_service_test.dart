@@ -168,6 +168,30 @@ void main() {
       expect(remaining.first.endpoint, equals('/api/v1/event/2'));
       expect(remaining.first.retryCount, equals(1));
     });
+
+    test('concurrent processQueue calls coalesce and do not dispatch duplicate items', () async {
+      await outbox.enqueue(
+        endpoint: '/api/v1/event/concurrent',
+        method: 'POST',
+        payload: {'num': 1},
+      );
+
+      int senderInvocations = 0;
+      Future<bool> slowSender(OutboxItem item) async {
+        senderInvocations++;
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        return true;
+      }
+
+      final results = await Future.wait([
+        outbox.processQueue(sender: slowSender),
+        outbox.processQueue(sender: slowSender),
+      ]);
+
+      expect(results, equals([1, 1]));
+      expect(senderInvocations, equals(1));
+      expect(await outbox.getPendingCount(), equals(0));
+    });
   });
 
   group('OutboxItem deserialization', () {

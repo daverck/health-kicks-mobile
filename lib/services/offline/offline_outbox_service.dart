@@ -117,6 +117,8 @@ class OfflineOutboxService {
   static const int maxRetryThreshold = 5;
 
   Database? _db;
+  Future<Database>? _dbInitFuture;
+  Future<int>? _activeProcessFuture;
   final String? _inMemoryDbName;
 
   /// Base backoff duration before the first retry (default: 2 seconds).
@@ -137,8 +139,13 @@ class OfflineOutboxService {
     if (_db != null && _db!.isOpen) {
       return _db!;
     }
-    _db = await _initDatabase();
-    return _db!;
+    _dbInitFuture ??= _initDatabase();
+    try {
+      _db = await _dbInitFuture!;
+      return _db!;
+    } finally {
+      _dbInitFuture = null;
+    }
   }
 
   Future<Database> _initDatabase() async {
@@ -318,9 +325,31 @@ class OfflineOutboxService {
 
   /// Process the pending queue using the provided sender callback.
   /// Returns the number of items successfully delivered.
+  /// Concurrent invocations are serialized/coalesced to prevent duplicate item dispatch.
   Future<int> processQueue({
     required Future<bool> Function(OutboxItem item) sender,
     int batchSize = 25,
+    DateTime? now,
+  }) async {
+    if (_activeProcessFuture != null) {
+      return _activeProcessFuture!;
+    }
+    final future = _processQueueInternal(
+      sender: sender,
+      batchSize: batchSize,
+      now: now,
+    );
+    _activeProcessFuture = future;
+    try {
+      return await future;
+    } finally {
+      _activeProcessFuture = null;
+    }
+  }
+
+  Future<int> _processQueueInternal({
+    required Future<bool> Function(OutboxItem item) sender,
+    required int batchSize,
     DateTime? now,
   }) async {
     final items = await getPendingItems(limit: batchSize, now: now);
@@ -344,6 +373,8 @@ class OfflineOutboxService {
 
   /// Close database connection.
   Future<void> close() async {
+    _dbInitFuture = null;
+    _activeProcessFuture = null;
     if (_db != null && _db!.isOpen) {
       await _db!.close();
       _db = null;

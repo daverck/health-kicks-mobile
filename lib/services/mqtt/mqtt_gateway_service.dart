@@ -255,16 +255,17 @@ class MqttGatewayService {
 
       if (_isConnected) {
         _reconnectAttempts = 0;
+        _isConnecting = false;
         log?.call('Connected successfully to AWS IoT Core via SigV4 WebSockets.', isError: false);
         _subscribeToCommands();
       } else {
+        _isConnecting = false;
         log?.call(
           'AWS IoT Core WSS connection failed: status ${status?.state}, returnCode: ${status?.returnCode}.',
           isError: true,
         );
         _scheduleManagedReconnect();
       }
-      _isConnecting = false;
       return _isConnected;
     } catch (e) {
       _isConnected = false;
