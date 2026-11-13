@@ -95,11 +95,13 @@ class IotCredentialsRepository {
     });
 
     try {
-      var response = await _httpClient.post(
-        uri,
-        headers: headers,
-        body: body,
-      );
+      var response = await _httpClient
+          .post(
+            uri,
+            headers: headers,
+            body: body,
+          )
+          .timeout(const Duration(seconds: 12));
 
       // Handle expired token (HTTP 401)
       if (response.statusCode == 401) {
@@ -121,11 +123,13 @@ class IotCredentialsRepository {
           final refreshedToken = await _resolveAccessToken();
           if (refreshedToken != null && refreshedToken.isNotEmpty) {
             headers['Authorization'] = 'Bearer $refreshedToken';
-            response = await _httpClient.post(
-              uri,
-              headers: headers,
-              body: body,
-            );
+            response = await _httpClient
+                .post(
+                  uri,
+                  headers: headers,
+                  body: body,
+                )
+                .timeout(const Duration(seconds: 12));
           }
         }
 

@@ -319,76 +319,34 @@ class StepStorageService {
       'unclassified': model.unclassifiedSteps,
     };
 
-    await db.transaction((txn) async {
-      for (final entry in activities.entries) {
-        final existing = await txn.query(
-          tableName,
-          columns: [columnStepCount, columnSyncStatus],
-          where: '$columnDate = ? AND $columnActivityType = ?',
-          whereArgs: [dateStr, entry.key],
-        );
+    final batch = db.batch();
+    for (final entry in activities.entries) {
+      batch.rawInsert(
+        '''
+        INSERT INTO $tableName ($columnDate, $columnActivityType, $columnStepCount, $columnSyncStatus)
+        VALUES (?, ?, ?, 0)
+        ON CONFLICT($columnDate, $columnActivityType) DO UPDATE SET
+          $columnSyncStatus = CASE
+            WHEN $tableName.$columnStepCount != excluded.$columnStepCount THEN 0
+            ELSE $tableName.$columnSyncStatus
+          END,
+          $columnStepCount = excluded.$columnStepCount
+        ''',
+        [dateStr, entry.key, entry.value],
+      );
 
-        if (existing.isEmpty) {
-          await txn.insert(
-            tableName,
-            {
-              columnDate: dateStr,
-              columnActivityType: entry.key,
-              columnStepCount: entry.value,
-              columnSyncStatus: 0,
-            },
-          );
-        } else {
-          final currentCount = existing.first[columnStepCount] as int;
-          final currentSyncStatus = existing.first[columnSyncStatus] as int;
-
-          if (currentCount != entry.value) {
-            await txn.update(
-              tableName,
-              {
-                columnStepCount: entry.value,
-                columnSyncStatus: 0, // Reset to unsynced
-              },
-              where: '$columnDate = ? AND $columnActivityType = ?',
-              whereArgs: [dateStr, entry.key],
-            );
-          } else if (currentSyncStatus == 0) {
-            // Unchanged but still unsynced: keep 0
-          }
-        }
-
-        // Also record/update into tableNameHourly for date.hour
-        final existingHourly = await txn.query(
-          tableNameHourly,
-          columns: [columnStepCount, columnSyncStatus],
-          where: '$columnDate = ? AND $columnHour = ? AND $columnActivityType = ?',
-          whereArgs: [dateStr, hour, entry.key],
-        );
-
-        if (existingHourly.isEmpty) {
-          await txn.insert(
-            tableNameHourly,
-            {
-              columnDate: dateStr,
-              columnHour: hour,
-              columnActivityType: entry.key,
-              columnStepCount: entry.value,
-              columnSyncStatus: 0,
-            },
-          );
-        } else {
-          await txn.update(
-            tableNameHourly,
-            {
-              columnStepCount: entry.value,
-              columnSyncStatus: 0,
-            },
-            where: '$columnDate = ? AND $columnHour = ? AND $columnActivityType = ?',
-            whereArgs: [dateStr, hour, entry.key],
-          );
-        }
-      }
-    });
+      batch.rawInsert(
+        '''
+        INSERT INTO $tableNameHourly ($columnDate, $columnHour, $columnActivityType, $columnStepCount, $columnSyncStatus)
+        VALUES (?, ?, ?, ?, 0)
+        ON CONFLICT($columnDate, $columnHour, $columnActivityType) DO UPDATE SET
+          $columnStepCount = excluded.$columnStepCount,
+          $columnSyncStatus = 0
+        ''',
+        [dateStr, hour, entry.key, entry.value],
+      );
+    }
+    await batch.commit(noResult: true);
   }
 
   /// Retrieves list of days with unsynced activities formatted for backend sync.
