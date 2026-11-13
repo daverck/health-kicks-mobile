@@ -84,6 +84,7 @@ class AuthService extends ChangeNotifier {
   String? _pendingCodeVerifier;
   String? get pendingCodeVerifier => _pendingCodeVerifier;
 
+  static const Duration _httpTimeout = Duration(seconds: 10);
   static const String _pkceCharset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
 
   /// Generates a 64-character URL-safe PKCE code_verifier, stores it in
@@ -172,10 +173,12 @@ class AuthService extends ChangeNotifier {
       _tokenUserId = TokenStorageService.parseUserId(token);
 
       final uri = Uri.parse('$_sanitizedBaseUrl/api/v1/auth/me');
-      final response = await _httpClient.get(
-        uri,
-        headers: buildApiHeaders(token),
-      );
+      final response = await _httpClient
+          .get(
+            uri,
+            headers: buildApiHeaders(token),
+          )
+          .timeout(_httpTimeout);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -292,11 +295,13 @@ class AuthService extends ChangeNotifier {
     };
 
     try {
-      final response = await _httpClient.post(
-        uri,
-        headers: buildApiHeaders(null),
-        body: jsonEncode(payload),
-      );
+      final response = await _httpClient
+          .post(
+            uri,
+            headers: buildApiHeaders(null),
+            body: jsonEncode(payload),
+          )
+          .timeout(_httpTimeout);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -342,10 +347,12 @@ class AuthService extends ChangeNotifier {
   Future<void> _fetchUserProfile(String accessToken) async {
     try {
       final meUri = Uri.parse('$_sanitizedBaseUrl/api/v1/auth/me');
-      final res = await _httpClient.get(
-        meUri,
-        headers: buildApiHeaders(accessToken),
-      );
+      final res = await _httpClient
+          .get(
+            meUri,
+            headers: buildApiHeaders(accessToken),
+          )
+          .timeout(_httpTimeout);
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         _currentUser = AuthUser.fromJson(data);
@@ -393,11 +400,13 @@ class AuthService extends ChangeNotifier {
     final uri = Uri.parse('$_sanitizedBaseUrl/api/v1/auth/refresh');
 
     try {
-      final response = await _httpClient.post(
-        uri,
-        headers: buildApiHeaders(null),
-        body: jsonEncode({'refresh_token': rToken}),
-      );
+      final response = await _httpClient
+          .post(
+            uri,
+            headers: buildApiHeaders(null),
+            body: jsonEncode({'refresh_token': rToken}),
+          )
+          .timeout(_httpTimeout);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -425,18 +434,22 @@ class AuthService extends ChangeNotifier {
     if (accessToken == null || accessToken.isEmpty) return false;
 
     try {
-      var response = await _httpClient.get(
-        Uri.parse('$_sanitizedBaseUrl/api/v1/auth/me'),
-        headers: buildApiHeaders(accessToken),
-      );
+      var response = await _httpClient
+          .get(
+            Uri.parse('$_sanitizedBaseUrl/api/v1/auth/me'),
+            headers: buildApiHeaders(accessToken),
+          )
+          .timeout(_httpTimeout);
 
       if (response.statusCode == 401 && await refreshToken()) {
         accessToken = await _tokenStorage.getAccessToken();
         if (accessToken == null || accessToken.isEmpty) return false;
-        response = await _httpClient.get(
-          Uri.parse('$_sanitizedBaseUrl/api/v1/auth/me'),
-          headers: buildApiHeaders(accessToken),
-        );
+        response = await _httpClient
+            .get(
+              Uri.parse('$_sanitizedBaseUrl/api/v1/auth/me'),
+              headers: buildApiHeaders(accessToken),
+            )
+            .timeout(_httpTimeout);
       }
 
       if (response.statusCode != 200) {
