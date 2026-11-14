@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/studio_activity_option.dart';
 import '../../services/studio/studio_api_service.dart';
+import 'common/activity_svg_icon.dart';
 import 'studio/studio_recent_activity_tile.dart';
 
 export '../../models/studio_activity_option.dart' show StudioActivityOption;
@@ -291,10 +292,22 @@ class _StudioSessionDialogState extends State<StudioSessionDialog> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Flexible(
-                        child: Text(
-                          opt.displayText,
-                          overflow: TextOverflow.ellipsis,
+                      Expanded(
+                        child: Row(
+                          children: [
+                            ActivitySvgIcon(
+                              activityKey: opt.key,
+                              size: 18,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                opt.label,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(width: 8),

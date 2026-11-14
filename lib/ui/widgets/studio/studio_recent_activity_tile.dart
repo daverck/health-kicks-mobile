@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../models/studio_activity_option.dart';
 import '../../../services/studio/studio_api_service.dart';
+import '../common/activity_svg_icon.dart';
 
 /// Interactive tile representing a recently recorded Studio activity shortcut.
 class StudioRecentActivityTile extends StatelessWidget {
@@ -106,8 +107,14 @@ class StudioRecentActivityTile extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Text(option.emoji),
-                    const SizedBox(width: 4),
+                    ActivitySvgIcon(
+                      activityKey: option.key,
+                      size: 16,
+                      color: isSelected
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 6),
                     Expanded(
                       child: Text(
                         label,

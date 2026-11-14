@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:healthkicks_mobile/ui/widgets/common/activity_svg_icon.dart';
 import 'package:healthkicks_mobile/ui/widgets/studio_session_dialog.dart';
 
 void main() {
@@ -63,7 +64,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text("S'asseoir (Transition) 🪑"), findsOneWidget);
+      expect(find.text("S'asseoir (Transition)"), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is ActivitySvgIcon && w.activityKey == 'sit_down',
+        ),
+        findsWidgets,
+      );
       expect(find.text('⚡ Edge AI'), findsOneWidget);
     });
 
@@ -80,7 +87,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Se lever (Transition) 🧍'), findsOneWidget);
+      expect(find.text('Se lever (Transition)'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is ActivitySvgIcon && w.activityKey == 'stand_up',
+        ),
+        findsWidgets,
+      );
       expect(find.text('⚡ Edge AI'), findsOneWidget);
     });
 
@@ -97,7 +110,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text("S'allonger (Transition) 🛏️"), findsOneWidget);
+      expect(find.text("S'allonger (Transition)"), findsOneWidget);
       expect(find.text('⚡ Edge AI'), findsOneWidget);
     });
 
@@ -114,7 +127,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Saut 🦘'), findsOneWidget);
+      expect(find.text('Saut'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is ActivitySvgIcon && w.activityKey == 'jump',
+        ),
+        findsWidgets,
+      );
       expect(find.text('⚡ Edge AI'), findsOneWidget);
     });
 
@@ -392,6 +411,48 @@ void main() {
 
         // In dropdown trigger row for 'stairs', it should now display '⚡ Edge AI' instead of '🧪 R&D'
         expect(find.text('⚡ Edge AI'), findsWidgets);
+      },
+    );
+
+    testWidgets(
+      'renders ActivitySvgIcon for all default activity keys and inside recent shortcut tiles',
+      (WidgetTester tester) async {
+        SharedPreferences.setMockInitialValues({
+          StudioSessionDialog.prefRecentActivityKeys: ['walk', 'stairs_up', 'fall_recovery'],
+        });
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Column(
+                children: [
+                  Expanded(
+                    child: StudioSessionDialog(
+                      onStartSession: ({required String label, required double durationSec}) async => true,
+                    ),
+                  ),
+                  Wrap(
+                    children: [
+                      for (final opt in StudioSessionDialog.defaultActivities)
+                        ActivitySvgIcon(activityKey: opt.key, size: 20),
+                      const ActivitySvgIcon(activityKey: 'unknown_experimental_label', size: 20),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byWidgetPredicate((w) => w is ActivitySvgIcon && w.activityKey == 'stairs_up'),
+          findsAtLeastNWidgets(2),
+        );
+        expect(
+          find.byWidgetPredicate((w) => w is ActivitySvgIcon && w.activityKey == 'fall_recovery'),
+          findsAtLeastNWidgets(2),
+        );
       },
     );
   });

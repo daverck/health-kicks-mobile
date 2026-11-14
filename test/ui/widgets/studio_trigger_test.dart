@@ -81,7 +81,7 @@ void main() {
       await tester.drag(find.byType(Scrollable).last, const Offset(0, -800));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Autre / Personnalisé 🏷️').last);
+      await tester.tap(find.text('Autre / Personnalisé').last);
       await tester.pumpAndSettle();
 
       // Enter custom tag
@@ -201,7 +201,7 @@ void main() {
       // Select 'stairs'
       await tester.tap(find.byType(DropdownButtonFormField<String>));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Escaliers 🪜').last);
+      await tester.tap(find.text('Escaliers').last);
       await tester.pumpAndSettle();
 
       // Confirm
@@ -236,7 +236,7 @@ void main() {
       // Open dropdown and select 'stairs_up'
       await tester.tap(find.byType(DropdownButtonFormField<String>));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Escaliers (Montée) ↗️').last);
+      await tester.tap(find.text('Escaliers (Montée)').last);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text("Démarrer l'enregistrement"));
