@@ -1,7 +1,9 @@
-import 'package:flutter/material.dart';
+import 'package:cupertino_ui/cupertino_ui.dart' show GlobalCupertinoLocalizations;
+import 'package:flutter_localizations/flutter_localizations.dart'
+    show GlobalWidgetsLocalizations;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:healthkicks_mobile/core/localization/app_language.dart';
 import 'package:healthkicks_mobile/core/localization/app_localizations.dart';
 import 'package:healthkicks_mobile/services/background_surveillance_service.dart';

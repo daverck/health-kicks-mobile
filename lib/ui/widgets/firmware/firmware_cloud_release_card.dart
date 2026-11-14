@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../../models/firmware_release_model.dart';
 
 /// Card showing latest official firmware release from Cloud backend/GitHub with metadata and comparison badge.

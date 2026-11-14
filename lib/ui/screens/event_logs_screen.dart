@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../models/log_entry_model.dart';
 import '../../services/log_export_service.dart';
 import '../widgets/log_export_dialog.dart';
@@ -209,7 +209,7 @@ class _EventLogsScreenState extends State<EventLogsScreen> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12.0),
               itemCount: _filterTags.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              separatorBuilder: (_, _) => const SizedBox(width: 6),
               itemBuilder: (context, index) {
                 final tag = _filterTags[index];
                 final isSelected = _selectedTag == tag;

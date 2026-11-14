@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../core/config/app_config.dart';
 import '../services/auth/auth_service.dart';
@@ -28,12 +28,10 @@ class DashboardMqttCoordinator {
   DashboardMqttCoordinator({
     required this.deviceId,
     this.authService,
-    IotCredentialsRepository? credentialsRepo,
-    MqttGatewayService? mqttService,
+    this._credentialsRepo,
+    this._mqttService,
     TokenStorageService? tokenStorage,
-  })  : _credentialsRepo = credentialsRepo,
-        _mqttService = mqttService,
-        _tokenStorage = tokenStorage ?? TokenStorageService();
+  })  : _tokenStorage = tokenStorage ?? TokenStorageService();
 
   Future<void> connectMqtt({
     required void Function(String tag, String message, {Color? color}) addLog,

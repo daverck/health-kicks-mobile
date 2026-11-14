@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Top app bar for the HealthKicks gateway dashboard with quick navigation actions.
 class DashboardAppBar extends StatelessWidget implements PreferredSizeWidget {

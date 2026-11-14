@@ -1,6 +1,6 @@
 import 'package:healthkicks_mobile/ui/widgets/events/unified_activity_card.dart';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/models/activity_detection_model.dart';
 import 'package:healthkicks_mobile/models/hitl/hitl_detection_item.dart';

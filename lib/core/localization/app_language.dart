@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Represents a language supported by the HealthKicks mobile application.
 /// Matches the language suite supported by the web frontend.

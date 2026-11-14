@@ -1,5 +1,5 @@
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Card allowing custom firmware binary selection, download via URL, and cryptographic SHA-256 fingerprint display.
 class FirmwareBinaryPickerCard extends StatelessWidget {

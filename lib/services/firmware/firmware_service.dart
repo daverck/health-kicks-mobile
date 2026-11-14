@@ -51,9 +51,8 @@ class FirmwareService {
 
   FirmwareService({
     http.Client? httpClient,
-    SharedPreferences? prefs,
-  })  : _httpClient = httpClient ?? http.Client(),
-        _prefs = prefs;
+    this._prefs,
+  })  : _httpClient = httpClient ?? http.Client();
 
   CachedFirmwareDownload? get cachedFirmwareDownload {
     final cached = _cachedFirmwareDownload;

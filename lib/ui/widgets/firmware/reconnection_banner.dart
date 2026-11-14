@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Status banner showing automatic BLE reconnection attempts after ESP32 reboot.
 class ReconnectionBanner extends StatelessWidget {

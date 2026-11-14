@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/models/log_entry_model.dart';
 import 'package:healthkicks_mobile/ui/widgets/log_export_dialog.dart';

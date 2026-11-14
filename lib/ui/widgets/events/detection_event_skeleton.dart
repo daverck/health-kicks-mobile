@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Shimmer placeholder card for skeleton loading of detection events.
 class DetectionEventSkeletonCard extends StatelessWidget {

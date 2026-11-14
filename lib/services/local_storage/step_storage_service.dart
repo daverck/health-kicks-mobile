@@ -22,9 +22,8 @@ class StepStorageService {
   Database? _db;
   final String? _inMemoryDbName;
 
-  StepStorageService({String? inMemoryDbName, Database? database})
-      : _inMemoryDbName = inMemoryDbName,
-        _db = database;
+  StepStorageService({this._inMemoryDbName, Database? database})
+      : _db = database;
 
   /// Lazy database initializer.
   Future<Database> get database async {

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Vector illustration widget rendering 24x24 activity icons matching the web ActivityIconComponent.
 class ActivitySvgIcon extends StatelessWidget {

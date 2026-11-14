@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../../services/integrations/health_connect_service.dart';
 
 /// Settings widget controlling Google Health Connect synchronization.

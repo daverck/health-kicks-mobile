@@ -291,7 +291,7 @@ class AuthService extends ChangeNotifier {
     final uri = Uri.parse('$_sanitizedBaseUrl/api/v1/auth/token/exchange');
     final payload = <String, dynamic>{
       'ticket': ticket,
-      if (resolvedVerifier != null) 'code_verifier': resolvedVerifier,
+      'code_verifier': ?resolvedVerifier,
     };
 
     try {

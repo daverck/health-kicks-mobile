@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../../services/auth/auth_service.dart';
 
 /// Card widget visualizing authenticated user profile, role badge, and session controls.

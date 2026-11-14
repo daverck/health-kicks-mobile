@@ -1,5 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthkicks_mobile/ui/widgets/common/activity_svg_icon.dart';
 import 'package:healthkicks_mobile/ui/widgets/studio_session_dialog.dart';

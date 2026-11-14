@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../../services/ble/ble_connection_manager.dart';
 
 /// Card widget visualizing BLE footwear connection and Cloud MQTT broker status.

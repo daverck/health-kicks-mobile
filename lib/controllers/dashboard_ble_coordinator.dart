@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 import '../core/constants/ble_constants.dart';
@@ -34,8 +34,8 @@ class DashboardBleCoordinator {
     this.onStatusChanged,
     required this.onDeviceReady,
     required this.onDeviceDisconnected,
-    BleConnectionManager? bleManager,
-  }) : _bleManager = bleManager;
+    this._bleManager,
+  });
 
   BleConnectionStatus get status => _bleStatus;
   Stream<BleConnectionStatus>? get statusStream => _bleManager?.statusStream;

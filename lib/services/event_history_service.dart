@@ -25,14 +25,12 @@ class EventHistoryService {
     String? backendBaseUrl,
     http.Client? httpClient,
     TokenStorageService? tokenStorage,
-    AuthService? authService,
-    Future<bool> Function()? refreshTokenFunction,
+    this._authService,
+    this._refreshTokenFunction,
     this.onLog,
   })  : _backendBaseUrl = (backendBaseUrl ?? AppConfig.backendBaseUrl).trim().replaceAll(RegExp(r'/+$'), ''),
         _httpClient = httpClient ?? http.Client(),
-        _tokenStorage = tokenStorage ?? TokenStorageService(),
-        _authService = authService,
-        _refreshTokenFunction = refreshTokenFunction;
+        _tokenStorage = tokenStorage ?? TokenStorageService();
 
   String get backendBaseUrl => _backendBaseUrl;
 

@@ -23,10 +23,9 @@ class DefaultFallLocationProvider implements FallLocationProvider {
   final Future<Map<String, dynamic>?> Function(Duration timeout)? _fetchRawLocation;
 
   const DefaultFallLocationProvider({
-    Future<bool> Function()? checkPermission,
-    Future<Map<String, dynamic>?> Function(Duration timeout)? fetchRawLocation,
-  })  : _checkPermission = checkPermission,
-        _fetchRawLocation = fetchRawLocation;
+    this._checkPermission,
+    this._fetchRawLocation,
+  });
 
   @override
   Future<FallAlertLocation?> getCurrentLocation({

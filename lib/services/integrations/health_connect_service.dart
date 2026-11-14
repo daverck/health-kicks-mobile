@@ -28,9 +28,8 @@ class HealthConnectService extends ChangeNotifier {
   bool _isEnabled = false;
   DateTime? _lastSyncTime;
 
-  HealthConnectService({Health? health, SharedPreferences? prefs})
-      : _health = health ?? Health(),
-        _prefs = prefs;
+  HealthConnectService({Health? health, this._prefs})
+      : _health = health ?? Health();
 
   /// Whether synchronization to Google Health Connect is currently enabled by user.
   bool get isEnabled => _isEnabled;

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../../models/hitl/hitl_detection_item.dart';
 import '../../../services/hitl/hitl_coordinator.dart';
 import 'unified_activity_card.dart';

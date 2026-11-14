@@ -128,12 +128,11 @@ class OfflineOutboxService {
   final Duration maxBackoff;
 
   OfflineOutboxService({
-    String? inMemoryDbName,
+    this._inMemoryDbName,
     Database? database,
     this.baseBackoff = const Duration(seconds: 2),
     this.maxBackoff = const Duration(minutes: 5),
-  })  : _inMemoryDbName = inMemoryDbName,
-        _db = database;
+  })  : _db = database;
 
   Future<Database> get database async {
     if (_db != null && _db!.isOpen) {

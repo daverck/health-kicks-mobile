@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../services/ble/ble_footwear_client.dart';
 import '../../../services/fall_sensitivity_settings_service.dart';

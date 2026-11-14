@@ -26,11 +26,10 @@ class HitlCoordinator extends ChangeNotifier {
   final void Function(String message, {bool isError})? onLog;
 
   HitlCoordinator({
-    MqttGatewayService? mqttService,
-    StudioApiService? studioApiService,
+    this._mqttService,
+    this._studioApiService,
     this.onLog,
-  })  : _mqttService = mqttService,
-        _studioApiService = studioApiService;
+  });
 
   bool get isHitlActive => _isHitlActive;
   List<HitlDetectionItem> get items => List.unmodifiable(_items);

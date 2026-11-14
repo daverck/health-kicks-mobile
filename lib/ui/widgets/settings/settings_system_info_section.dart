@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Section displaying application and footwear firmware system information tiles.
 class SettingsSystemInfoSection extends StatelessWidget {

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../models/activity_detection_model.dart';
 import '../../models/log_entry_model.dart';
 import '../../models/step_data_model.dart';

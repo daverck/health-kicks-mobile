@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../models/studio_session_model.dart';
 import '../../services/audio/studio_audio_feedback_service.dart';
 import 'studio/studio_recording_gauge.dart';

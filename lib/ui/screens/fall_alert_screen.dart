@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../controllers/fall_alert_controller.dart';
 
 /// Full-screen high-contrast emergency overlay displayed when a live fall is detected.

@@ -24,11 +24,11 @@ class EventHistoryNotifier extends ChangeNotifier {
   static const int pageSize = 20;
 
   EventHistoryNotifier({
-    required EventHistoryService service,
+    required this._service,
     this.deviceId,
     List<ActivityDetectionModel>? liveActivities,
     Stream<ActivityDetectionModel>? activityStream,
-  }) : _service = service {
+  }) {
     if (liveActivities != null && liveActivities.isNotEmpty) {
       _liveSessionEvents.addAll(
         liveActivities.map((a) => DetectionEvent.fromActivityDetection(a, deviceId: deviceId ?? 'HK-2')),

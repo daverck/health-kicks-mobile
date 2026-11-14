@@ -42,16 +42,14 @@ class StepSyncService {
   Duration get backgroundInterval => _backgroundInterval;
 
   StepSyncService({
-    required StepStorageService storageService,
+    required this._storageService,
     TokenStorageService? tokenStorage,
-    AuthService? authService,
+    this._authService,
     this.healthConnectService,
     String? backendBaseUrl,
     http.Client? httpClient,
     this.onLog,
-  })  : _storageService = storageService,
-        _tokenStorage = tokenStorage ?? TokenStorageService(),
-        _authService = authService,
+  })  : _tokenStorage = tokenStorage ?? TokenStorageService(),
         _backendBaseUrl = (backendBaseUrl ?? AppConfig.backendBaseUrl).trim().replaceAll(RegExp(r'/+$'), ''),
         _httpClient = httpClient ?? http.Client();
 

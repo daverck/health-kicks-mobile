@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -41,8 +41,8 @@ class DashboardStudioCoordinator {
     required this.getBleClient,
     required this.getBleStatus,
     required this.getIsSensorCalibrated,
-    StudioApiService? studioApiService,
-  }) : _studioApiService = studioApiService;
+    this._studioApiService,
+  });
 
   String get lastStudioActivityKey => _lastStudioActivityKey;
   String get lastStudioCustomLabel => _lastStudioCustomLabel;

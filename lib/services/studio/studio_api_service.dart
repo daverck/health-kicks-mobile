@@ -160,14 +160,12 @@ class StudioApiService {
     String? backendBaseUrl,
     http.Client? httpClient,
     TokenStorageService? tokenStorage,
-    AuthService? authService,
-    Future<bool> Function()? refreshTokenFunction,
+    this._authService,
+    this._refreshTokenFunction,
     this.onLog,
   })  : _backendBaseUrl = (backendBaseUrl ?? AppConfig.backendBaseUrl).trim().replaceAll(RegExp(r'/+$'), ''),
         _httpClient = httpClient ?? http.Client(),
-        _tokenStorage = tokenStorage ?? TokenStorageService(),
-        _authService = authService,
-        _refreshTokenFunction = refreshTokenFunction;
+        _tokenStorage = tokenStorage ?? TokenStorageService();
 
   String get backendBaseUrl => _backendBaseUrl;
 
@@ -244,10 +242,10 @@ class StudioApiService {
     final payload = <String, dynamic>{
       'label': label,
       'duration_sec': durationSec,
-      if (pulseCount != null) 'pulse_count': pulseCount,
-      if (pulseDurationMs != null) 'pulse_duration_ms': pulseDurationMs,
-      if (pulsePauseMs != null) 'pulse_pause_ms': pulsePauseMs,
-      if (pulseIntensity != null) 'pulse_intensity': pulseIntensity,
+      'pulse_count': ?pulseCount,
+      'pulse_duration_ms': ?pulseDurationMs,
+      'pulse_pause_ms': ?pulsePauseMs,
+      'pulse_intensity': ?pulseIntensity,
     };
     final body = jsonEncode(payload);
     final effectiveIdempotencyKey =

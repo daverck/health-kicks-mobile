@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'app_language.dart';
 
 /// Class providing localized strings across the HealthKicks mobile application.

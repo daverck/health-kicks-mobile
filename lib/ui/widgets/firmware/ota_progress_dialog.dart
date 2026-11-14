@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../../services/ble/ble_ota_service.dart';
 
 /// Modal dialog displaying live OTA flashing progress, speed, SHA-256 validation, and reboot auto-reconnection status.

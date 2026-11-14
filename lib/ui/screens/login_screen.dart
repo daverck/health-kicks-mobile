@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../services/auth/auth_service.dart';
 
 /// HealthKicks user authentication screen via SSO (Google / Microsoft Azure).
