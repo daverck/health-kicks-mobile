@@ -1,10 +1,10 @@
 /// Global configuration for the HealthKicks Mobile application.
 class AppConfig {
   /// Base URL of the HealthKicks FastAPI backend API.
-  /// Defaults to production / HTTPS on port 8443.
+  /// Defaults to production HTTPS endpoint on api.healthkicks.eu.
   static const String backendBaseUrl = String.fromEnvironment(
     'BACKEND_BASE_URL',
-    defaultValue: 'https://healthkicks.duckdns.org:8443',
+    defaultValue: 'https://api.healthkicks.eu',
   );
 
   /// Default AWS IoT Core ATS endpoint.

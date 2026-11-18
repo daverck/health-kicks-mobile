@@ -291,12 +291,12 @@ void main() {
       expect(authService.state, equals(AuthState.initial));
     });
 
-    test('AuthService - Defaults to AppConfig.backendBaseUrl (port 8443)', () {
+    test('AuthService - Defaults to AppConfig.backendBaseUrl', () {
       final authService = AuthService(
         tokenStorage: tokenStorage,
       );
 
-      expect(authService.backendBaseUrl, equals('https://healthkicks.duckdns.org:8443'));
+      expect(authService.backendBaseUrl, equals('https://api.healthkicks.eu'));
     });
 
     test('logout - Deletes tokens and resets state', () async {
