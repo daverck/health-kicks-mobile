@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'package:cupertino_ui/cupertino_ui.dart' show GlobalCupertinoLocalizations;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart'
     show GlobalWidgetsLocalizations;
 import 'package:material_ui/material_ui.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
+import 'core/config/app_config.dart';
 import 'core/localization/app_language.dart';
 import 'core/localization/app_localizations.dart';
 import 'core/theme/app_theme.dart';
@@ -22,10 +25,24 @@ void main() async {
   await themeService.loadTheme();
   final localeService = LocaleService();
   await localeService.loadLocale();
-  runApp(HealthKicksApp(
+
+  final app = HealthKicksApp(
     themeService: themeService,
     localeService: localeService,
-  ));
+  );
+
+  if (AppConfig.sentryDsn.isNotEmpty) {
+    await SentryFlutter.init(
+      (options) {
+        options.dsn = AppConfig.sentryDsn;
+        options.tracesSampleRate = 0.2;
+        options.environment = kReleaseMode ? 'production' : 'development';
+      },
+      appRunner: () => runApp(app),
+    );
+  } else {
+    runApp(app);
+  }
 }
 
 class HealthKicksApp extends StatefulWidget {

@@ -19,6 +19,13 @@ class AppConfig {
     defaultValue: 'eu-north-1',
   );
 
+  /// Sentry DSN for mobile crash reporting and error diagnostics.
+  static const String sentryDsn = String.fromEnvironment(
+    'SENTRY_DSN',
+    defaultValue:
+        'https://a42586aa0336c6835c99a921e62d987f@o4512458563780608.ingest.de.sentry.io/4512459295948880',
+  );
+
   /// Inactivity timeout before automatically shutting down the background surveillance service (5 minutes).
   static const Duration bleDisconnectTimeout = Duration(minutes: 5);
 }
