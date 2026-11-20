@@ -321,6 +321,24 @@ void main() {
       expect(find.text('Studio'), findsNothing);
     });
 
+    testWidgets('Studio button is VISIBLE when role is "trainer" and buttons are disabled when disconnected',
+        (WidgetTester tester) async {
+      final authService = createAuthServiceWithRole('trainer');
+
+      await tester.pumpWidget(HealthKicksApp(authService: authService));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Test Haptique'), findsOneWidget);
+      expect(find.text('Studio'), findsOneWidget);
+
+      // Both buttons are disabled when BLE is disconnected
+      final hapticBtn = tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Test Haptique'));
+      expect(hapticBtn.onPressed, isNull);
+
+      final studioBtn = tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Studio'));
+      expect(studioBtn.onPressed, isNull);
+    });
+
     testWidgets('Studio button is VISIBLE when role is "clinician" and buttons are disabled when disconnected',
         (WidgetTester tester) async {
       final authService = createAuthServiceWithRole('clinician');

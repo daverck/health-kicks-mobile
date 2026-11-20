@@ -340,7 +340,40 @@ void main() {
 
       expect(refreshed, isTrue);
       expect(authService.currentUser?.role, 'clinician');
+      expect(authService.isClinician, isTrue);
+      expect(authService.canUseHitl, isTrue);
       expect(notifications, 1);
+    });
+
+    test('refreshCurrentUser recognizes trainer role and enables HITL', () async {
+      await tokenStorage.saveTokens(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      );
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'id': 43,
+            'email': 'trainer@example.com',
+            'role': 'trainer',
+            'is_active': true,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final authService = AuthService(
+        backendBaseUrl: 'http://127.0.0.1:8000',
+        tokenStorage: tokenStorage,
+        httpClient: mockClient,
+      );
+
+      final refreshed = await authService.refreshCurrentUser();
+
+      expect(refreshed, isTrue);
+      expect(authService.currentUser?.role, 'trainer');
+      expect(authService.isTrainer, isTrue);
+      expect(authService.canUseHitl, isTrue);
     });
 
     test('initialize - Reloads profile after refreshing an expired token', () async {

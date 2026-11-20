@@ -285,7 +285,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
 
   void _openDetectionEventsHistoryScreen() {
     final role = widget.authService?.currentUser?.role;
-    final isClinicianOrAdmin = role == 'admin' || role == 'clinician';
+    final isClinicianOrAdmin = role == 'admin' || role == 'trainer' || role == 'clinician';
 
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -360,7 +360,7 @@ class _GatewayDashboardScreenState extends State<GatewayDashboardScreen> with Wi
       listenable: Listenable.merge(listenables),
       builder: (context, _) {
         final role = widget.authService?.currentUser?.role;
-        final isClinicianOrAdmin = role == 'admin' || role == 'clinician';
+        final isClinicianOrAdmin = role == 'admin' || role == 'trainer' || role == 'clinician';
         final showFallOverlay = _controller.fallAlertController.isAlertScreenVisible;
 
         return Stack(
