@@ -482,6 +482,49 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Deletes the currently authenticated user's account via DELETE /api/v1/users/me.
+  /// Complies with Apple App Store and Google Play account deletion mandates.
+  Future<bool> deleteAccount() async {
+    if (_currentUser == null) {
+      _lastError = 'Cannot delete account: unauthenticated user';
+      notifyListeners();
+      return false;
+    }
+
+    final token = await _tokenStorage.getAccessToken();
+    if (token == null || token.isEmpty) {
+      _lastError = 'Cannot delete account: access token missing';
+      notifyListeners();
+      return false;
+    }
+
+    _lastError = null;
+    final uri = Uri.parse('$_sanitizedBaseUrl/api/v1/users/me');
+
+    try {
+      final response = await _httpClient
+          .delete(
+            uri,
+            headers: buildApiHeaders(token),
+          )
+          .timeout(_httpTimeout);
+
+      if (response.statusCode == 204 || response.statusCode == 200) {
+        await logout();
+        return true;
+      } else {
+        _lastError = 'Account deletion failed (${response.statusCode}): ${response.body}';
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      debugPrint('[AuthService] Error deleting user account: $e');
+      _lastError = 'Account deletion error: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
   @override
   void dispose() {
     _linkSubscription?.cancel();

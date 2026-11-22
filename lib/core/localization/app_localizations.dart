@@ -56,6 +56,13 @@ class AppLocalizations {
   String get passwordLabel => translate('password_label');
   String get loginButton => translate('login_button');
   String get logout => translate('logout');
+  String get dangerZone => translate('danger_zone');
+  String get deleteAccount => translate('delete_account');
+  String get deleteAccountConfirmTitle => translate('delete_account_confirm_title');
+  String get deleteAccountConfirmMessage => translate('delete_account_confirm_message');
+  String get deleteAccountConfirmButton => translate('delete_account_confirm_button');
+  String get deleteAccountSuccess => translate('delete_account_success');
+  String get deleteAccountError => translate('delete_account_error');
   String get sessionChecking => translate('session_checking');
   String get invalidCredentials => translate('invalid_credentials');
 
@@ -219,6 +226,14 @@ class AppLocalizations {
       'password_label': 'Mot de passe',
       'login_button': 'Se connecter',
       'logout': 'Déconnexion',
+      'danger_zone': 'ZONE DE DANGER',
+      'delete_account': 'Supprimer mon compte',
+      'delete_account_confirm_title': 'Supprimer votre compte ?',
+      'delete_account_confirm_message':
+          'Cette action est irréversible. Vos données de profil, historiques de pas, alertes de chute et contacts d\'urgence seront définitivement supprimés. Les données de capteurs déjà anonymisées seront dissociées de votre identité.',
+      'delete_account_confirm_button': 'Supprimer définitivement',
+      'delete_account_success': 'Votre compte a été supprimé avec succès.',
+      'delete_account_error': 'Échec de la suppression du compte.',
       'session_checking': 'Vérification de session...',
       'invalid_credentials': 'Email ou mot de passe invalide.',
       'dashboard_title': 'Tableau de bord Passerelle',
@@ -332,6 +347,14 @@ class AppLocalizations {
       'password_label': 'Password',
       'login_button': 'Sign In',
       'logout': 'Log Out',
+      'danger_zone': 'DANGER ZONE',
+      'delete_account': 'Delete account',
+      'delete_account_confirm_title': 'Delete your account?',
+      'delete_account_confirm_message':
+          'This action is irreversible. Your profile data, step history, fall alerts, and emergency contacts will be permanently deleted. Already anonymized sensor data will be dissociated from your identity.',
+      'delete_account_confirm_button': 'Delete permanently',
+      'delete_account_success': 'Your account was successfully deleted.',
+      'delete_account_error': 'Failed to delete account.',
       'session_checking': 'Checking session...',
       'invalid_credentials': 'Invalid email or password.',
       'dashboard_title': 'Gateway Dashboard',
@@ -445,6 +468,14 @@ class AppLocalizations {
       'password_label': 'Wachtwoord',
       'login_button': 'Inloggen',
       'logout': 'Uitloggen',
+      'danger_zone': 'GEVARENZONE',
+      'delete_account': 'Account verwijderen',
+      'delete_account_confirm_title': 'Uw account verwijderen?',
+      'delete_account_confirm_message':
+          'Deze actie is onomkeerbaar. Uw profielgegevens, stappengeschiedenis, valwaarschuwingen en noodcontacten worden definitief verwijderd. Reeds geanonimiseerde sensorgegevens worden losgekoppeld van uw identiteit.',
+      'delete_account_confirm_button': 'Definitief verwijderen',
+      'delete_account_success': 'Uw account is succesvol verwijderd.',
+      'delete_account_error': 'Account verwijderen is mislukt.',
       'session_checking': 'Sessie controleren...',
       'invalid_credentials': 'Ongeldig e-mailadres of wachtwoord.',
       'dashboard_title': 'Gateway Dashboard',
@@ -558,6 +589,14 @@ class AppLocalizations {
       'password_label': 'Contraseña',
       'login_button': 'Iniciar Sesión',
       'logout': 'Cerrar Sesión',
+      'danger_zone': 'ZONA DE PELIGRO',
+      'delete_account': 'Eliminar mi cuenta',
+      'delete_account_confirm_title': '¿Eliminar su cuenta?',
+      'delete_account_confirm_message':
+          'Esta acción es irreversible. Sus datos de perfil, historial de pasos, alertas de caída y contactos de emergencia se eliminarán permanentemente. Los datos de sensores ya anonimizados se desvincularán de su identidad.',
+      'delete_account_confirm_button': 'Eliminar definitivamente',
+      'delete_account_success': 'Su cuenta se ha eliminado con éxito.',
+      'delete_account_error': 'Error al eliminar la cuenta.',
       'session_checking': 'Comprobando sesión...',
       'invalid_credentials': 'Email o contraseña inválidos.',
       'dashboard_title': 'Panel de Control Gateway',
@@ -671,6 +710,14 @@ class AppLocalizations {
       'password_label': 'Passwort',
       'login_button': 'Anmelden',
       'logout': 'Abmelden',
+      'danger_zone': 'GEFAHRENZONE',
+      'delete_account': 'Konto löschen',
+      'delete_account_confirm_title': 'Möchten Sie Ihr Konto löschen?',
+      'delete_account_confirm_message':
+          'Diese Aktion kann nicht rückgängig gemacht werden. Ihre Profildaten, der Schrittverlauf, Sturzwarnungen und Notfallkontakte werden dauerhaft gelöscht. Bereits anonymisierte Sensordaten werden von Ihrer Identität getrennt.',
+      'delete_account_confirm_button': 'Dauerhaft löschen',
+      'delete_account_success': 'Ihr Konto wurde erfolgreich gelöscht.',
+      'delete_account_error': 'Löschen des Kontos fehlgeschlagen.',
       'session_checking': 'Sitzung wird überprüft...',
       'invalid_credentials': 'Ungültige E-Mail-Adresse oder Passwort.',
       'dashboard_title': 'Gateway-Dashboard',
@@ -784,6 +831,14 @@ class AppLocalizations {
       'password_label': 'كلمة المرور',
       'login_button': 'تسجيل الدخول',
       'logout': 'تسجيل الخروج',
+      'danger_zone': 'منطقة الخطر',
+      'delete_account': 'حذف حسابي',
+      'delete_account_confirm_title': 'هل تريد حذف حسابك؟',
+      'delete_account_confirm_message':
+          'هذا الإجراء لا رجعة فيه. سيتم حذف بيانات ملفك الشخصي وسجل خطواتك وتنبيهات السقوط وجهات اتصال الطوارئ نهائياً. سيتم فصل بيانات الحساسات مجهولة الهوية عن هويتك.',
+      'delete_account_confirm_button': 'حذف نهائياً',
+      'delete_account_success': 'تم حذف حسابك بنجاح.',
+      'delete_account_error': 'فشل حذف الحساب.',
       'session_checking': 'جارٍ التحقق من الجلسة...',
       'invalid_credentials': 'البريد الإلكتروني أو كلمة المرور غير صالحة.',
       'dashboard_title': 'لوحة تحكم البوابة',
@@ -896,6 +951,14 @@ class AppLocalizations {
       'password_label': '密码',
       'login_button': '登录',
       'logout': '退出登录',
+      'danger_zone': '危险区域',
+      'delete_account': '注销并删除我的账户',
+      'delete_account_confirm_title': '确定要删除您的账户吗？',
+      'delete_account_confirm_message':
+          '此操作不可撤销。您的个人资料、计步历史记录、跌倒告警记录和紧急联系人将被永久删除。已匿名的传感器数据将与您的身份彻底解绑。',
+      'delete_account_confirm_button': '永久删除',
+      'delete_account_success': '您的账户已成功删除。',
+      'delete_account_error': '删除账户失败。',
       'session_checking': '正在检查登录状态...',
       'invalid_credentials': '邮箱或密码不正确。',
       'dashboard_title': '网关控制台',

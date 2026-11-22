@@ -447,5 +447,175 @@ void main() {
       expect(userWithoutOptional.pseudonym, isEmpty);
       expect(userWithoutOptional.effectiveUserUuid, equals('user-uuid-99'));
     });
+
+    test('deleteAccount - Returns false when user is not authenticated', () async {
+      final authService = AuthService(
+        backendBaseUrl: 'http://127.0.0.1:8000',
+        tokenStorage: tokenStorage,
+      );
+
+      final result = await authService.deleteAccount();
+
+      expect(result, isFalse);
+      expect(authService.lastError, contains('unauthenticated'));
+    });
+
+    test('deleteAccount - Successfully deletes account with 204 No Content and clears session', () async {
+      await tokenStorage.saveTokens(
+        accessToken: 'valid_access_token',
+        refreshToken: 'valid_refresh_token',
+      );
+
+      http.Request? capturedRequest;
+      final mockClient = MockClient((request) async {
+        if (request.method == 'GET' && request.url.path == '/api/v1/auth/me') {
+          return http.Response(
+            jsonEncode({
+              'uuid': 'user-123',
+              'email': 'user@example.com',
+              'role': 'user',
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (request.method == 'DELETE' && request.url.path == '/api/v1/users/me') {
+          capturedRequest = request;
+          return http.Response('', 204);
+        }
+        return http.Response('Not Found', 404);
+      });
+
+      final authService = AuthService(
+        backendBaseUrl: 'http://127.0.0.1:8000',
+        tokenStorage: tokenStorage,
+        httpClient: mockClient,
+      );
+      await authService.initialize();
+      expect(authService.currentUser, isNotNull);
+
+      final deleted = await authService.deleteAccount();
+
+      expect(deleted, isTrue);
+      expect(capturedRequest, isNotNull);
+      expect(capturedRequest!.headers['authorization'], equals('Bearer valid_access_token'));
+      expect(authService.currentUser, isNull);
+      expect(authService.state, equals(AuthState.unauthenticated));
+      expect(await tokenStorage.hasValidToken(), isFalse);
+    });
+
+    test('deleteAccount - Successfully deletes account with 200 OK', () async {
+      await tokenStorage.saveTokens(
+        accessToken: 'valid_access_token',
+        refreshToken: 'valid_refresh_token',
+      );
+
+      final mockClient = MockClient((request) async {
+        if (request.method == 'GET' && request.url.path == '/api/v1/auth/me') {
+          return http.Response(
+            jsonEncode({
+              'uuid': 'user-123',
+              'email': 'user@example.com',
+              'role': 'user',
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (request.method == 'DELETE' && request.url.path == '/api/v1/users/me') {
+          return http.Response(jsonEncode({'status': 'deleted'}), 200);
+        }
+        return http.Response('Not Found', 404);
+      });
+
+      final authService = AuthService(
+        backendBaseUrl: 'http://127.0.0.1:8000',
+        tokenStorage: tokenStorage,
+        httpClient: mockClient,
+      );
+      await authService.initialize();
+
+      final deleted = await authService.deleteAccount();
+
+      expect(deleted, isTrue);
+      expect(authService.currentUser, isNull);
+      expect(authService.state, equals(AuthState.unauthenticated));
+    });
+
+    test('deleteAccount - Returns false and updates lastError on HTTP 500 error', () async {
+      await tokenStorage.saveTokens(
+        accessToken: 'valid_access_token',
+        refreshToken: 'valid_refresh_token',
+      );
+
+      final mockClient = MockClient((request) async {
+        if (request.method == 'GET' && request.url.path == '/api/v1/auth/me') {
+          return http.Response(
+            jsonEncode({
+              'uuid': 'user-123',
+              'email': 'user@example.com',
+              'role': 'user',
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (request.method == 'DELETE' && request.url.path == '/api/v1/users/me') {
+          return http.Response('Internal Server Error', 500);
+        }
+        return http.Response('Not Found', 404);
+      });
+
+      final authService = AuthService(
+        backendBaseUrl: 'http://127.0.0.1:8000',
+        tokenStorage: tokenStorage,
+        httpClient: mockClient,
+      );
+      await authService.initialize();
+
+      final deleted = await authService.deleteAccount();
+
+      expect(deleted, isFalse);
+      expect(authService.currentUser, isNotNull);
+      expect(authService.lastError, contains('Account deletion failed (500)'));
+    });
+
+    test('deleteAccount - Returns false and logs error on network exception', () async {
+      await tokenStorage.saveTokens(
+        accessToken: 'valid_access_token',
+        refreshToken: 'valid_refresh_token',
+      );
+
+      final mockClient = MockClient((request) async {
+        if (request.method == 'GET' && request.url.path == '/api/v1/auth/me') {
+          return http.Response(
+            jsonEncode({
+              'uuid': 'user-123',
+              'email': 'user@example.com',
+              'role': 'user',
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (request.method == 'DELETE' && request.url.path == '/api/v1/users/me') {
+          throw http.ClientException('Connection reset by peer');
+        }
+        return http.Response('Not Found', 404);
+      });
+
+      final authService = AuthService(
+        backendBaseUrl: 'http://127.0.0.1:8000',
+        tokenStorage: tokenStorage,
+        httpClient: mockClient,
+      );
+      await authService.initialize();
+
+      final deleted = await authService.deleteAccount();
+
+      expect(deleted, isFalse);
+      expect(authService.currentUser, isNotNull);
+      expect(authService.lastError, contains('Account deletion error'));
+    });
   });
 }
