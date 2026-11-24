@@ -71,45 +71,4 @@ void main() {
     expect(switchWidget.value, isTrue);
     expect(find.textContaining('Actif • Dernière synchro'), findsOneWidget);
   });
-
-  testWidgets('SettingsHealthConnectCard renders Apple Santé title and icon on iOS', (tester) async {
-    final mockHealth = MockHealthForCard();
-    final service = HealthConnectService(health: mockHealth, isIosOverride: true);
-    await service.init();
-
-    await tester.pumpWidget(buildTestWidget(service));
-
-    expect(find.text('Apple Santé (HealthKit)'), findsOneWidget);
-    expect(find.text('Exporter les pas de la chaussure vers Apple Santé'), findsOneWidget);
-    expect(find.byIcon(Icons.favorite_outline), findsOneWidget);
-  });
-
-  testWidgets('Toggling switch ON on iOS requests permissions and enables sync', (tester) async {
-    final mockHealth = MockHealthForCard();
-    final service = HealthConnectService(health: mockHealth, isIosOverride: true);
-    await service.init();
-
-    await tester.pumpWidget(buildTestWidget(service));
-
-    await tester.tap(find.byType(Switch));
-    await tester.pumpAndSettle();
-
-    expect(service.isEnabled, isTrue);
-    expect(find.text('Synchronisation Apple Santé activée !'), findsOneWidget);
-  });
-
-  testWidgets('Toggling switch OFF on iOS disables sync', (tester) async {
-    final mockHealth = MockHealthForCard();
-    final service = HealthConnectService(health: mockHealth, isIosOverride: true);
-    await service.init();
-    await service.setEnabled(true);
-
-    await tester.pumpWidget(buildTestWidget(service));
-
-    await tester.tap(find.byType(Switch));
-    await tester.pumpAndSettle();
-
-    expect(service.isEnabled, isFalse);
-    expect(find.text('Synchronisation Apple Santé désactivée.'), findsOneWidget);
-  });
 }

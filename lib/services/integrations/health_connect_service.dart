@@ -10,9 +10,9 @@ enum HealthConnectInstallationStatus {
   unsupportedPlatform,
 }
 
-/// Service managing export synchronization with Google Health Connect (Android) and Apple HealthKit (iOS).
+/// Service managing export synchronization with Google Health Connect on Android.
 ///
-/// Ensures exclusive forward export (Footwear -> Health Connect / HealthKit) of net step counts
+/// Ensures exclusive forward export (Footwear -> Health Connect) of net step counts
 /// and biomechanical activities with deduplicated client record IDs.
 class HealthConnectService extends ChangeNotifier {
   /// SharedPreferences key persisting whether Health Connect sync is active.
@@ -23,34 +23,19 @@ class HealthConnectService extends ChangeNotifier {
 
   final Health _health;
   final SharedPreferences? _prefs;
-  final bool? isIosOverride;
-  final bool? isAndroidOverride;
 
   bool _isConfigured = false;
   bool _isEnabled = false;
   DateTime? _lastSyncTime;
 
-  HealthConnectService({
-    Health? health,
-    this._prefs,
-    this.isIosOverride,
-    this.isAndroidOverride,
-  })  : _health = health ?? Health();
+  HealthConnectService({Health? health, this._prefs})
+      : _health = health ?? Health();
 
-  /// Whether synchronization to health platform is currently enabled by user.
+  /// Whether synchronization to Google Health Connect is currently enabled by user.
   bool get isEnabled => _isEnabled;
 
-  /// Timestamp of the last successful sync to health platform.
+  /// Timestamp of the last successful sync to Health Connect.
   DateTime? get lastSyncTime => _lastSyncTime;
-
-  /// Whether the host platform is iOS.
-  bool get isIos => isIosOverride ?? (!kIsWeb && Platform.isIOS);
-
-  /// Whether the host platform is Android.
-  bool get isAndroid => isAndroidOverride ?? (!kIsWeb && Platform.isAndroid);
-
-  /// Human-readable brand name of the underlying health sync service.
-  String get platformServiceName => isIos ? 'Apple Santé' : 'Google Health Connect';
 
   static const List<HealthDataType> _dataTypes = [
     HealthDataType.STEPS,
@@ -78,28 +63,25 @@ class HealthConnectService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Check whether health integration is available or installed on the current device.
+  /// Check whether Health Connect is available or installed on the current device.
   Future<HealthConnectInstallationStatus> checkInstallationStatus() async {
-    if (isIos) {
-      return HealthConnectInstallationStatus.installed;
+    if (!Platform.isAndroid) {
+      return HealthConnectInstallationStatus.unsupportedPlatform;
     }
-    if (isAndroid) {
-      try {
-        final isAvailable = await _health.isHealthConnectAvailable();
-        if (isAvailable) {
-          return HealthConnectInstallationStatus.installed;
-        }
-        return HealthConnectInstallationStatus.notInstalled;
-      } catch (_) {
-        return HealthConnectInstallationStatus.notInstalled;
+    try {
+      final isAvailable = await _health.isHealthConnectAvailable();
+      if (isAvailable) {
+        return HealthConnectInstallationStatus.installed;
       }
+      return HealthConnectInstallationStatus.notInstalled;
+    } catch (_) {
+      return HealthConnectInstallationStatus.notInstalled;
     }
-    return HealthConnectInstallationStatus.unsupportedPlatform;
   }
 
   /// Open Google Play Store to install Google Health Connect (Android 9-13).
   Future<void> promptInstallHealthConnect() async {
-    if (isAndroid) {
+    if (Platform.isAndroid) {
       try {
         await _health.installHealthConnect();
       } catch (e) {
