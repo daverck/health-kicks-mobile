@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../core/constants/ble_constants.dart';
+import '../../models/activity_bout_model.dart';
 import '../../models/activity_detection_model.dart';
 import '../../models/haptic_command_model.dart';
 import '../../models/step_data_model.dart';
@@ -56,6 +57,9 @@ class BleFootwearClient {
 
   final _stepDataController = StreamController<StepDataModel>.broadcast();
   Stream<StepDataModel> get stepDataStream => _stepDataController.stream;
+
+  final _activityBoutsController = StreamController<({DateTime sessionStartTime, List<ActivityBoutModel> bouts})>.broadcast();
+  Stream<({DateTime sessionStartTime, List<ActivityBoutModel> bouts})> get activityBoutsStream => _activityBoutsController.stream;
 
   StepDataModel? _currentStepData;
   StepDataModel? get currentStepData => _currentStepData;
@@ -145,6 +149,10 @@ class BleFootwearClient {
   Future<void> _subscribeToStudioControl(BluetoothCharacteristic char) async {
     final sub = char.onValueReceived.listen((bytes) {
       if (bytes.isNotEmpty) {
+        if (bytes[0] == BleConstants.respActivityBouts && bytes.length >= 6) {
+          _handleActivityBoutsResponse(bytes);
+          return;
+        }
         final statusMsg = utf8.decode(bytes, allowMalformed: true).trim();
         onLog?.call('Studio Control notification (0004): "$statusMsg"', isError: false);
         if (statusMsg.startsWith('FINISHED') || statusMsg.startsWith('START')) {
@@ -155,6 +163,52 @@ class BleFootwearClient {
     });
     device.cancelWhenDisconnected(sub);
     await char.setNotifyValue(true);
+  }
+
+  Future<void> _handleActivityBoutsResponse(List<int> bytes) async {
+    final count = bytes[1];
+    final uptimeSec = (bytes[2] << 24) | (bytes[3] << 16) | (bytes[4] << 8) | bytes[5];
+    final sessionStartTime = DateTime.now().subtract(Duration(seconds: uptimeSec));
+
+    final bouts = <ActivityBoutModel>[];
+    for (int i = 0; i < count; i++) {
+      final offset = 6 + (i * 8);
+      if (bytes.length >= offset + 8) {
+        final bout = ActivityBoutModel.fromBytes(Uint8List.fromList(bytes), offset);
+        bouts.add(bout);
+      }
+    }
+
+    onLog?.call(
+      'Activity Bouts notification: count=$count (parsed ${bouts.length}), uptime=${uptimeSec}s, sessionStart=$sessionStartTime',
+      isError: false,
+    );
+
+    _activityBoutsController.add((sessionStartTime: sessionStartTime, bouts: bouts));
+
+    if (bouts.isNotEmpty) {
+      await sendActivityBoutAck(bouts.length);
+    }
+  }
+
+  /// Sends request for offline activity bouts (opcode 0x30).
+  Future<void> requestActivityBouts() async {
+    if (_studioControlChar == null) {
+      throw StateError('Studio Control characteristic not initialized.');
+    }
+    await _studioControlChar!.write([BleConstants.cmdReqActivityBouts], withoutResponse: false);
+    onLog?.call('Requested activity bouts (0x30) via Characteristic 0004.', isError: false);
+  }
+
+  /// Acknowledges received activity bouts (opcode 0x32).
+  Future<void> sendActivityBoutAck(int count) async {
+    if (_studioControlChar == null) return;
+    try {
+      await _studioControlChar!.write([BleConstants.cmdAckActivityBouts, count & 0xFF], withoutResponse: false);
+      onLog?.call('Sent activity bout acknowledgment (0x32): count=$count', isError: false);
+    } catch (e) {
+      onLog?.call('Failed to send activity bout ack: $e', isError: true);
+    }
   }
 
   Future<void> _subscribeToStudioBurst(BluetoothCharacteristic char) async {
@@ -315,5 +369,6 @@ class BleFootwearClient {
     _studioStatusController.close();
     _burstResultController.close();
     _stepDataController.close();
+    _activityBoutsController.close();
   }
 }

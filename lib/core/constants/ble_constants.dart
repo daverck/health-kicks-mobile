@@ -81,6 +81,11 @@ class BleConstants {
   static const int sampleRateHz = 50;
   static const int bytesPerFrame = 14;
 
+  /// Activity Bout Synchronization Opcodes (Characteristic 0004)
+  static const int cmdReqActivityBouts = 0x30;
+  static const int respActivityBouts = 0x31;
+  static const int cmdAckActivityBouts = 0x32;
+
   /// Maximum scan duration before automatic timeout if no device is found
   static const Duration defaultScanTimeout = Duration(minutes: 3);
 }

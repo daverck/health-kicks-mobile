@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:healthkicks_mobile/models/step_data_model.dart';
+import 'package:healthkicks_mobile/models/activity_bout_model.dart';
 import 'package:healthkicks_mobile/services/local_storage/step_storage_service.dart';
 
 void main() {
@@ -373,6 +374,57 @@ void main() {
       expect(unsynced.length, equals(1));
       final hourlyList = unsynced.first['hourly_steps'] as List<Map<String, dynamic>>;
       expect(hourlyList.length, equals(4));
+    });
+
+    test('recordVentilatedBouts records bouts across exact calendar hours in local_hourly_steps', () async {
+      // Hardware session starts at 16:00:00
+      final sessionStart = DateTime(2026, 9, 22, 16, 0, 0);
+
+      final bouts = [
+        // Bout 1: 16:10:00 - 16:20:00 (10 mins, walk, 500 steps)
+        ActivityBoutModel(
+          startUptimeSec: 600,
+          durationSec: 600,
+          stepCount: 500,
+          activityType: 0x01, // walk
+          avgCadence: 85,
+        ),
+        // Bout 2: 16:50:00 - 17:20:00 (30 mins crossing hour boundary, run, 3000 steps)
+        // 10 mins in H16 (1000 steps), 20 mins in H17 (2000 steps)
+        ActivityBoutModel(
+          startUptimeSec: 3000,
+          durationSec: 1800,
+          stepCount: 3000,
+          activityType: 0x02, // run
+          avgCadence: 160,
+        ),
+      ];
+
+      await storageService.recordVentilatedBouts(
+        sessionStartTime: sessionStart,
+        bouts: bouts,
+        deviceId: 'HK-VENTILATED',
+      );
+
+      // Verify hourly steps
+      final hourly = await storageService.getHourlySteps(sessionStart);
+      expect(hourly.length, equals(3)); // H16 walk, H16 run, H17 run
+
+      final h16Walk = hourly.firstWhere((r) => r['hour'] == 16 && r['activity_type'] == 'walk');
+      expect(h16Walk['step_count'], equals(500));
+
+      final h16Run = hourly.firstWhere((r) => r['hour'] == 16 && r['activity_type'] == 'run');
+      expect(h16Run['step_count'], equals(1000));
+
+      final h17Run = hourly.firstWhere((r) => r['hour'] == 17 && r['activity_type'] == 'run');
+      expect(h17Run['step_count'], equals(2000));
+
+      // Verify total daily steps
+      final daily = await storageService.getDailySteps(sessionStart);
+      expect(daily, isNotNull);
+      expect(daily!.walkSteps, equals(500));
+      expect(daily.runSteps, equals(3000));
+      expect(daily.totalSteps, equals(3500));
     });
   });
 }

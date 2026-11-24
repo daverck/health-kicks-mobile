@@ -5,6 +5,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../../models/daily_step_record.dart';
 import '../../models/step_data_model.dart';
+import '../../models/activity_bout_model.dart';
 import 'step_history_aggregator.dart';
 
 export '../../models/daily_step_record.dart';
@@ -346,6 +347,80 @@ class StepStorageService {
       );
     }
     await batch.commit(noResult: true);
+  }
+
+  /// Records offline movement bouts, ventilating their steps across exact calendar hours.
+  /// Guarantees that steps are credited to the actual hours of movement rather than connection time.
+  Future<void> recordVentilatedBouts({
+    required DateTime sessionStartTime,
+    required List<ActivityBoutModel> bouts,
+    required String deviceId,
+  }) async {
+    if (bouts.isEmpty) return;
+
+    final db = await database;
+    await db.transaction((txn) async {
+      final batch = txn.batch();
+      var hasOps = false;
+
+      for (final bout in bouts) {
+        if (bout.stepCount <= 0) continue;
+
+        final activityTypeStr = _activityTypeToString(bout.activityType);
+        final ventilation = bout.computeHourlyVentilation(sessionStartTime);
+        final boutStart = bout.getStartTime(sessionStartTime);
+        final dateStr = _formatDate(boutStart);
+
+        for (final entry in ventilation.entries) {
+          final hour = entry.key;
+          final stepDelta = entry.value;
+          if (stepDelta <= 0) continue;
+
+          hasOps = true;
+
+          // Upsert into local_daily_steps
+          batch.rawInsert(
+            '''
+            INSERT INTO $tableName ($columnDate, $columnActivityType, $columnStepCount, $columnSyncStatus)
+            VALUES (?, ?, ?, 0)
+            ON CONFLICT($columnDate, $columnActivityType)
+            DO UPDATE SET $columnStepCount = $tableName.$columnStepCount + excluded.$columnStepCount,
+                          $columnSyncStatus = 0
+            ''',
+            [dateStr, activityTypeStr, stepDelta],
+          );
+
+          // Upsert into local_hourly_steps with exact target hour
+          batch.rawInsert(
+            '''
+            INSERT INTO $tableNameHourly ($columnDate, $columnHour, $columnActivityType, $columnStepCount, $columnSyncStatus)
+            VALUES (?, ?, ?, ?, 0)
+            ON CONFLICT($columnDate, $columnHour, $columnActivityType)
+            DO UPDATE SET $columnStepCount = $tableNameHourly.$columnStepCount + excluded.$columnStepCount,
+                          $columnSyncStatus = 0
+            ''',
+            [dateStr, hour, activityTypeStr, stepDelta],
+          );
+        }
+      }
+
+      if (hasOps) {
+        await batch.commit(noResult: true);
+      }
+    });
+  }
+
+  static String _activityTypeToString(int type) {
+    switch (type) {
+      case 0x01:
+        return 'walk';
+      case 0x02:
+        return 'run';
+      case 0x03:
+        return 'stairs';
+      default:
+        return 'unclassified';
+    }
   }
 
   /// Retrieves list of days with unsynced activities formatted for backend sync.

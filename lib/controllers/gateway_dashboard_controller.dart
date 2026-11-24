@@ -537,6 +537,20 @@ class GatewayDashboardController extends ChangeNotifier {
         _odometerCoordinator.handleOdometerReading(stepData);
       });
 
+      newClient.activityBoutsStream.listen((event) {
+        _odometerCoordinator.handleActivityBouts(
+          sessionStartTime: event.sessionStartTime,
+          bouts: event.bouts,
+        );
+      });
+
+      // Request offline activity bouts for accurate hourly step ventilation
+      try {
+        unawaited(newClient.requestActivityBouts());
+      } catch (e) {
+        addLog('BLE', 'Erreur requête activity bouts : $e', color: Colors.orange);
+      }
+
       try {
         unawaited(_inactivitySettingsService.syncToBle(newClient));
       } catch (e) {

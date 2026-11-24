@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../core/config/app_config.dart';
 import '../models/step_data_model.dart';
+import '../models/activity_bout_model.dart';
 import '../services/auth/auth_service.dart';
 import '../services/auth/token_storage_service.dart';
 import '../services/local_storage/step_storage_service.dart';
@@ -111,6 +112,26 @@ class DashboardOdometerCoordinator {
       onStepDataUpdated();
     } catch (e) {
       onLog('SYNC', 'Erreur enregistrement odomètre : $e', color: Colors.orange);
+    }
+  }
+
+  /// Handles incoming offline activity bouts, saves them with exact hourly ventilation,
+  /// and flushes sync immediately to update backend and dashboards.
+  Future<void> handleActivityBouts({
+    required DateTime sessionStartTime,
+    required List<ActivityBoutModel> bouts,
+  }) async {
+    try {
+      await storageService.recordVentilatedBouts(
+        sessionStartTime: sessionStartTime,
+        bouts: bouts,
+        deviceId: deviceId,
+      );
+      final totalBoutSteps = bouts.fold<int>(0, (sum, b) => sum + b.stepCount);
+      onLog('BOUTS', 'Enregistrement de ${bouts.length} bouts ($totalBoutSteps pas) avec ventilation horaire exacte.', color: Colors.green);
+      flushSteps();
+    } catch (e) {
+      onLog('BOUTS', 'Erreur traitement bouts d\'activité : $e', color: Colors.orange);
     }
   }
 
