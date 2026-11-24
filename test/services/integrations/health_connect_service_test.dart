@@ -145,5 +145,45 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString(HealthConnectService.keyLastSync), isNotNull);
     });
+
+    test('checkInstallationStatus returns installed on iOS', () async {
+      final service = HealthConnectService(health: fakeHealth, isIosOverride: true);
+      expect(await service.checkInstallationStatus(), HealthConnectInstallationStatus.installed);
+      expect(service.platformServiceName, 'Apple Santé');
+    });
+
+    test('requestWritePermissions requests authorization on iOS', () async {
+      fakeHealth.hasPerms = false;
+      fakeHealth.authResult = true;
+      final service = HealthConnectService(health: fakeHealth, isIosOverride: true);
+      final granted = await service.requestWritePermissions();
+      expect(granted, isTrue);
+    });
+
+    test('requestWritePermissions returns false on iOS when authorization is denied', () async {
+      fakeHealth.hasPerms = false;
+      fakeHealth.authResult = false;
+      final service = HealthConnectService(health: fakeHealth, isIosOverride: true);
+      final granted = await service.requestWritePermissions();
+      expect(granted, isFalse);
+    });
+
+    test('checkInstallationStatus on Android returns installed when available', () async {
+      fakeHealth.available = true;
+      final service = HealthConnectService(health: fakeHealth, isAndroidOverride: true);
+      expect(await service.checkInstallationStatus(), HealthConnectInstallationStatus.installed);
+      expect(service.platformServiceName, 'Google Health Connect');
+    });
+
+    test('checkInstallationStatus on Android returns notInstalled when not available', () async {
+      fakeHealth.available = false;
+      final service = HealthConnectService(health: fakeHealth, isAndroidOverride: true);
+      expect(await service.checkInstallationStatus(), HealthConnectInstallationStatus.notInstalled);
+    });
+
+    test('checkInstallationStatus returns unsupportedPlatform on other platforms', () async {
+      final service = HealthConnectService(health: fakeHealth, isIosOverride: false, isAndroidOverride: false);
+      expect(await service.checkInstallationStatus(), HealthConnectInstallationStatus.unsupportedPlatform);
+    });
   });
 }

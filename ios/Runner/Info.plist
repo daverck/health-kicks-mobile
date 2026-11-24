@@ -45,6 +45,12 @@
 		<string>bluetooth-central</string>
 	</array>
 
+	<!-- Apple HealthKit Permissions -->
+	<key>NSHealthShareUsageDescription</key>
+	<string>HealthKicks consulte vos données de santé pour synchroniser vos activités physiques.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>HealthKicks synchronise vos pas nets et métriques de marche depuis votre chaussure connectée vers Apple Santé.</string>
+
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
