@@ -52,11 +52,11 @@ void main() {
       expect(launchedMode, equals(LaunchMode.externalApplication));
     });
 
-    test('signInWithGoogle - Cleanly handles trailing slash on https://healthkicks.duckdns.org/', () async {
+    test('signInWithGoogle - Cleanly handles trailing slash on https://app.healthkicks.eu/', () async {
       Uri? launchedUri;
 
       final authService = AuthService(
-        backendBaseUrl: 'https://healthkicks.duckdns.org/',
+        backendBaseUrl: 'https://app.healthkicks.eu/',
         tokenStorage: tokenStorage,
         urlLauncher: (uri, {mode = LaunchMode.platformDefault}) async {
           launchedUri = uri;
@@ -70,7 +70,7 @@ void main() {
       expect(launchedUri, isNotNull);
       expect(
         launchedUri.toString(),
-        startsWith('https://healthkicks.duckdns.org/api/v1/auth/google/login?redirect=true'),
+        startsWith('https://app.healthkicks.eu/api/v1/auth/google/login?redirect=true'),
       );
       expect(launchedUri.toString(), contains('code_challenge='));
       expect(launchedUri.toString(), contains('code_challenge_method=S256'));
@@ -112,7 +112,7 @@ void main() {
       Uri? launchedUri;
 
       final authService = AuthService(
-        backendBaseUrl: 'https://healthkicks.duckdns.org',
+        backendBaseUrl: 'https://app.healthkicks.eu',
         tokenStorage: tokenStorage,
         urlLauncher: (uri, {mode = LaunchMode.platformDefault}) async {
           launchedUri = uri;
@@ -120,13 +120,13 @@ void main() {
         },
       );
 
-      final success = await authService.signInWithAzure(backendUrl: 'https://healthkicks.duckdns.org/');
+      final success = await authService.signInWithAzure(backendUrl: 'https://app.healthkicks.eu/');
 
       expect(success, isTrue);
       expect(launchedUri, isNotNull);
       expect(
         launchedUri.toString(),
-        startsWith('https://healthkicks.duckdns.org/api/v1/auth/azure/login?redirect=true'),
+        startsWith('https://app.healthkicks.eu/api/v1/auth/azure/login?redirect=true'),
       );
       expect(launchedUri.toString(), contains('code_challenge='));
       expect(launchedUri.toString(), contains('code_challenge_method=S256'));

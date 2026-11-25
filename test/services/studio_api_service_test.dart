@@ -107,7 +107,7 @@ void main() {
       });
 
       final service = StudioApiService(
-        backendBaseUrl: 'https://healthkicks.duckdns.org:8443',
+        backendBaseUrl: 'https://api.healthkicks.eu',
         httpClient: mockClient,
         tokenStorage: tokenStorage,
       );
@@ -124,7 +124,7 @@ void main() {
       expect(response.durationSec, equals(5.0));
       expect(response.status, equals('command_dispatched'));
 
-      expect(capturedRequest.url.toString(), equals('https://healthkicks.duckdns.org:8443/api/v1/devices/HK-2/commands/studio/start'));
+      expect(capturedRequest.url.toString(), equals('https://api.healthkicks.eu/api/v1/devices/HK-2/commands/studio/start'));
       expect(capturedRequest.headers['Authorization'], equals('Bearer initial-valid-jwt-token'));
       expect(capturedRequest.headers['Content-Type'], equals('application/json'));
 
@@ -138,7 +138,7 @@ void main() {
       await tokenStorage.clearTokens();
 
       final service = StudioApiService(
-        backendBaseUrl: 'https://healthkicks.duckdns.org:8443',
+        backendBaseUrl: 'https://api.healthkicks.eu',
         tokenStorage: tokenStorage,
       );
 
@@ -181,7 +181,7 @@ void main() {
 
       bool refreshCalled = false;
       final service = StudioApiService(
-        backendBaseUrl: 'https://healthkicks.duckdns.org:8443',
+        backendBaseUrl: 'https://api.healthkicks.eu',
         httpClient: mockClient,
         tokenStorage: tokenStorage,
         refreshTokenFunction: () async {
@@ -213,7 +213,7 @@ void main() {
       });
 
       final service = StudioApiService(
-        backendBaseUrl: 'https://healthkicks.duckdns.org:8443',
+        backendBaseUrl: 'https://api.healthkicks.eu',
         httpClient: mockClient,
         tokenStorage: tokenStorage,
         refreshTokenFunction: () async => false, // Refresh fails
@@ -235,7 +235,7 @@ void main() {
       });
 
       final service = StudioApiService(
-        backendBaseUrl: 'https://healthkicks.duckdns.org:8443',
+        backendBaseUrl: 'https://api.healthkicks.eu',
         httpClient: mockClient,
         tokenStorage: tokenStorage,
       );
@@ -285,14 +285,14 @@ void main() {
       });
 
       final service = StudioApiService(
-        backendBaseUrl: 'https://healthkicks.duckdns.org:8443',
+        backendBaseUrl: 'https://api.healthkicks.eu',
         httpClient: mockClient,
         tokenStorage: tokenStorage,
       );
 
       final stats = await service.getStudioStats(deviceId: 'HK-2');
 
-      expect(capturedRequest.url.toString(), equals('https://healthkicks.duckdns.org:8443/api/v1/devices/HK-2/studio/stats'));
+      expect(capturedRequest.url.toString(), equals('https://api.healthkicks.eu/api/v1/devices/HK-2/studio/stats'));
       expect(stats.totalSessions, equals(35));
       expect(stats.getCountForLabel('walk'), equals(25));
       expect(stats.getValidatedCountForLabel('walk'), equals(20));
@@ -327,13 +327,13 @@ void main() {
       });
 
       final service = StudioApiService(
-        backendBaseUrl: 'https://healthkicks.duckdns.org:8443',
+        backendBaseUrl: 'https://api.healthkicks.eu',
         httpClient: mockClient,
         tokenStorage: tokenStorage,
       );
 
       final stats = await service.getStudioStats();
-      expect(capturedRequest.url.toString(), equals('https://healthkicks.duckdns.org:8443/api/v1/studio/stats'));
+      expect(capturedRequest.url.toString(), equals('https://api.healthkicks.eu/api/v1/studio/stats'));
       expect(stats.getCountForLabel('idle'), equals(2));
     });
   });
