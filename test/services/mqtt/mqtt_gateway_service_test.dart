@@ -25,8 +25,8 @@ class FakeCredentialsRepository implements IotCredentialsRepository {
       secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
       sessionToken: 'AQoDYXdzEJr1EXAMPLE',
       expiration: DateTime.now().add(const Duration(hours: 1)),
-      iotEndpoint: 'a1b2c3d4e5f6-ats.iot.eu-north-1.amazonaws.com',
-      region: 'eu-north-1',
+      iotEndpoint: 'a1b2c3d4e5f6-ats.iot.eu-west-1.amazonaws.com',
+      region: 'eu-west-1',
     );
   }
 

@@ -13,8 +13,8 @@ void main() {
       'secret_access_key': 'test_secret_key_123',
       'session_token': 'test_session_token_xyz',
       'expiration': '2099-01-01T00:00:00Z',
-      'iot_endpoint': 'a2k10w7ebf2tx9-ats.iot.eu-north-1.amazonaws.com',
-      'region': 'eu-north-1',
+      'iot_endpoint': 'a2k10w7ebf2tx9-ats.iot.eu-west-1.amazonaws.com',
+      'region': 'eu-west-1',
     };
 
     test('IoTCredentials - Deserialization and isExpired evaluation', () {
@@ -22,8 +22,8 @@ void main() {
       expect(creds.accessKeyId, equals('ASIA_TEST_ACCESS_KEY'));
       expect(creds.secretAccessKey, equals('test_secret_key_123'));
       expect(creds.sessionToken, equals('test_session_token_xyz'));
-      expect(creds.iotEndpoint, equals('a2k10w7ebf2tx9-ats.iot.eu-north-1.amazonaws.com'));
-      expect(creds.region, equals('eu-north-1'));
+      expect(creds.iotEndpoint, equals('a2k10w7ebf2tx9-ats.iot.eu-west-1.amazonaws.com'));
+      expect(creds.region, equals('eu-west-1'));
       expect(creds.isExpired, isFalse);
 
       final expiredCreds = IoTCredentials(
@@ -32,7 +32,7 @@ void main() {
         sessionToken: 'T',
         expiration: DateTime.now().toUtc().subtract(const Duration(minutes: 10)),
         iotEndpoint: 'ep',
-        region: 'eu-north-1',
+        region: 'eu-west-1',
       );
       expect(expiredCreds.isExpired, isTrue);
 
@@ -43,7 +43,7 @@ void main() {
         sessionToken: 'T',
         expiration: DateTime.now().toUtc().add(const Duration(minutes: 3)),
         iotEndpoint: 'ep',
-        region: 'eu-north-1',
+        region: 'eu-west-1',
       );
       expect(soonExpiringCreds.isExpired, isTrue);
 

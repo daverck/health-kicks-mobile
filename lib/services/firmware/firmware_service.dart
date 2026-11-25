@@ -108,7 +108,7 @@ class FirmwareService {
 
     // Direct HTTP HEAD fallback against AWS S3
     final s3Url = fallbackS3Url ??
-        'https://healthkicks-firmware-releases.s3.eu-north-1.amazonaws.com/firmware/esp32s3/latest/firmware.bin';
+        'https://healthkicks-firmware-releases-eu-west-1.s3.eu-west-1.amazonaws.com/firmware/esp32s3/latest/firmware.bin';
     try {
       final headRes = await _httpClient.head(
         Uri.parse(s3Url),

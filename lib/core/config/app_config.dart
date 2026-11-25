@@ -10,13 +10,13 @@ class AppConfig {
   /// Default AWS IoT Core ATS endpoint.
   static const String awsIotEndpoint = String.fromEnvironment(
     'AWS_IOT_ENDPOINT',
-    defaultValue: 'a2k10w7ebf2tx9-ats.iot.eu-north-1.amazonaws.com',
+    defaultValue: 'a2k10w7ebf2tx9-ats.iot.eu-west-1.amazonaws.com',
   );
 
   /// Default AWS region for IoT Core and STS.
   static const String awsRegion = String.fromEnvironment(
     'AWS_REGION',
-    defaultValue: 'eu-north-1',
+    defaultValue: 'eu-west-1',
   );
 
   /// Sentry DSN for mobile crash reporting and error diagnostics.
