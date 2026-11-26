@@ -1,0 +1,91 @@
+name: Release Android App Bundle
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: "Optional Android versionCode override"
+        required: false
+        type: string
+
+jobs:
+  build-aab:
+    name: Build Signed Release AAB
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Verify Static Analysis
+        run: flutter analyze
+
+      - name: Run Test Suite
+        run: flutter test
+
+      - name: Configure Android Release Signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+            echo "Missing one or more required ANDROID_* signing secrets." >&2
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/upload-keystore.jks
+          cat <<EOF > android/key.properties
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=../upload-keystore.jks
+          EOF
+
+      - name: Build Signed Obfuscated AAB
+        run: |
+          EXTRA_ARGS=""
+          if [ -n "${{ github.event.inputs.build_number }}" ]; then
+            EXTRA_ARGS="--build-number=${{ github.event.inputs.build_number }}"
+          fi
+          flutter build appbundle --release \
+            --obfuscate \
+            --split-debug-info=build/app/outputs/symbols \
+            --android-project-arg requireReleaseSigning=true \
+            $EXTRA_ARGS
+
+      - name: Clean Up Signing Credentials
+        if: always()
+        run: rm -f android/upload-keystore.jks android/key.properties
+
+      - name: Upload Release AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: healthkicks-android-aab
+          path: build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
+      - name: Upload Debug Symbols Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: healthkicks-android-symbols
+          path: build/app/outputs/symbols
+          if-no-files-found: error
