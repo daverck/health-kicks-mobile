@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart'
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:healthkicks_mobile/core/config/app_config.dart';
 import 'package:healthkicks_mobile/core/localization/app_language.dart';
 import 'package:healthkicks_mobile/core/localization/app_localizations.dart';
 import 'package:healthkicks_mobile/services/background_surveillance_service.dart';
@@ -560,7 +561,7 @@ void main() {
 
       expect(find.text('INFORMATIONS SYSTÈME'), findsOneWidget);
       expect(find.text('Application mobile'), findsOneWidget);
-      expect(find.text('HealthKicks Mobile v1.0.0+1 (Gateway BLE-MQTT)'), findsOneWidget);
+      expect(find.text('HealthKicks Mobile v${AppConfig.appVersion} (Gateway BLE-MQTT)'), findsOneWidget);
       expect(find.text('Firmware chaussure connectée (ESP32-S3)'), findsOneWidget);
     });
   });

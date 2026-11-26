@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../../../core/config/app_config.dart';
+
 /// Section displaying application and footwear firmware system information tiles.
 class SettingsSystemInfoSection extends StatelessWidget {
   final bool isBleReady;
@@ -35,7 +37,7 @@ class SettingsSystemInfoSection extends StatelessWidget {
         const ListTile(
           leading: Icon(Icons.phone_android_outlined),
           title: Text('Application mobile'),
-          subtitle: Text('HealthKicks Mobile v1.0.0+1 (Gateway BLE-MQTT)'),
+          subtitle: Text('HealthKicks Mobile v${AppConfig.appVersion} (Gateway BLE-MQTT)'),
         ),
         ListTile(
           leading: Icon(Icons.memory_outlined, color: isBleReady ? Colors.teal : null),

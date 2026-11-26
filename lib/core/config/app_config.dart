@@ -26,6 +26,19 @@ class AppConfig {
         'https://a42586aa0336c6835c99a921e62d987f@o4512458563780608.ingest.de.sentry.io/4512459295948880',
   );
 
+  /// Mobile application semantic version + build number (override via --dart-define=APP_VERSION=...).
+  static const String appVersion = String.fromEnvironment(
+    'APP_VERSION',
+    defaultValue: '1.0.0+1',
+  );
+
+  /// Default ESP32-S3 OTA firmware binary S3 URL.
+  static const String defaultFirmwareOtaUrl = String.fromEnvironment(
+    'DEFAULT_FIRMWARE_OTA_URL',
+    defaultValue:
+        'https://healthkicks-firmware-releases-eu-west-1.s3.eu-west-1.amazonaws.com/firmware/esp32s3/latest/firmware.bin',
+  );
+
   /// Inactivity timeout before automatically shutting down the background surveillance service (5 minutes).
   static const Duration bleDisconnectTimeout = Duration(minutes: 5);
 }

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:http/http.dart' as http;
+import '../../core/config/app_config.dart';
 import '../../models/firmware_release_model.dart';
 import '../../services/api/api_headers.dart';
 import '../../services/auth/auth_service.dart';
@@ -27,8 +28,7 @@ class FirmwareUpdateScreen extends StatefulWidget {
   final String? targetDeviceId;
   final Future<void> Function()? onReconnect;
 
-  static const String defaultFirmwareUrl =
-      'https://healthkicks-firmware-releases-eu-west-1.s3.eu-west-1.amazonaws.com/firmware/esp32s3/latest/firmware.bin';
+  static const String defaultFirmwareUrl = AppConfig.defaultFirmwareOtaUrl;
 
   const FirmwareUpdateScreen({
     super.key,
