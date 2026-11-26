@@ -88,17 +88,28 @@ flowchart TD
 
 ## 3. Dependencies & Tech Stack
 
-- **Framework**: Flutter 3.24+ / Dart 3.5+
+- **Framework**: Flutter 3.47+ / Dart 3.13+ (Release `1.0.0+1`, Android `targetSdk >= 35`)
 - **BLE Connectivity**: `flutter_blue_plus` (LESC Numeric Comparison secure pairing support)
 - **IoT Gateway**: `mqtt_client` with AWS SigV4 over WebSockets authentication (temporary AWS STS token negotiation via backend)
-- **Telephony & SMS**: Android native plugin `telephony` / `SmsManager`
-- **Geolocation**: `geolocator`
+- **Telephony & SMS**: Native Android `SmsManager` via platform `MethodChannel`
+- **Geolocation**: Native Android location provider via platform `MethodChannel`
+- **Health Integration**: `health` (`^13.3.2`, Android Health Connect step synchronization)
+- **Observability**: `sentry_flutter` (`^10.6.0`)
 - **Local Storage**: `sqflite` (local SQLite database) & `flutter_secure_storage` (encrypted tokens)
 - **Application Architecture**: Clean Architecture & Reactive State Management
 
 ---
 
-## 4. Contract Compliance
+## 4. Release & Play Store Compliance
+
+- **CI/CD & Signed Release**: `.github/workflows/ci.yml` (`flutter analyze && flutter test`), `.github/workflows/sast.yml` (Semgrep), and `.github/workflows/release-android.yml` (R8-shrunk signed Android App Bundle `.aab` build).
+- **Play Store Documentation**:
+  - Permissions & Data Safety justification: [`docs/PLAY_STORE_PERMISSIONS.md`](./docs/PLAY_STORE_PERMISSIONS.md)
+  - Store listing assets & metadata: [`docs/PLAY_STORE_LISTING.md`](./docs/PLAY_STORE_LISTING.md)
+
+---
+
+## 5. Contract Compliance
 
 All BLE, MQTT, and REST interactions strictly adhere to ecosystem contracts:
 - BLE GATT Contract: [`contracts/ble_gatt_specs.md`](../contracts/ble_gatt_specs.md)
