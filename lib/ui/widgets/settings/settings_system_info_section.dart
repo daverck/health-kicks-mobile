@@ -35,7 +35,7 @@ class SettingsSystemInfoSection extends StatelessWidget {
         const ListTile(
           leading: Icon(Icons.phone_android_outlined),
           title: Text('Application mobile'),
-          subtitle: Text('HealthKicks Mobile v0.1.0+1 (Gateway BLE-MQTT)'),
+          subtitle: Text('HealthKicks Mobile v1.0.0+1 (Gateway BLE-MQTT)'),
         ),
         ListTile(
           leading: Icon(Icons.memory_outlined, color: isBleReady ? Colors.teal : null),

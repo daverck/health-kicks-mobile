@@ -560,7 +560,7 @@ void main() {
 
       expect(find.text('INFORMATIONS SYSTÈME'), findsOneWidget);
       expect(find.text('Application mobile'), findsOneWidget);
-      expect(find.text('HealthKicks Mobile v0.1.0+1 (Gateway BLE-MQTT)'), findsOneWidget);
+      expect(find.text('HealthKicks Mobile v1.0.0+1 (Gateway BLE-MQTT)'), findsOneWidget);
       expect(find.text('Firmware chaussure connectée (ESP32-S3)'), findsOneWidget);
     });
   });
