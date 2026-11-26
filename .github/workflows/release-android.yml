@@ -61,10 +61,12 @@ jobs:
           EOF
 
       - name: Build Signed Obfuscated AAB
+        env:
+          BUILD_NUMBER: ${{ github.event.inputs.build_number }}
         run: |
           EXTRA_ARGS=""
-          if [ -n "${{ github.event.inputs.build_number }}" ]; then
-            EXTRA_ARGS="--build-number=${{ github.event.inputs.build_number }}"
+          if [ -n "$BUILD_NUMBER" ]; then
+            EXTRA_ARGS="--build-number=$BUILD_NUMBER"
           fi
           flutter build appbundle --release \
             --obfuscate \
